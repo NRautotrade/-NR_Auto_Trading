@@ -1,0 +1,9 @@
+body{font-family:Arial,sans-serif;background:#0b0b0b;color:#fff;margin:0;padding:20px}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+header a{margin-left:10px;color:#fff}
+.card{background:#151515;border:1px solid #333;border-radius:12px;padding:20px;margin:20px 0}
+input,select,button{padding:10px;border-radius:8px;border:1px solid #444;background:#222;color:#fff}
+button{cursor:pointer}
+label{display:block;margin:10px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+a{color:#8ab4ff}
