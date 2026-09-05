@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<main class="card">
+
+<h1>NR AUTO TRADING</h1>
+
+{% if error %}
+<div class="error">{{ error }}</div>
+{% endif %}
+
+{% if message %}
+<div class="success">{{ message }}</div>
+{% endif %}
+
+<p>
+<a class="button" href="/">BACK TO DASHBOARD</a>
+</p>
+
+</main>
+</body>
+</html>
