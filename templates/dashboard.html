@@ -1,0 +1,185 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<main class="card">
+
+<header>
+<div>
+<h1>NR AUTO TRADING</h1>
+<p class="sub">Online Trading Dashboard</p>
+</div>
+<a class="secondary" href="/logout">LOGOUT</a>
+</header>
+
+<hr>
+
+<h2>Welcome, {{ user["username"] }}</h2>
+
+{% if error %}
+<div class="error">{{ error }}</div>
+{% endif %}
+
+{% if request.query_params.get("connected") %}
+<div class="success">Deriv account connected successfully.</div>
+{% endif %}
+
+<section class="panel">
+<h3>DERIV ACCOUNT</h3>
+
+{% if connection %}
+<p>
+<strong>Status:</strong> Connected<br>
+<strong>Account:</strong> {{ connection["account_id"] }}<br>
+<strong>Mode:</strong> {{ connection["account_type"]|upper }}
+</p>
+{% else %}
+<p>No Deriv account connected yet.</p>
+{% endif %}
+
+<div class="actions">
+<a class="button" href="/deriv/connect?mode=demo">
+CONNECT DEMO ACCOUNT
+</a>
+
+{% if allow_real %}
+<a class="button" href="/deriv/connect?mode=real">
+CONNECT REAL ACCOUNT
+</a>
+{% else %}
+<button disabled>REAL ACCOUNT LOCKED</button>
+{% endif %}
+</div>
+</section>
+
+<form method="post" action="/settings">
+
+<section class="panel">
+<h3>MARKETS</h3>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 5 Index">
+Volatility 5
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 10 Index">
+Volatility 10
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 15 Index">
+Volatility 15
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 25 Index"
+{% if settings and "Volatility 25 Index" in settings["markets"] %} checked{% endif %}>
+Volatility 25
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 30 Index">
+Volatility 30
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 50 Index">
+Volatility 50
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 75 Index">
+Volatility 75
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 100 Index">
+Volatility 100
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Step Index">
+Step Index
+</label>
+
+</section>
+
+<section class="panel">
+<h3>STRATEGIES</h3>
+
+<label>
+<input type="checkbox" name="strategies" value="ABC Pattern" checked>
+ABC Pattern
+</label>
+
+<label>
+<input type="checkbox" name="strategies" value="Breakout">
+Breakout
+</label>
+
+<label>
+<input type="checkbox" name="strategies" value="Trend">
+Trend
+</label>
+
+</section>
+
+<section class="panel">
+<h3>RISK MANAGEMENT</h3>
+
+<label>Risk per Trade ($)</label>
+<input type="number" name="risk_trade"
+value="{{ settings['risk_trade'] if settings else 50 }}"
+step="0.01" min="0">
+
+<label>Risk / Reward</label>
+<input type="number" name="reward_risk"
+value="{{ settings['reward_risk'] if settings else 2 }}"
+step="0.1" min="0.1">
+
+<label>Daily Target ($)</label>
+<input type="number" name="daily_target"
+value="{{ settings['daily_target'] if settings else 200 }}"
+step="0.01" min="0">
+
+<label>Maximum Daily Profit ($)</label>
+<input type="number" name="max_daily_profit"
+value="{{ settings['max_daily_profit'] if settings else 500 }}"
+step="0.01" min="0">
+
+<label>Maximum Daily Loss ($)</label>
+<input type="number" name="max_daily_loss"
+value="{{ settings['max_daily_loss'] if settings else 50 }}"
+step="0.01" min="0">
+
+<label>Protect at TP Distance (%)</label>
+<input type="number" name="protect_tp"
+value="{{ settings['protect_tp'] if settings else 70 }}"
+step="1" min="1" max="100">
+
+<label>Lock Profit (R)</label>
+<input type="number" name="lock_profit_r"
+value="{{ settings['lock_profit_r'] if settings else 1 }}"
+step="0.1" min="0">
+
+</section>
+
+<section class="panel">
+<h3>TIMEFRAME</h3>
+<p><strong>M5</strong> — Locked</p>
+<p>Protection: <strong>70% → 1R</strong></p>
+</section>
+
+<button type="submit">SAVE SETTINGS</button>
+
+</form>
+
+</main>
+</body>
+</html>
