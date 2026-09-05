@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main class="card">
+<h1>NR AUTO TRADING</h1>
+<p class="sub">Secure user login • Demo & Real Accounts</p>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post" action="/login">
+<label>Username</label>
+<input name="username" autocomplete="username" required>
+<label>Password</label>
+<input name="password" type="password" autocomplete="current-password" required>
+<button>LOGIN</button>
+</form>
+<a class="secondary" href="/register">CREATE ACCOUNT</a>
+</main>
+</body>
+</html>
