@@ -1,304 +1,1256 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{ title }}</title>
-<link rel="stylesheet" href="/static/style.css">
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top, #10254d 0%, #061329 42%, #020914 100%);
+    color: #f4f7fb;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.container {
+    width: min(1200px, 94%);
+    margin: 0 auto;
+    padding: 25px 0 45px;
+}
+
+/* HEADER */
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 22px;
+    margin-bottom: 20px;
+    border: 1px solid #214a7c;
+    border-radius: 18px;
+    background: rgba(5, 20, 43, .92);
+    box-shadow: 0 15px 40px rgba(0,0,0,.28);
+}
+
+.brand {
+    font-size: 25px;
+    font-weight: 900;
+    letter-spacing: .5px;
+}
+
+.brand-sub {
+    color: #83bfff;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.user-box {
+    text-align: right;
+    font-size: 13px;
+    color: #aebed4;
+}
+
+.user-box strong {
+    color: white;
+}
+
+.logout {
+    display: inline-block;
+    margin-top: 7px;
+    color: #83bfff;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+/* ACCOUNT */
+
+.account {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.account-card {
+    border: 1px solid #214a7c;
+    border-radius: 16px;
+    background: rgba(6, 24, 50, .92);
+    padding: 18px;
+}
+
+.label {
+    color: #83bfff;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .7px;
+    margin-bottom: 8px;
+}
+
+.value {
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.connected {
+    color: #22e57a;
+}
+
+/* MAIN GRID */
+
+.main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+.panel {
+    border: 1px solid #214a7c;
+    border-radius: 18px;
+    background: rgba(5, 21, 45, .94);
+    padding: 20px;
+    margin-bottom: 18px;
+    box-shadow: 0 12px 35px rgba(0,0,0,.2);
+}
+
+.panel-title {
+    color: #8bc2ff;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: .5px;
+    margin-bottom: 18px;
+}
+
+/* BUTTONS */
+
+button,
+.button {
+    border: 0;
+    border-radius: 11px;
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 900;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    background: #20e477;
+    color: #03120b;
+}
+
+button:hover,
+.button:hover {
+    filter: brightness(1.08);
+}
+
+.danger {
+    background: #ff666d;
+    color: #180306;
+}
+
+.disabled {
+    background: #26364c;
+    color: #788ba5;
+    cursor: not-allowed;
+}
+
+.button-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+/* MARKET GRID */
+
+.market-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 9px;
+}
+
+.market {
+    position: relative;
+}
+
+.market input {
+    position: absolute;
+    opacity: 0;
+}
+
+.market span {
+    display: block;
+    padding: 13px 10px;
+    border: 1px solid #274d78;
+    border-radius: 10px;
+    text-align: center;
+    color: #c8d6e8;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    background: #091a34;
+}
+
+.market input:checked + span {
+    border-color: #20e477;
+    background: rgba(32,228,119,.12);
+    color: #20e477;
+}
+
+/* STRATEGIES */
+
+.strategy-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 9px;
+}
+
+.strategy {
+    position: relative;
+}
+
+.strategy input {
+    position: absolute;
+    opacity: 0;
+}
+
+.strategy span {
+    display: block;
+    padding: 14px 7px;
+    text-align: center;
+    border: 1px solid #274d78;
+    border-radius: 10px;
+    background: #091a34;
+    color: #c8d6e8;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.strategy input:checked + span {
+    background: rgba(32,228,119,.12);
+    border-color: #20e477;
+    color: #20e477;
+}
+
+/* RISK */
+
+.fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 13px;
+}
+
+.field label {
+    display: block;
+    color: #aebed4;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.field input {
+    width: 100%;
+    margin-top: 7px;
+    padding: 12px;
+    border-radius: 9px;
+    border: 1px solid #2b527e;
+    background: #07172d;
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    outline: none;
+}
+
+.field input:focus {
+    border-color: #20e477;
+}
+
+/* TIMEFRAME */
+
+.locked {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-radius: 11px;
+    background: #091a34;
+    border: 1px solid #274d78;
+}
+
+.locked strong {
+    color: white;
+}
+
+.lock {
+    color: #20e477;
+    font-weight: 900;
+}
+
+/* BOT */
+
+.bot-status {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 21px;
+    font-weight: 900;
+    margin-bottom: 12px;
+}
+
+.status-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #777;
+}
+
+.running .status-dot {
+    background: #20e477;
+    box-shadow: 0 0 12px rgba(32,228,119,.8);
+}
+
+.running .status-text {
+    color: #20e477;
+}
+
+.bot-message {
+    padding: 13px;
+    border-radius: 10px;
+    background: #07172d;
+    color: #9fb1c9;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+
+/* TRADE */
+
+.trade-box {
+    border: 1px solid #274d78;
+    border-radius: 12px;
+    background: #07172d;
+    padding: 15px;
+}
+
+.trade-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    font-size: 13px;
+}
+
+.trade-row:last-child {
+    border-bottom: 0;
+}
+
+.trade-row span:first-child {
+    color: #8298b4;
+}
+
+.trade-row span:last-child {
+    color: white;
+    font-weight: 800;
+    text-align: right;
+}
+
+.profit {
+    color: #20e477 !important;
+}
+
+.loss {
+    color: #ff666d !important;
+}
+
+/* SAVE */
+
+.save-btn {
+    width: 100%;
+    margin-top: 3px;
+    font-size: 15px;
+    padding: 16px;
+}
+
+/* NOTICE */
+
+.notice {
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+    color: #8298b4;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.error {
+    border: 1px solid #ff666d;
+    background: rgba(255,102,109,.12);
+    color: #ff9ca1;
+    padding: 13px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+}
+
+.success {
+    border: 1px solid #20e477;
+    background: rgba(32,228,119,.10);
+    color: #20e477;
+    padding: 13px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+}
+
+/* MOBILE */
+
+@media (max-width: 800px) {
+
+    .main-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .account {
+        grid-template-columns: 1fr;
+    }
+
+    .topbar {
+        padding: 15px;
+    }
+
+    .brand {
+        font-size: 20px;
+    }
+
+    .fields {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+
+    .container {
+        width: 94%;
+        padding-top: 12px;
+    }
+
+    .market-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .strategy-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .button-row {
+        grid-template-columns: 1fr;
+    }
+
+    .panel {
+        padding: 16px;
+    }
+}
+</style>
 </head>
 
 <body>
-<main class="card wide">
 
-<header>
-<div>
-<strong>NR AUTO TRADING</strong>
-<span>Online Trading Dashboard</span>
+<div class="container">
+
+    <!-- HEADER -->
+
+    <div class="topbar">
+        <div>
+            <div class="brand">NR AUTO TRADING</div>
+            <div class="brand-sub">AUTOMATED TRADING SYSTEM</div>
+        </div>
+
+        <div class="user-box">
+            <strong>{{ user["username"] }}</strong><br>
+            {% if connection %}
+                {{ connection["account_type"]|upper }} ACCOUNT
+            {% else %}
+                ACCOUNT NOT CONNECTED
+            {% endif %}
+            <br>
+            <a class="logout" href="/logout">LOGOUT</a>
+        </div>
+    </div>
+
+
+    <!-- ACCOUNT -->
+
+    <div class="account">
+
+        <div class="account-card">
+            <div class="label">ACCOUNT STATUS</div>
+
+            {% if connection %}
+                <div class="value connected">CONNECTED</div>
+            {% else %}
+                <div class="value">NOT CONNECTED</div>
+            {% endif %}
+        </div>
+
+        <div class="account-card">
+            <div class="label">ACCOUNT</div>
+
+            <div class="value">
+                {% if connection %}
+                    {{ connection["account_id"] }}
+                {% else %}
+                    —
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="account-card">
+            <div class="label">TRADING MODE</div>
+
+            <div class="value">
+                {% if connection %}
+                    {{ connection["account_type"]|upper }}
+                {% else %}
+                    DEMO
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    {% if request.query_params.get("connected") %}
+    <div class="success">
+        Deriv account connected successfully.
+    </div>
+    {% endif %}
+
+
+    <div class="main-grid">
+
+        <!-- LEFT SIDE -->
+
+        <div>
+
+            <!-- DERIV ACCOUNT -->
+
+            <section class="panel">
+
+                <div class="panel-title">DERIV ACCOUNT</div>
+
+                {% if connection %}
+
+                    <div class="trade-box">
+
+                        <div class="trade-row">
+                            <span>Status</span>
+                            <span class="profit">CONNECTED</span>
+                        </div>
+
+                        <div class="trade-row">
+                            <span>Account</span>
+                            <span>{{ connection["account_id"] }}</span>
+                        </div>
+
+                        <div class="trade-row">
+                            <span>Mode</span>
+                            <span>{{ connection["account_type"]|upper }}</span>
+                        </div>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="notice">
+                        Connect your Deriv account before running the bot.
+                    </div>
+
+                {% endif %}
+
+                <br>
+
+                <div class="button-row">
+
+                    <a class="button" href="/deriv/connect?mode=demo">
+                        CONNECT DEMO
+                    </a>
+
+                    {% if allow_real %}
+
+                        <a class="button" href="/deriv/connect?mode=real">
+                            CONNECT REAL
+                        </a>
+
+                    {% else %}
+
+                        <button class="disabled" disabled>
+                            REAL LOCKED
+                        </button>
+
+                    {% endif %}
+
+                </div>
+
+            </section>
+
+
+            <!-- MARKETS -->
+
+            <form method="post" action="/settings">
+
+                <section class="panel">
+
+                    <div class="panel-title">MARKETS</div>
+
+                    <div class="market-grid">
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Step Index"
+                                   {% if settings and "Step Index" in settings["markets"] %}checked{% endif %}>
+                            <span>STEP INDEX</span>
+                        </label>
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Volatility 5 Index"
+                                   {% if settings and "Volatility 5 Index" in settings["markets"] %}checked{% endif %}>
+                            <span>V5</span>
+                        </label>
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Volatility 10 Index"
+                                   {% if settings and "Volatility 10 Index" in settings["markets"] %}checked{% endif %}>
+                            <span>V10</span>
+                        </label>
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Volatility 15 Index"
+                                   {% if settings and "Volatility 15 Index" in settings["markets"] %}checked{% endif %}>
+                            <span>V15</span>
+                        </label>
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Volatility 25 Index"
+                                   {% if settings and "Volatility 25 Index" in settings["markets"] %}checked{% endif %}>
+                            <span>V25</span>
+                        </label>
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Volatility 30 Index"
+                                   {% if settings and "Volatility 30 Index" in settings["markets"] %}checked{% endif %}>
+                            <span>V30</span>
+                        </label>
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Volatility 50 Index"
+                                   {% if settings and "Volatility 50 Index" in settings["markets"] %}checked{% endif %}>
+                            <span>V50</span>
+                        </label>
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Volatility 75 Index"
+                                   {% if settings and "Volatility 75 Index" in settings["markets"] %}checked{% endif %}>
+                            <span>V75</span>
+                        </label>
+
+                        <label class="market">
+                            <input type="checkbox"
+                                   name="markets"
+                                   value="Volatility 100 Index"
+                                   {% if settings and "Volatility 100 Index" in settings["markets"] %}checked{% endif %}>
+                            <span>V100</span>
+                        </label>
+
+                    </div>
+
+                </section>
+
+
+                <!-- STRATEGIES -->
+
+                <section class="panel">
+
+                    <div class="panel-title">STRATEGY</div>
+
+                    <div class="strategy-grid">
+
+                        <label class="strategy">
+                            <input type="checkbox"
+                                   name="strategies"
+                                   value="ABC Pattern"
+                                   {% if not settings or "ABC Pattern" in settings["strategies"] %}checked{% endif %}>
+                            <span>ABC</span>
+                        </label>
+
+                        <label class="strategy">
+                            <input type="checkbox"
+                                   name="strategies"
+                                   value="Breakout">
+                            <span>BREAKOUT</span>
+                        </label>
+
+                        <label class="strategy">
+                            <input type="checkbox"
+                                   name="strategies"
+                                   value="Trend">
+                            <span>TREND</span>
+                        </label>
+
+                    </div>
+
+                    <div class="notice" style="margin-top:12px;">
+                        ABC is currently the active online trading strategy.
+                    </div>
+
+                </section>
+
+
+                <!-- RISK MANAGEMENT -->
+
+                <section class="panel">
+
+                    <div class="panel-title">RISK MANAGEMENT</div>
+
+                    <div class="fields">
+
+                        <div class="field">
+                            <label>
+                                RISK / TRADE ($)
+                                <input type="number"
+                                       name="risk_trade"
+                                       value="{{ settings['risk_trade'] if settings else 50 }}"
+                                       step="0.01"
+                                       min="0">
+                            </label>
+                        </div>
+
+                        <div class="field">
+                            <label>
+                                RISK / REWARD
+                                <input type="number"
+                                       name="reward_risk"
+                                       value="{{ settings['reward_risk'] if settings else 2 }}"
+                                       step="0.1"
+                                       min="0.1">
+                            </label>
+                        </div>
+
+                        <div class="field">
+                            <label>
+                                DAILY TARGET ($)
+                                <input type="number"
+                                       name="daily_target"
+                                       value="{{ settings['daily_target'] if settings else 200 }}"
+                                       step="0.01"
+                                       min="0">
+                            </label>
+                        </div>
+
+                        <div class="field">
+                            <label>
+                                MAX DAILY PROFIT ($)
+                                <input type="number"
+                                       name="max_daily_profit"
+                                       value="{{ settings['max_daily_profit'] if settings else 500 }}"
+                                       step="0.01"
+                                       min="0">
+                            </label>
+                        </div>
+
+                        <div class="field">
+                            <label>
+                                MAX DAILY LOSS ($)
+                                <input type="number"
+                                       name="max_daily_loss"
+                                       value="{{ settings['max_daily_loss'] if settings else 50 }}"
+                                       step="0.01"
+                                       min="0">
+                            </label>
+                        </div>
+
+                        <div class="field">
+                            <label>
+                                PROTECT AT (%)
+                                <input type="number"
+                                       name="protect_tp"
+                                       value="{{ settings['protect_tp'] if settings else 70 }}"
+                                       step="1"
+                                       min="1"
+                                       max="100">
+                            </label>
+                        </div>
+
+                        <div class="field">
+                            <label>
+                                LOCK PROFIT (R)
+                                <input type="number"
+                                       name="lock_profit_r"
+                                       value="{{ settings['lock_profit_r'] if settings else 1 }}"
+                                       step="0.1"
+                                       min="0">
+                            </label>
+                        </div>
+
+                    </div>
+
+                </section>
+
+
+                <!-- TIMEFRAME -->
+
+                <section class="panel">
+
+                    <div class="panel-title">TIMEFRAME</div>
+
+                    <div class="locked">
+                        <div>
+                            <strong>M5</strong>
+                            — Locked
+                        </div>
+
+                        <div class="lock">
+                            LOCKED
+                        </div>
+                    </div>
+
+                    <br>
+
+                    <div class="locked">
+                        <div>
+                            Protection
+                        </div>
+
+                        <div>
+                            <strong>70% → 1R</strong>
+                        </div>
+                    </div>
+
+                </section>
+
+
+                <button class="save-btn" type="submit">
+                    SAVE SETTINGS
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <!-- RIGHT SIDE -->
+
+        <div>
+
+            <!-- BOT CONTROL -->
+
+            <section class="panel">
+
+                <div class="panel-title">BOT CONTROL</div>
+
+                <div id="botStatus" class="bot-status">
+
+                    <div class="status-dot"></div>
+
+                    <div class="status-text">
+                        STOPPED
+                    </div>
+
+                </div>
+
+                <div id="botMessage" class="bot-message">
+                    Bot stopped.
+                </div>
+
+                <div class="button-row">
+
+                    <button onclick="runBot()">
+                        RUN BOT
+                    </button>
+
+                    <button class="danger" onclick="stopBot()">
+                        STOP BOT
+                    </button>
+
+                </div>
+
+                <br>
+
+                <div class="notice">
+                    Online execution is Demo-only right now.
+                    Real account connection is available, but live trading is locked.
+                </div>
+
+            </section>
+
+
+            <!-- ACTIVE TRADE -->
+
+            <section class="panel">
+
+                <div class="panel-title">
+                    ACTIVE TRADE
+                </div>
+
+                <div id="activeTrade">
+
+                    <div class="notice">
+                        No active trade.
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- LAST TRADE -->
+
+            <section class="panel">
+
+                <div class="panel-title">
+                    LAST TRADE
+                </div>
+
+                <div id="lastTrade">
+
+                    <div class="notice">
+                        No trades this session.
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- SYSTEM -->
+
+            <section class="panel">
+
+                <div class="panel-title">
+                    SYSTEM STATUS
+                </div>
+
+                <div class="trade-box">
+
+                    <div class="trade-row">
+                        <span>Timeframe</span>
+                        <span>M5</span>
+                    </div>
+
+                    <div class="trade-row">
+                        <span>Strategy</span>
+                        <span>ABC</span>
+                    </div>
+
+                    <div class="trade-row">
+                        <span>Execution</span>
+                        <span>DEMO</span>
+                    </div>
+
+                    <div class="trade-row">
+                        <span>Protection</span>
+                        <span>70% → 1R</span>
+                    </div>
+
+                </div>
+
+            </section>
+
+        </div>
+
+    </div>
+
 </div>
-<a href="/logout">LOGOUT</a>
-</header>
 
-<div class="hero">
-<div>
-<h1>Trading Dashboard</h1>
-<p class="sub">Welcome, {{ user["username"] }}</p>
-</div>
-<div class="accountbox">
-{% if connection %}
-<strong>CONNECTED</strong><br>
-{{ connection["account_id"] }}<br>
-{{ connection["account_type"]|upper }}
-{% else %}
-<strong>NOT CONNECTED</strong>
-{% endif %}
-</div>
-</div>
-
-{% if error %}
-<div class="error">{{ error }}</div>
-{% endif %}
-
-{% if request.query_params.get("connected") %}
-<div class="success">Deriv account connected successfully.</div>
-{% endif %}
-
-<div class="grid">
-
-<div>
-
-<section class="panel">
-<h2>DERIV ACCOUNT</h2>
-
-{% if connection %}
-<p>
-<strong>Status:</strong> Connected<br>
-<strong>Account:</strong> {{ connection["account_id"] }}<br>
-<strong>Mode:</strong> {{ connection["account_type"]|upper }}
-</p>
-{% else %}
-<p>No Deriv account connected yet.</p>
-{% endif %}
-
-<div class="row">
-<a class="button" href="/deriv/connect?mode=demo">CONNECT DEMO</a>
-
-{% if allow_real %}
-<a class="button" href="/deriv/connect?mode=real">CONNECT REAL</a>
-{% else %}
-<button disabled class="disabled">REAL LOCKED</button>
-{% endif %}
-</div>
-</section>
-
-<form method="post" action="/settings">
-
-<section class="panel">
-<h2>MARKETS</h2>
-<div class="checks">
-
-<label><input type="checkbox" name="markets" value="Step Index" {% if settings and "Step Index" in settings["markets"] %}checked{% endif %}> Step Index</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 5 Index" {% if settings and "Volatility 5 Index" in settings["markets"] %}checked{% endif %}> Volatility 5</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 10 Index" {% if settings and "Volatility 10 Index" in settings["markets"] %}checked{% endif %}> Volatility 10</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 15 Index" {% if settings and "Volatility 15 Index" in settings["markets"] %}checked{% endif %}> Volatility 15</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 25 Index" {% if settings and "Volatility 25 Index" in settings["markets"] %}checked{% endif %}> Volatility 25</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 30 Index" {% if settings and "Volatility 30 Index" in settings["markets"] %}checked{% endif %}> Volatility 30</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 50 Index" {% if settings and "Volatility 50 Index" in settings["markets"] %}checked{% endif %}> Volatility 50</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 75 Index" {% if settings and "Volatility 75 Index" in settings["markets"] %}checked{% endif %}> Volatility 75</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 100 Index" {% if settings and "Volatility 100 Index" in settings["markets"] %}checked{% endif %}> Volatility 100</label>
-
-</div>
-</section>
-
-<section class="panel">
-<h2>STRATEGIES</h2>
-
-<label>
-<input type="checkbox" name="strategies" value="ABC Pattern"
-{% if not settings or "ABC Pattern" in settings["strategies"] %}checked{% endif %}>
-ABC Pattern
-</label>
-
-<label>
-<input type="checkbox" name="strategies" value="Breakout">
-Breakout
-</label>
-
-<label>
-<input type="checkbox" name="strategies" value="Trend">
-Trend
-</label>
-
-</section>
-
-<section class="panel">
-<h2>RISK MANAGEMENT</h2>
-
-<div class="fields">
-
-<label>
-Risk / Trade ($)
-<input type="number" name="risk_trade"
-value="{{ settings['risk_trade'] if settings else 50 }}"
-step="0.01" min="0">
-</label>
-
-<label>
-Risk / Reward
-<input type="number" name="reward_risk"
-value="{{ settings['reward_risk'] if settings else 2 }}"
-step="0.1" min="0.1">
-</label>
-
-<label>
-Daily Target ($)
-<input type="number" name="daily_target"
-value="{{ settings['daily_target'] if settings else 200 }}"
-step="0.01" min="0">
-</label>
-
-<label>
-Maximum Daily Profit ($)
-<input type="number" name="max_daily_profit"
-value="{{ settings['max_daily_profit'] if settings else 500 }}"
-step="0.01" min="0">
-</label>
-
-<label>
-Maximum Daily Loss ($)
-<input type="number" name="max_daily_loss"
-value="{{ settings['max_daily_loss'] if settings else 50 }}"
-step="0.01" min="0">
-</label>
-
-<label>
-Protect at TP (%)
-<input type="number" name="protect_tp"
-value="{{ settings['protect_tp'] if settings else 70 }}"
-step="1" min="1" max="100">
-</label>
-
-<label>
-Lock Profit (R)
-<input type="number" name="lock_profit_r"
-value="{{ settings['lock_profit_r'] if settings else 1 }}"
-step="0.1" min="0">
-</label>
-
-</div>
-</section>
-
-<section class="panel">
-<h2>TIMEFRAME</h2>
-<p><strong>M5</strong> — Locked</p>
-<p>Protection: <strong>70% → 1R</strong></p>
-</section>
-
-<button type="submit">SAVE SETTINGS</button>
-
-</form>
-
-</div>
-
-<div>
-
-<section class="panel">
-<h2>BOT CONTROL</h2>
-
-<p id="botStatus">
-<strong>● STOPPED</strong>
-</p>
-
-<p id="botMessage" class="note">
-Bot stopped.
-</p>
-
-<div class="row">
-<button id="runBtn" onclick="runBot()">RUN BOT</button>
-<button id="stopBtn" class="danger" onclick="stopBot()">STOP BOT</button>
-</div>
-
-<p class="note">
-Online execution is Demo-only right now.
-Real account connection is available, but live trading is locked.
-</p>
-
-</section>
-
-<section class="panel">
-<h2>LAST TRADE</h2>
-<div id="lastTrade" class="note">
-No trades this session.
-</div>
-</section>
-
-</div>
-</div>
-
-</main>
 
 <script>
 
 async function api(url, method="GET") {
-const r = await fetch(url,{method});
-const d = await r.json();
 
-if(!r.ok) {
-throw new Error(d.error || "Request failed");
+    const r = await fetch(url, { method });
+
+    const d = await r.json();
+
+    if (!r.ok) {
+        throw new Error(d.error || "Request failed");
+    }
+
+    return d;
 }
 
-return d;
+
+function money(value) {
+
+    const n = Number(value || 0);
+
+    return "$" + n.toFixed(2);
+
 }
+
+
+function renderTrade(trade) {
+
+    if (!trade) {
+
+        return `
+            <div class="notice">
+                No active trade.
+            </div>
+        `;
+
+    }
+
+    const profit = Number(trade.profit || 0);
+
+    const profitClass =
+        profit >= 0 ? "profit" : "loss";
+
+    return `
+
+        <div class="trade-box">
+
+            <div class="trade-row">
+                <span>MARKET</span>
+                <span>${trade.market || "—"}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>DIRECTION</span>
+                <span>${trade.direction || "—"}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>ENTRY</span>
+                <span>${trade.entry_price ?? "—"}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>CURRENT</span>
+                <span>${trade.current_price ?? "—"}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>ENTRY SPOT</span>
+                <span>${trade.entry_spot ?? "—"}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>CURRENT SPOT</span>
+                <span>${trade.current_spot ?? "—"}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>STAKE</span>
+                <span>${money(trade.stake)}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>LIVE P/L</span>
+                <span class="${profitClass}">
+                    ${money(profit)}
+                </span>
+            </div>
+
+            <div class="trade-row">
+                <span>STATUS</span>
+                <span>${trade.status || "—"}</span>
+            </div>
+
+        </div>
+    `;
+
+}
+
+
+function renderLastTrade(trade) {
+
+    if (!trade) {
+
+        return `
+            <div class="notice">
+                No trades this session.
+            </div>
+        `;
+
+    }
+
+    const profit = Number(trade.profit || 0);
+
+    const profitClass =
+        profit >= 0 ? "profit" : "loss";
+
+    return `
+
+        <div class="trade-box">
+
+            <div class="trade-row">
+                <span>MARKET</span>
+                <span>${trade.market || "—"}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>DIRECTION</span>
+                <span>${trade.direction || "—"}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>STAKE</span>
+                <span>${money(trade.stake)}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>PAYOUT</span>
+                <span>${money(trade.payout)}</span>
+            </div>
+
+            <div class="trade-row">
+                <span>P/L</span>
+                <span class="${profitClass}">
+                    ${money(profit)}
+                </span>
+            </div>
+
+            <div class="trade-row">
+                <span>STATUS</span>
+                <span>${trade.status || "—"}</span>
+            </div>
+
+        </div>
+
+    `;
+
+}
+
 
 async function refreshState() {
 
-try {
+    try {
 
-const s = await api("/api/trading/state");
+        const s =
+            await api("/api/trading/state");
 
-document.getElementById("botStatus").innerHTML =
-s.running
-? '<strong style="color:#24e37b">● RUNNING</strong>'
-: '<strong>● STOPPED</strong>';
 
-document.getElementById("botMessage").textContent =
-s.message || "";
+        const status =
+            document.getElementById("botStatus");
 
-if(s.last_trade) {
 
-document.getElementById("lastTrade").textContent =
-`${s.last_trade.market} ${s.last_trade.direction} • $${Number(s.last_trade.stake).toFixed(2)} • payout $${Number(s.last_trade.payout).toFixed(2)} • ${s.last_trade.contract_id || ""}`;
+        if (s.running) {
+
+            status.classList.add("running");
+
+            status.innerHTML = `
+                <div class="status-dot"></div>
+                <div class="status-text">
+                    RUNNING
+                </div>
+            `;
+
+        } else {
+
+            status.classList.remove("running");
+
+            status.innerHTML = `
+                <div class="status-dot"></div>
+                <div class="status-text">
+                    STOPPED
+                </div>
+            `;
+
+        }
+
+
+        document.getElementById("botMessage").textContent =
+            s.message || "";
+
+
+        document.getElementById("activeTrade").innerHTML =
+            renderTrade(
+                s.last_trade && s.last_trade.is_open
+                    ? s.last_trade
+                    : null
+            );
+
+
+        document.getElementById("lastTrade").innerHTML =
+            renderLastTrade(s.last_trade);
+
+
+    } catch (e) {
+
+        console.log(e);
+
+    }
 
 }
 
-} catch(e) {}
-
-}
 
 async function runBot() {
 
-try {
+    try {
 
-const d = await api("/api/trading/start","POST");
+        const d =
+            await api(
+                "/api/trading/start",
+                "POST"
+            );
 
-document.getElementById("botMessage").textContent =
-d.message;
+        document.getElementById("botMessage").textContent =
+            d.message || "Bot starting...";
 
-refreshState();
+        refreshState();
 
-} catch(e) {
+    } catch (e) {
 
-alert(e.message);
+        alert(e.message);
+
+    }
 
 }
 
-}
 
 async function stopBot() {
 
-try {
+    try {
 
-await api("/api/trading/stop","POST");
+        await api(
+            "/api/trading/stop",
+            "POST"
+        );
 
-refreshState();
+        refreshState();
 
-} catch(e) {
+    } catch (e) {
 
-alert(e.message);
+        alert(e.message);
+
+    }
 
 }
 
-}
 
 refreshState();
 
-setInterval(refreshState,3000);
+setInterval(refreshState, 3000);
 
 </script>
 
