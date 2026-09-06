@@ -3,300 +3,1053 @@
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{ title }}</title>
-<link rel="stylesheet" href="/static/style.css">
+
+<style>
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    background:#07152b;
+    color:#fff;
+    font-family:Arial,sans-serif;
+}
+
+main{
+    max-width:1400px;
+    margin:auto;
+    padding:18px;
+}
+
+header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:18px 22px;
+    background:#0b1e3a;
+    border:1px solid #19365f;
+    border-radius:12px;
+    margin-bottom:14px;
+}
+
+.brand{
+    font-size:23px;
+    font-weight:bold;
+}
+
+.brand span{
+    display:block;
+    font-size:12px;
+    color:#8da4c7;
+    margin-top:4px;
+}
+
+.header-right{
+    display:flex;
+    align-items:center;
+    gap:18px;
+}
+
+.user{
+    color:#b9c8dd;
+    font-size:13px;
+}
+
+.status{
+    padding:8px 13px;
+    border-radius:7px;
+    background:#123b2b;
+    color:#27e47b;
+    font-weight:bold;
+    font-size:12px;
+}
+
+.logout{
+    color:#fff;
+    text-decoration:none;
+    font-size:12px;
+}
+
+.panel{
+    background:#0b1e3a;
+    border:1px solid #19365f;
+    border-radius:10px;
+    padding:18px;
+    margin-bottom:14px;
+}
+
+h2{
+    margin:0 0 15px;
+    font-size:14px;
+    color:#bcd0ec;
+    letter-spacing:.5px;
+}
+
+.account-status{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:15px;
+}
+
+.account-info{
+    color:#9db2cf;
+    font-size:13px;
+    line-height:1.6;
+}
+
+.account-buttons{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+
+button,.button{
+    border:0;
+    background:#1677ff;
+    color:white;
+    padding:10px 15px;
+    border-radius:6px;
+    cursor:pointer;
+    font-weight:bold;
+    text-decoration:none;
+    font-size:12px;
+}
+
+button:hover,.button:hover{
+    opacity:.9;
+}
+
+button.danger{
+    background:#c93645;
+}
+
+button.disabled{
+    background:#34445c;
+    cursor:not-allowed;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:10px;
+}
+
+.stat{
+    background:#071a33;
+    border:1px solid #19365f;
+    border-radius:8px;
+    padding:15px;
+    min-height:90px;
+}
+
+.stat-title{
+    color:#8199ba;
+    font-size:11px;
+    margin-bottom:10px;
+}
+
+.stat-value{
+    font-size:22px;
+    font-weight:bold;
+}
+
+.profit{
+    color:#27e47b;
+}
+
+.loss{
+    color:#ff5b68;
+}
+
+.main-grid{
+    display:grid;
+    grid-template-columns:360px 1fr;
+    gap:14px;
+}
+
+.checks{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+}
+
+.checks label,
+.strategy label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    color:#d8e4f4;
+    font-size:13px;
+}
+
+input[type=checkbox]{
+    accent-color:#1677ff;
+}
+
+.strategy{
+    display:grid;
+    gap:10px;
+}
+
+.fields{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+}
+
+.fields label{
+    color:#9db2cf;
+    font-size:11px;
+}
+
+input[type=number]{
+    width:100%;
+    margin-top:6px;
+    background:#07152b;
+    color:white;
+    border:1px solid #29486f;
+    border-radius:5px;
+    padding:9px;
+}
+
+.position-wrap{
+    overflow-x:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:650px;
+}
+
+th{
+    text-align:left;
+    color:#8299b9;
+    font-size:10px;
+    padding:10px;
+    border-bottom:1px solid #234267;
+}
+
+td{
+    padding:11px 10px;
+    border-bottom:1px solid #142f51;
+    font-size:12px;
+}
+
+.buy{
+    color:#27e47b;
+    font-weight:bold;
+}
+
+.sell{
+    color:#ff5b68;
+    font-weight:bold;
+}
+
+.empty{
+    text-align:center;
+    color:#7187a7;
+    padding:25px;
+}
+
+.bot-controls{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.note{
+    color:#8299b9;
+    font-size:12px;
+    line-height:1.5;
+}
+
+.error{
+    background:#421b25;
+    border:1px solid #7a3040;
+    padding:12px;
+    border-radius:7px;
+    margin-bottom:14px;
+}
+
+.success{
+    background:#123b2b;
+    border:1px solid #236d4c;
+    color:#27e47b;
+    padding:12px;
+    border-radius:7px;
+    margin-bottom:14px;
+}
+
+.activity{
+    max-height:220px;
+    overflow:auto;
+}
+
+.activity-row{
+    padding:9px 0;
+    border-bottom:1px solid #142f51;
+    font-size:12px;
+    color:#9db2cf;
+}
+
+@media(max-width:900px){
+    .stats{
+        grid-template-columns:repeat(3,1fr);
+    }
+
+    .main-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+@media(max-width:600px){
+    main{
+        padding:9px;
+    }
+
+    header{
+        padding:14px;
+    }
+
+    .brand{
+        font-size:18px;
+    }
+
+    .header-right{
+        gap:8px;
+    }
+
+    .user{
+        display:none;
+    }
+
+    .stats{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+    .fields{
+        grid-template-columns:1fr;
+    }
+
+    .checks{
+        grid-template-columns:1fr;
+    }
+
+    .account-status{
+        align-items:flex-start;
+        flex-direction:column;
+    }
+}
+</style>
 </head>
 
 <body>
-<main class="card wide">
+
+<main>
 
 <header>
-<div>
-<strong>NR AUTO TRADING</strong>
-<span>Online Trading Dashboard</span>
-</div>
-<a href="/logout">LOGOUT</a>
+    <div class="brand">
+        NR AUTO TRADING
+        <span>Online Trading Dashboard</span>
+    </div>
+
+    <div class="header-right">
+        <span class="user">USER: {{ user["username"] }}</span>
+        <span id="headerStatus" class="status">BOT STOPPED</span>
+        <a class="logout" href="/logout">LOG OUT</a>
+    </div>
 </header>
 
-<div class="hero">
-<div>
-<h1>Trading Dashboard</h1>
-<p class="sub">Welcome, {{ user["username"] }}</p>
-</div>
-<div class="accountbox">
-{% if connection %}
-<strong>CONNECTED</strong><br>
-{{ connection["account_id"] }}<br>
-{{ connection["account_type"]|upper }}
-{% else %}
-<strong>NOT CONNECTED</strong>
-{% endif %}
-</div>
-</div>
 
-{% if error %}
-<div class="error">{{ error }}</div>
-{% endif %}
-
-{% if request.query_params.get("connected") %}
-<div class="success">Deriv account connected successfully.</div>
-{% endif %}
-
-<div class="grid">
-
-<div>
+<!-- DERIV ACCOUNT -->
 
 <section class="panel">
-<h2>DERIV ACCOUNT</h2>
+
+<h2>TRADING ACCOUNT</h2>
+
+<div class="account-status">
+
+<div class="account-info">
 
 {% if connection %}
-<p>
-<strong>Status:</strong> Connected<br>
-<strong>Account:</strong> {{ connection["account_id"] }}<br>
-<strong>Mode:</strong> {{ connection["account_type"]|upper }}
-</p>
+
+<strong id="accountId">
+{{ connection["account_id"] }}
+</strong>
+
+<br>
+
+<span id="accountMode">
+{{ connection["account_type"]|upper }}
+</span>
+
+<br>
+
+<span id="connectionStatus">CONNECTED</span>
+
 {% else %}
-<p>No Deriv account connected yet.</p>
+
+<span id="connectionStatus">NOT CONNECTED</span>
+
 {% endif %}
 
-<div class="row">
-<a class="button" href="/deriv/connect?mode=demo">CONNECT DEMO</a>
+</div>
+
+<div class="account-buttons">
+
+<a class="button" href="/deriv/connect?mode=demo">
+DEMO ACCOUNT
+</a>
 
 {% if allow_real %}
-<a class="button" href="/deriv/connect?mode=real">CONNECT REAL</a>
+
+<a class="button" href="/deriv/connect?mode=real">
+REAL ACCOUNT
+</a>
+
 {% else %}
-<button disabled class="disabled">REAL LOCKED</button>
+
+<button disabled class="disabled">
+REAL LOCKED
+</button>
+
 {% endif %}
+
 </div>
+
+</div>
+
 </section>
+
+
+<!-- ACCOUNT / TODAY -->
+
+<section class="panel">
+
+<h2>ACCOUNT / TODAY</h2>
+
+<div class="stats">
+
+<div class="stat">
+<div class="stat-title">BALANCE</div>
+<div id="balance" class="stat-value">$0.00</div>
+</div>
+
+<div class="stat">
+<div class="stat-title">EQUITY</div>
+<div id="equity" class="stat-value">$0.00</div>
+</div>
+
+<div class="stat">
+<div class="stat-title">TODAY'S P/L</div>
+<div id="todayPL" class="stat-value">$0.00</div>
+</div>
+
+<div class="stat">
+<div class="stat-title">OPEN TRADES</div>
+<div id="openTrades" class="stat-value">0</div>
+</div>
+
+<div class="stat">
+<div class="stat-title">WINS</div>
+<div id="wins" class="stat-value">0</div>
+</div>
+
+<div class="stat">
+<div class="stat-title">LOSSES</div>
+<div id="losses" class="stat-value">0</div>
+</div>
+
+</div>
+
+</section>
+
+
+<div class="main-grid">
+
+
+<!-- LEFT SIDE -->
+
+<div>
+
 
 <form method="post" action="/settings">
 
+
 <section class="panel">
+
 <h2>MARKETS</h2>
+
 <div class="checks">
 
-<label><input type="checkbox" name="markets" value="Step Index" {% if settings and "Step Index" in settings["markets"] %}checked{% endif %}> Step Index</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 5 Index" {% if settings and "Volatility 5 Index" in settings["markets"] %}checked{% endif %}> Volatility 5</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 10 Index" {% if settings and "Volatility 10 Index" in settings["markets"] %}checked{% endif %}> Volatility 10</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 15 Index" {% if settings and "Volatility 15 Index" in settings["markets"] %}checked{% endif %}> Volatility 15</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 25 Index" {% if settings and "Volatility 25 Index" in settings["markets"] %}checked{% endif %}> Volatility 25</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 30 Index" {% if settings and "Volatility 30 Index" in settings["markets"] %}checked{% endif %}> Volatility 30</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 50 Index" {% if settings and "Volatility 50 Index" in settings["markets"] %}checked{% endif %}> Volatility 50</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 75 Index" {% if settings and "Volatility 75 Index" in settings["markets"] %}checked{% endif %}> Volatility 75</label>
-
-<label><input type="checkbox" name="markets" value="Volatility 100 Index" {% if settings and "Volatility 100 Index" in settings["markets"] %}checked{% endif %}> Volatility 100</label>
-
-</div>
-</section>
-
-<section class="panel">
-<h2>STRATEGIES</h2>
+<label>
+<input type="checkbox" name="markets" value="Step Index"
+{% if settings and "Step Index" in settings["markets"] %}checked{% endif %}>
+Step Index
+</label>
 
 <label>
-<input type="checkbox" name="strategies" value="ABC Pattern"
+<input type="checkbox" name="markets" value="Volatility 5 Index"
+{% if settings and "Volatility 5 Index" in settings["markets"] %}checked{% endif %}>
+Volatility 5
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 10 Index"
+{% if settings and "Volatility 10 Index" in settings["markets"] %}checked{% endif %}>
+Volatility 10
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 15 Index"
+{% if settings and "Volatility 15 Index" in settings["markets"] %}checked{% endif %}>
+Volatility 15
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 25 Index"
+{% if settings and "Volatility 25 Index" in settings["markets"] %}checked{% endif %}>
+Volatility 25
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 30 Index"
+{% if settings and "Volatility 30 Index" in settings["markets"] %}checked{% endif %}>
+Volatility 30
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 50 Index"
+{% if settings and "Volatility 50 Index" in settings["markets"] %}checked{% endif %}>
+Volatility 50
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 75 Index"
+{% if settings and "Volatility 75 Index" in settings["markets"] %}checked{% endif %}>
+Volatility 75
+</label>
+
+<label>
+<input type="checkbox" name="markets" value="Volatility 100 Index"
+{% if settings and "Volatility 100 Index" in settings["markets"] %}checked{% endif %}>
+Volatility 100
+</label>
+
+</div>
+
+</section>
+
+
+<section class="panel">
+
+<h2>STRATEGIES</h2>
+
+<div class="strategy">
+
+<label>
+<input type="checkbox"
+name="strategies"
+value="ABC Pattern"
 {% if not settings or "ABC Pattern" in settings["strategies"] %}checked{% endif %}>
 ABC Pattern
 </label>
 
 <label>
-<input type="checkbox" name="strategies" value="Breakout">
+<input type="checkbox"
+name="strategies"
+value="Breakout">
 Breakout
 </label>
 
 <label>
-<input type="checkbox" name="strategies" value="Trend">
+<input type="checkbox"
+name="strategies"
+value="Trend">
 Trend
 </label>
 
+</div>
+
 </section>
 
+
 <section class="panel">
-<h2>RISK MANAGEMENT</h2>
+
+<h2>RISK & PROTECTION</h2>
 
 <div class="fields">
 
 <label>
 Risk / Trade ($)
-<input type="number" name="risk_trade"
+<input type="number"
+name="risk_trade"
 value="{{ settings['risk_trade'] if settings else 50 }}"
-step="0.01" min="0">
+step="0.01">
 </label>
 
 <label>
-Risk / Reward
-<input type="number" name="reward_risk"
+Reward / Risk
+<input type="number"
+name="reward_risk"
 value="{{ settings['reward_risk'] if settings else 2 }}"
-step="0.1" min="0.1">
+step="0.1">
 </label>
 
 <label>
 Daily Target ($)
-<input type="number" name="daily_target"
+<input type="number"
+name="daily_target"
 value="{{ settings['daily_target'] if settings else 200 }}"
-step="0.01" min="0">
+step="0.01">
 </label>
 
 <label>
-Maximum Daily Profit ($)
-<input type="number" name="max_daily_profit"
+Max Daily Profit ($)
+<input type="number"
+name="max_daily_profit"
 value="{{ settings['max_daily_profit'] if settings else 500 }}"
-step="0.01" min="0">
+step="0.01">
 </label>
 
 <label>
-Maximum Daily Loss ($)
-<input type="number" name="max_daily_loss"
+Max Daily Loss ($)
+<input type="number"
+name="max_daily_loss"
 value="{{ settings['max_daily_loss'] if settings else 50 }}"
-step="0.01" min="0">
+step="0.01">
 </label>
 
 <label>
 Protect at TP (%)
-<input type="number" name="protect_tp"
+<input type="number"
+name="protect_tp"
 value="{{ settings['protect_tp'] if settings else 70 }}"
-step="1" min="1" max="100">
+step="1">
 </label>
 
 <label>
 Lock Profit (R)
-<input type="number" name="lock_profit_r"
+<input type="number"
+name="lock_profit_r"
 value="{{ settings['lock_profit_r'] if settings else 1 }}"
-step="0.1" min="0">
+step="0.1">
 </label>
 
 </div>
+
+<p class="note">
+M5 locked • Protection 70% → 1R
+</p>
+
 </section>
+
 
 <section class="panel">
+
 <h2>TIMEFRAME</h2>
-<p><strong>M5</strong> — Locked</p>
-<p>Protection: <strong>70% → 1R</strong></p>
+
+<strong>M5 — LOCKED</strong>
+
 </section>
 
-<button type="submit">SAVE SETTINGS</button>
+
+<button type="submit">
+SAVE SETTINGS
+</button>
 
 </form>
 
-</div>
-
-<div>
 
 <section class="panel">
-<h2>BOT CONTROL</h2>
 
-<p id="botStatus">
+<h2>BOT CONTROLS</h2>
+
+<div id="botStatus">
 <strong>● STOPPED</strong>
-</p>
+</div>
 
 <p id="botMessage" class="note">
 Bot stopped.
 </p>
 
-<div class="row">
-<button id="runBtn" onclick="runBot()">RUN BOT</button>
-<button id="stopBtn" class="danger" onclick="stopBot()">STOP BOT</button>
-</div>
+<div class="bot-controls">
 
-<p class="note">
-Online execution is Demo-only right now.
-Real account connection is available, but live trading is locked.
-</p>
+<button onclick="runBot()">
+START BOT
+</button>
+
+<button class="danger" onclick="stopBot()">
+STOP BOT
+</button>
+
+</div>
 
 </section>
 
+</div>
+
+
+<!-- RIGHT SIDE -->
+
+<div>
+
 <section class="panel">
+
+<h2>OPEN POSITIONS</h2>
+
+<div class="position-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>SYMBOL</th>
+<th>TYPE</th>
+<th>ENTRY</th>
+<th>CURRENT</th>
+<th>P/L</th>
+<th>STATUS</th>
+</tr>
+
+</thead>
+
+<tbody id="positions">
+
+<tr>
+<td colspan="6" class="empty">
+No open trades
+</td>
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</section>
+
+
+<section class="panel">
+
 <h2>LAST TRADE</h2>
+
 <div id="lastTrade" class="note">
 No trades this session.
 </div>
+
+</section>
+
+
+<section class="panel">
+
+<h2>ACTIVITY</h2>
+
+<div id="activity" class="activity">
+
+<div class="activity-row">
+System ready.
+</div>
+
+</div>
+
 </section>
 
 </div>
+
 </div>
 
 </main>
 
+
 <script>
 
-async function api(url, method="GET") {
-const r = await fetch(url,{method});
-const d = await r.json();
+async function api(url, method="GET"){
 
-if(!r.ok) {
-throw new Error(d.error || "Request failed");
+    const response = await fetch(url,{method:method});
+
+    const data = await response.json();
+
+    if(!response.ok){
+        throw new Error(data.error || "Request failed");
+    }
+
+    return data;
 }
 
-return d;
+
+function money(value){
+
+    const n = Number(value || 0);
+
+    return "$" + n.toFixed(2);
 }
 
-async function refreshState() {
 
-try {
+function setMoney(id,value){
 
-const s = await api("/api/trading/state");
+    const element = document.getElementById(id);
 
-document.getElementById("botStatus").innerHTML =
-s.running
-? '<strong style="color:#24e37b">● RUNNING</strong>'
-: '<strong>● STOPPED</strong>';
+    if(!element) return;
 
-document.getElementById("botMessage").textContent =
-s.message || "";
+    const n = Number(value || 0);
 
-if(s.last_trade) {
+    element.textContent = money(n);
 
-document.getElementById("lastTrade").textContent =
-`${s.last_trade.market} ${s.last_trade.direction} • $${Number(s.last_trade.stake).toFixed(2)} • payout $${Number(s.last_trade.payout).toFixed(2)} • ${s.last_trade.contract_id || ""}`;
+    element.classList.remove("profit","loss");
+
+    if(n > 0){
+        element.classList.add("profit");
+    }
+
+    if(n < 0){
+        element.classList.add("loss");
+    }
+}
+
+
+function renderPositions(positions){
+
+    const table = document.getElementById("positions");
+
+    if(!positions || !positions.length){
+
+        table.innerHTML = `
+        <tr>
+        <td colspan="6" class="empty">
+        No open trades
+        </td>
+        </tr>`;
+
+        return;
+    }
+
+
+    table.innerHTML = positions.map(p => {
+
+        const direction = String(
+            p.direction || p.type || ""
+        ).toUpperCase();
+
+        const cls =
+            direction.includes("BUY") ||
+            direction.includes("CALL")
+            ? "buy"
+            : "sell";
+
+
+        return `
+        <tr>
+
+        <td>${p.symbol || p.market || "-"}</td>
+
+        <td class="${cls}">
+        ${direction || "-"}
+        </td>
+
+        <td>
+        ${p.entry !== undefined
+            ? Number(p.entry).toFixed(4)
+            : "-"}
+        </td>
+
+        <td>
+        ${p.current !== undefined
+            ? Number(p.current).toFixed(4)
+            : "-"}
+        </td>
+
+        <td class="${Number(p.profit || 0) >= 0 ? "buy" : "sell"}">
+        ${money(p.profit || 0)}
+        </td>
+
+        <td>
+        ${p.status || "OPEN"}
+        </td>
+
+        </tr>
+        `;
+
+    }).join("");
+}
+
+
+function renderActivity(items){
+
+    const box = document.getElementById("activity");
+
+    if(!items || !items.length) return;
+
+    box.innerHTML = items.map(item => {
+
+        if(typeof item === "string"){
+            return `<div class="activity-row">${item}</div>`;
+        }
+
+        return `
+        <div class="activity-row">
+        ${item.message || item.text || ""}
+        </div>`;
+
+    }).join("");
+}
+
+
+async function refreshState(){
+
+    try{
+
+        const s = await api("/api/trading/state");
+
+
+        /* BOT STATUS */
+
+        const running = !!s.running;
+
+        document.getElementById("headerStatus").textContent =
+            running ? "BOT RUNNING" : "BOT STOPPED";
+
+
+        document.getElementById("headerStatus").style.color =
+            running ? "#27e47b" : "#ff6975";
+
+
+        document.getElementById("botStatus").innerHTML =
+            running
+            ? '<strong style="color:#27e47b">● RUNNING</strong>'
+            : '<strong>● STOPPED</strong>';
+
+
+        document.getElementById("botMessage").textContent =
+            s.message || "";
+
+
+        /* ACCOUNT / TODAY */
+
+        setMoney("balance",s.balance);
+
+        setMoney("equity",s.equity);
+
+        setMoney("todayPL",
+            s.today_pl !== undefined
+            ? s.today_pl
+            : s.daily_pl
+        );
+
+
+        document.getElementById("openTrades").textContent =
+            s.open_trades !== undefined
+            ? s.open_trades
+            : (s.positions || []).length;
+
+
+        document.getElementById("wins").textContent =
+            s.wins !== undefined ? s.wins : 0;
+
+
+        document.getElementById("losses").textContent =
+            s.losses !== undefined ? s.losses : 0;
+
+
+        /* OPEN POSITIONS */
+
+        renderPositions(
+            s.positions ||
+            s.open_positions ||
+            []
+        );
+
+
+        /* LAST TRADE */
+
+        if(s.last_trade){
+
+            const t = s.last_trade;
+
+            document.getElementById("lastTrade").textContent =
+                `${t.market || t.symbol || ""} ` +
+                `${t.direction || t.type || ""} • ` +
+                `$${Number(t.stake || 0).toFixed(2)} • ` +
+                `P/L ${money(t.profit || 0)} • ` +
+                `${t.contract_id || ""}`;
+
+        }
+
+
+        /* ACTIVITY */
+
+        if(s.activity){
+
+            renderActivity(s.activity);
+
+        }
+
+    }
+
+    catch(error){
+
+        console.log(error);
+
+    }
 
 }
 
-} catch(e) {}
+
+async function runBot(){
+
+    try{
+
+        const result =
+            await api("/api/trading/start","POST");
+
+        document.getElementById("botMessage").textContent =
+            result.message || "Bot started.";
+
+        refreshState();
+
+    }
+
+    catch(error){
+
+        alert(error.message);
+
+    }
 
 }
 
-async function runBot() {
 
-try {
+async function stopBot(){
 
-const d = await api("/api/trading/start","POST");
+    try{
 
-document.getElementById("botMessage").textContent =
-d.message;
+        const result =
+            await api("/api/trading/stop","POST");
+
+        document.getElementById("botMessage").textContent =
+            result.message || "Bot stopped.";
+
+        refreshState();
+
+    }
+
+    catch(error){
+
+        alert(error.message);
+
+    }
+
+}
+
+
+/* INITIAL LOAD */
 
 refreshState();
 
-} catch(e) {
 
-alert(e.message);
-
-}
-
-}
-
-async function stopBot() {
-
-try {
-
-await api("/api/trading/stop","POST");
-
-refreshState();
-
-} catch(e) {
-
-alert(e.message);
-
-}
-
-}
-
-refreshState();
+/* LIVE UPDATE */
 
 setInterval(refreshState,3000);
 
