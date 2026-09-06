@@ -226,7 +226,7 @@ async def deriv_connect(request: Request, mode: str = "demo"):
             "error": "DERIV_CLIENT_ID is not configured yet."}, status_code=500)
     if mode not in {"demo", "real"}:
         mode = "demo"
-        verifier = secrets.token_urlsafe(64)
+    verifier = secrets.token_urlsafe(64)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     state = secrets.token_urlsafe(32)
     request.session["oauth_verifier"] = verifier
