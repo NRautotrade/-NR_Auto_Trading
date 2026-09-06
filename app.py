@@ -391,61 +391,26 @@ def resolve_online_symbol(active_symbols, wanted):
 def abc_signal(candles, swing_len=2):
     if len(candles) < 20:
         return None
-
-    # Deriv API returns candle objects with named fields:
-    # epoch, open, high, low, close.
-    # Keep a fallback for older array-style candle data.
-    def candle_high(c):
-        if isinstance(c, dict):
-            return float(c["high"])
-        return float(c[2])
-
-    def candle_low(c):
-        if isinstance(c, dict):
-            return float(c["low"])
-        return float(c[3])
-
-    hi = [candle_high(c) for c in candles]
-    lo = [candle_low(c) for c in candles]
-
-    highs = []
-    lows = []
-
+    hi = [float(c[2]) for c in candles]
+    lo = [float(c[3]) for c in candles]
+    highs, lows = [], []
     for i in range(swing_len, len(candles) - swing_len):
-        if all(
-            hi[i] > hi[i-j] and hi[i] > hi[i+j]
-            for j in range(1, swing_len + 1)
-        ):
+        if all(hi[i] > hi[i-j] and hi[i] > hi[i+j] for j in range(1, swing_len+1)):
             highs.append((i, hi[i]))
-
-        if all(
-            lo[i] < lo[i-j] and lo[i] < lo[i+j]
-            for j in range(1, swing_len + 1)
-        ):
+        if all(lo[i] < lo[i-j] and lo[i] < lo[i+j] for j in range(1, swing_len+1)):
             lows.append((i, lo[i]))
-
-    # Bearish ABC → PUT
     if len(highs) >= 2 and len(lows) >= 1:
-        ai, A = highs[-2]
-        ci, C = highs[-1]
-
+        ai, A = highs[-2]; ci, C = highs[-1]
         mids = [x for x in lows if ai < x[0] < ci]
-
         if mids and C < A:
             bi, B = mids[-1]
             return ("PUT", ai, bi, ci, A, B, C)
-
-    # Bullish ABC → CALL
     if len(lows) >= 2 and len(highs) >= 1:
-        ai, A = lows[-2]
-        ci, C = lows[-1]
-
+        ai, A = lows[-2]; ci, C = lows[-1]
         mids = [x for x in highs if ai < x[0] < ci]
-
         if mids and C > A:
             bi, B = mids[-1]
             return ("CALL", ai, bi, ci, A, B, C)
-
     return None
 
 async def fetch_m5_candles(ws, symbol):
@@ -473,10 +438,40 @@ async def demo_bot_worker(user_id, account_id, token, markets, risk, rr):
             state["symbols"] = symbols
             state["message"] = "Demo worker is running. Waiting for ABC setupsâ¦"
             last_setup = {}
-            open_markets = set()
+            open_contracts = {}
             while not state.get("stop_requested"):
+                # Refresh every open contract so the dashboard shows live P/L.
+                for market, contract_id in list(open_contracts.items()):
+                    try:
+                        msg = await ws_request(ws, {
+                            "proposal_open_contract": 1,
+                            "contract_id": contract_id,
+                            "subscribe": 1,
+                        }, 6000 + len(open_contracts))
+                        c = msg.get("proposal_open_contract", {})
+                        lt = state.get("last_trade") or {}
+                        lt.update({
+                            "market": market,
+                            "contract_id": contract_id,
+                            "status": c.get("status", "open"),
+                            "is_open": not bool(c.get("is_sold")),
+                            "entry_price": c.get("buy_price", lt.get("stake", 0)),
+                            "current_price": c.get("bid_price", c.get("current_spot", lt.get("stake", 0))),
+                            "entry_spot": c.get("entry_spot"),
+                            "current_spot": c.get("current_spot"),
+                            "profit": float(c.get("profit", 0) or 0),
+                            "payout": c.get("payout", lt.get("payout")),
+                        })
+                        state["last_trade"] = lt
+                        if c.get("is_sold") or c.get("status") in {"won", "lost", "sold", "expired"}:
+                            open_contracts.pop(market, None)
+                            state["message"] = f"{market}: contract {c.get('status', 'closed').upper()} â P/L ${float(c.get('profit', 0) or 0):+.2f}"
+                            continue
+                    except Exception:
+                        pass
+
                 for market, symbol in symbols.items():
-                    if market in open_markets or state.get("stop_requested"):
+                    if market in open_contracts or state.get("stop_requested"):
                         continue
                     try:
                         candles = await fetch_m5_candles(ws, symbol)
@@ -517,10 +512,24 @@ async def demo_bot_worker(user_id, account_id, token, markets, risk, rr):
 
                         buy = await ws_request(ws, {"buy": proposal_id, "price": ask}, 500 + hash((market, key)) % 1000)
                         contract = buy.get("buy", {})
-                        open_markets.add(market)
+                        contract_id = contract.get("contract_id")
+                        if not contract_id:
+                            continue
+                        open_contracts[market] = contract_id
                         state["trades"] = int(state.get("trades", 0)) + 1
-                        state["message"] = f"DEMO TRADE: {market} {direction} ${ask:.2f} / 5m"
-                        state["last_trade"] = {"market": market, "direction": direction, "stake": ask, "payout": payout, "contract_id": contract.get("contract_id")}
+                        state["message"] = f"DEMO TRADE OPEN: {market} {direction} ${ask:.2f} / 5m"
+                        state["last_trade"] = {
+                            "market": market,
+                            "direction": direction,
+                            "stake": ask,
+                            "payout": payout,
+                            "contract_id": contract_id,
+                            "status": "open",
+                            "is_open": True,
+                            "entry_price": ask,
+                            "current_price": ask,
+                            "profit": 0.0,
+                        }
                     except Exception as exc:
                         state["message"] = f"{market}: {type(exc).__name__} â waiting."
                 await asyncio.sleep(10)
