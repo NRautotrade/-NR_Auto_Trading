@@ -281,9 +281,18 @@ async def deriv_callback(request: Request, code: str | None = None, state: str |
     data = acct_resp.json().get("data", [])
     mode = request.session.pop("oauth_mode", "demo")
     wanted = [a for a in data if str(a.get("account_type", "")).lower() == mode]
-    account = wanted[0] if wanted else (data[0] if data else None)
-    if not account:
-        return templates.TemplateResponse("result.html", {"request": request, "title": APP_NAME, "message": "No Deriv trading account was returned."}, status_code=400)
+    if not wanted:
+        label = "real" if mode == "real" else "demo"
+        return templates.TemplateResponse(
+            "result.html",
+            {
+                "request": request,
+                "title": APP_NAME,
+                "message": f"No {label} Deriv trading account was returned for this authorization. Please make sure the {label} account is available on your Deriv profile and try again."
+            },
+            status_code=400
+        )
+    account = wanted[0]
 
     encrypted = protect_token(token)
     conn = db()
