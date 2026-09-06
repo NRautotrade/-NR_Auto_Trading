@@ -202,7 +202,8 @@ async def dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "title": APP_NAME, "user": user,
         "settings": settings, "connection": connection,
-        "allow_real": ALLOW_REAL_TRADING
+        "allow_real": ALLOW_REAL_TRADING,
+        "real_connection_enabled": True
     })
 
 @app.post("/settings")
@@ -225,12 +226,7 @@ async def deriv_connect(request: Request, mode: str = "demo"):
             "error": "DERIV_CLIENT_ID is not configured yet."}, status_code=500)
     if mode not in {"demo", "real"}:
         mode = "demo"
-    if mode == "real" and not ALLOW_REAL_TRADING:
-        return templates.TemplateResponse("dashboard.html", {"request": request, "title": APP_NAME, "user": user,
-            "settings": None, "connection": None, "allow_real": ALLOW_REAL_TRADING,
-            "error": "Real trading is locked until the server is explicitly enabled for real mode."}, status_code=403)
-
-    verifier = secrets.token_urlsafe(64)
+        verifier = secrets.token_urlsafe(64)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     state = secrets.token_urlsafe(32)
     request.session["oauth_verifier"] = verifier
