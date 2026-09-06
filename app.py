@@ -391,26 +391,61 @@ def resolve_online_symbol(active_symbols, wanted):
 def abc_signal(candles, swing_len=2):
     if len(candles) < 20:
         return None
-    hi = [float(c[2]) for c in candles]
-    lo = [float(c[3]) for c in candles]
-    highs, lows = [], []
+
+    # Deriv API returns candle objects with named fields:
+    # epoch, open, high, low, close.
+    # Keep a fallback for older array-style candle data.
+    def candle_high(c):
+        if isinstance(c, dict):
+            return float(c["high"])
+        return float(c[2])
+
+    def candle_low(c):
+        if isinstance(c, dict):
+            return float(c["low"])
+        return float(c[3])
+
+    hi = [candle_high(c) for c in candles]
+    lo = [candle_low(c) for c in candles]
+
+    highs = []
+    lows = []
+
     for i in range(swing_len, len(candles) - swing_len):
-        if all(hi[i] > hi[i-j] and hi[i] > hi[i+j] for j in range(1, swing_len+1)):
+        if all(
+            hi[i] > hi[i-j] and hi[i] > hi[i+j]
+            for j in range(1, swing_len + 1)
+        ):
             highs.append((i, hi[i]))
-        if all(lo[i] < lo[i-j] and lo[i] < lo[i+j] for j in range(1, swing_len+1)):
+
+        if all(
+            lo[i] < lo[i-j] and lo[i] < lo[i+j]
+            for j in range(1, swing_len + 1)
+        ):
             lows.append((i, lo[i]))
+
+    # Bearish ABC → PUT
     if len(highs) >= 2 and len(lows) >= 1:
-        ai, A = highs[-2]; ci, C = highs[-1]
+        ai, A = highs[-2]
+        ci, C = highs[-1]
+
         mids = [x for x in lows if ai < x[0] < ci]
+
         if mids and C < A:
             bi, B = mids[-1]
             return ("PUT", ai, bi, ci, A, B, C)
+
+    # Bullish ABC → CALL
     if len(lows) >= 2 and len(highs) >= 1:
-        ai, A = lows[-2]; ci, C = lows[-1]
+        ai, A = lows[-2]
+        ci, C = lows[-1]
+
         mids = [x for x in highs if ai < x[0] < ci]
+
         if mids and C > A:
             bi, B = mids[-1]
             return ("CALL", ai, bi, ci, A, B, C)
+
     return None
 
 async def fetch_m5_candles(ws, symbol):
