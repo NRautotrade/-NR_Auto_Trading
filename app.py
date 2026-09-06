@@ -7,6 +7,7 @@ import json
 from urllib.parse import urlencode
 
 import httpx
+import websockets
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -202,8 +203,7 @@ async def dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "title": APP_NAME, "user": user,
         "settings": settings, "connection": connection,
-        "allow_real": ALLOW_REAL_TRADING,
-        "real_connection_enabled": True
+        "allow_real": ALLOW_REAL_TRADING
     })
 
 @app.post("/settings")
@@ -226,6 +226,11 @@ async def deriv_connect(request: Request, mode: str = "demo"):
             "error": "DERIV_CLIENT_ID is not configured yet."}, status_code=500)
     if mode not in {"demo", "real"}:
         mode = "demo"
+    if mode == "real" and not ALLOW_REAL_TRADING:
+        return templates.TemplateResponse("dashboard.html", {"request": request, "title": APP_NAME, "user": user,
+            "settings": None, "connection": None, "allow_real": ALLOW_REAL_TRADING,
+            "error": "Real trading is locked until the server is explicitly enabled for real mode."}, status_code=403)
+
     verifier = secrets.token_urlsafe(64)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     state = secrets.token_urlsafe(32)
@@ -285,14 +290,13 @@ async def deriv_callback(request: Request, code: str | None = None, state: str |
         label = "real" if mode == "real" else "demo"
         return templates.TemplateResponse(
             "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": f"No {label} Deriv trading account was returned for this authorization. Please make sure the {label} account is available on your Deriv profile and try again."
-            },
+            {"request": request, "title": APP_NAME,
+             "message": f"No {label} Deriv trading account was returned for this authorization."},
             status_code=400
         )
     account = wanted[0]
+    if not account:
+        return templates.TemplateResponse("result.html", {"request": request, "title": APP_NAME, "message": "No Deriv trading account was returned."}, status_code=400)
 
     encrypted = protect_token(token)
     conn = db()
@@ -305,6 +309,67 @@ async def deriv_callback(request: Request, code: str | None = None, state: str |
     conn.commit()
     conn.close()
     return RedirectResponse("/dashboard?connected=1", status_code=303)
+
+@app.get("/api/trading/test-connection")
+async def test_trading_connection(request: Request):
+    """Open the authenticated Deriv WebSocket and read balance only.
+    This endpoint NEVER sends proposal/buy/sell/contract_update commands.
+    """
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+
+    conn = db()
+    row = conn.execute(
+        "SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?",
+        (user["id"],),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return JSONResponse({"ok": False, "error": "Connect a Deriv account first."}, status_code=400)
+
+    try:
+        token = unprotect_token(row["access_token_encrypted"])
+        account_id = row["account_id"]
+        async with httpx.AsyncClient(timeout=20) as client:
+            otp_resp = await client.post(
+                f"https://api.derivws.com/trading/v1/options/accounts/{account_id}/otp",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Deriv-App-ID": DERIV_CLIENT_ID,
+                },
+            )
+        if otp_resp.status_code >= 400:
+            return JSONResponse({"ok": False, "error": "Deriv rejected the WebSocket authentication request."}, status_code=400)
+
+        otp_data = otp_resp.json().get("data", {})
+        ws_url = otp_data.get("url")
+        if not ws_url:
+            return JSONResponse({"ok": False, "error": "Deriv did not return a WebSocket URL."}, status_code=400)
+
+        async with websockets.connect(ws_url, open_timeout=15, close_timeout=5) as ws:
+            await ws.send(json.dumps({"balance": 1, "req_id": 1}))
+            for _ in range(10):
+                raw = await ws.recv()
+                msg = json.loads(raw)
+                if msg.get("msg_type") == "balance":
+                    bal = msg.get("balance", {})
+                    return {
+                        "ok": True,
+                        "websocket_connected": True,
+                        "account_id": account_id,
+                        "account_type": row["account_type"],
+                        "balance": bal.get("balance"),
+                        "currency": bal.get("currency"),
+                        "message": "Authenticated Deriv WebSocket connection is working."
+                    }
+                if msg.get("error"):
+                    return JSONResponse({"ok": False, "error": msg["error"].get("message", "Deriv WebSocket error.")}, status_code=400)
+
+        return JSONResponse({"ok": False, "error": "Connected, but Deriv did not return a balance response."}, status_code=400)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"Trading connection test failed: {type(exc).__name__}."}, status_code=500)
+
 
 @app.get("/api/status")
 async def api_status(request: Request):
