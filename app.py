@@ -4,6 +4,8 @@ import sqlite3
 import hashlib
 import base64
 import json
+import asyncio
+import time
 from urllib.parse import urlencode
 
 import httpx
@@ -25,6 +27,10 @@ app = FastAPI(title=APP_NAME)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# In-memory demo bot workers. Each logged-in user gets an isolated task.
+BOT_TASKS = {}
+BOT_STATE = {}
 
 def db():
     conn = sqlite3.connect(DB_PATH)
@@ -309,6 +315,210 @@ async def deriv_callback(request: Request, code: str | None = None, state: str |
     conn.commit()
     conn.close()
     return RedirectResponse("/dashboard?connected=1", status_code=303)
+
+
+async def deriv_ws_url(account_id: str, token: str):
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"https://api.derivws.com/trading/v1/options/accounts/{account_id}/otp",
+            headers={"Authorization": f"Bearer {token}", "Deriv-App-ID": DERIV_CLIENT_ID},
+        )
+    if resp.status_code >= 400:
+        raise RuntimeError("Deriv rejected WebSocket authentication.")
+    url = resp.json().get("data", {}).get("url")
+    if not url:
+        raise RuntimeError("Deriv did not return a WebSocket URL.")
+    return url
+
+async def ws_request(ws, payload, req_id, timeout=15):
+    payload = dict(payload)
+    payload["req_id"] = req_id
+    await ws.send(json.dumps(payload))
+    while True:
+        msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=timeout))
+        if msg.get("req_id") == req_id:
+            if msg.get("error"):
+                err = msg["error"].get("message", "Deriv API error.")
+                raise RuntimeError(err)
+            return msg
+
+async def get_active_symbols(ws):
+    msg = await ws_request(ws, {"active_symbols": "brief"}, 100)
+    return msg.get("active_symbols", [])
+
+def resolve_online_symbol(active_symbols, wanted):
+    target = wanted.lower().strip()
+    aliases = {
+        "step index": ["step index", "step index 100"],
+    }
+    names = aliases.get(target, [target])
+    for item in active_symbols:
+        text = " ".join(str(item.get(k, "")) for k in ("display_name", "name", "market_display_name")).lower()
+        if any(n in text for n in names):
+            return item.get("symbol")
+    return None
+
+def abc_signal(candles, swing_len=2):
+    if len(candles) < 20:
+        return None
+    hi = [float(c[2]) for c in candles]
+    lo = [float(c[3]) for c in candles]
+    highs, lows = [], []
+    for i in range(swing_len, len(candles) - swing_len):
+        if all(hi[i] > hi[i-j] and hi[i] > hi[i+j] for j in range(1, swing_len+1)):
+            highs.append((i, hi[i]))
+        if all(lo[i] < lo[i-j] and lo[i] < lo[i+j] for j in range(1, swing_len+1)):
+            lows.append((i, lo[i]))
+    if len(highs) >= 2 and len(lows) >= 1:
+        ai, A = highs[-2]; ci, C = highs[-1]
+        mids = [x for x in lows if ai < x[0] < ci]
+        if mids and C < A:
+            bi, B = mids[-1]
+            return ("PUT", ai, bi, ci, A, B, C)
+    if len(lows) >= 2 and len(highs) >= 1:
+        ai, A = lows[-2]; ci, C = lows[-1]
+        mids = [x for x in highs if ai < x[0] < ci]
+        if mids and C > A:
+            bi, B = mids[-1]
+            return ("CALL", ai, bi, ci, A, B, C)
+    return None
+
+async def fetch_m5_candles(ws, symbol):
+    msg = await ws_request(ws, {
+        "ticks_history": symbol,
+        "end": "latest",
+        "count": 100,
+        "style": "candles",
+        "granularity": 300,
+    }, 200 + hash(symbol) % 1000)
+    return msg.get("candles", [])
+
+async def demo_bot_worker(user_id, account_id, token, markets, risk, rr):
+    state = BOT_STATE[user_id]
+    state.update({"running": True, "mode": "demo", "message": "Starting demo trading workerâ¦", "trades": 0})
+    try:
+        ws_url = await deriv_ws_url(account_id, token)
+        async with websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as ws:
+            await ws_request(ws, {"balance": 1}, 10)
+            active = await get_active_symbols(ws)
+            symbols = {m: resolve_online_symbol(active, m) for m in markets}
+            symbols = {m: s for m, s in symbols.items() if s}
+            if not symbols:
+                raise RuntimeError("None of the selected markets are currently available on Deriv API.")
+            state["symbols"] = symbols
+            state["message"] = "Demo worker is running. Waiting for ABC setupsâ¦"
+            last_setup = {}
+            open_markets = set()
+            while not state.get("stop_requested"):
+                for market, symbol in symbols.items():
+                    if market in open_markets or state.get("stop_requested"):
+                        continue
+                    try:
+                        candles = await fetch_m5_candles(ws, symbol)
+                        signal = abc_signal(candles)
+                        if not signal:
+                            continue
+                        direction, ai, bi, ci, A, B, C = signal
+                        key = (direction, ai, bi, ci)
+                        if last_setup.get(market) == key:
+                            continue
+                        last_setup[market] = key
+
+                        # Demo-only stake cap: never risk more than 2% of balance per contract.
+                        bal_msg = await ws_request(ws, {"balance": 1}, 300)
+                        balance = float(bal_msg.get("balance", {}).get("balance", 0) or 0)
+                        stake = min(float(risk), max(0.35, balance * 0.02))
+                        if balance <= 0 or stake > balance:
+                            continue
+
+                        proposal = await ws_request(ws, {
+                            "proposal": 1,
+                            "amount": round(stake, 2),
+                            "basis": "stake",
+                            "contract_type": direction,
+                            "currency": bal_msg.get("balance", {}).get("currency", "USD"),
+                            "duration": 5,
+                            "duration_unit": "m",
+                            "underlying_symbol": symbol,
+                        }, 400 + hash((market, key)) % 1000)
+                        prop = proposal.get("proposal", {})
+                        proposal_id = prop.get("id")
+                        ask = float(prop.get("ask_price", stake) or stake)
+                        payout = float(prop.get("payout", 0) or 0)
+                        profit = payout - ask
+                        if not proposal_id or profit < stake * float(rr):
+                            state["message"] = f"{market}: ABC {direction} found; payout below selected RR, skipped."
+                            continue
+
+                        buy = await ws_request(ws, {"buy": proposal_id, "price": ask}, 500 + hash((market, key)) % 1000)
+                        contract = buy.get("buy", {})
+                        open_markets.add(market)
+                        state["trades"] = int(state.get("trades", 0)) + 1
+                        state["message"] = f"DEMO TRADE: {market} {direction} ${ask:.2f} / 5m"
+                        state["last_trade"] = {"market": market, "direction": direction, "stake": ask, "payout": payout, "contract_id": contract.get("contract_id")}
+                    except Exception as exc:
+                        state["message"] = f"{market}: {type(exc).__name__} â waiting."
+                await asyncio.sleep(10)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        state["message"] = f"Worker stopped: {type(exc).__name__} â {exc}"
+    finally:
+        state["running"] = False
+        state["stop_requested"] = False
+
+@app.post("/api/trading/start")
+async def start_trading(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    existing = BOT_TASKS.get(uid)
+    if existing and not existing.done():
+        return {"ok": True, "running": True, "message": "Bot is already running."}
+    conn = db()
+    connection = conn.execute("SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?", (uid,)).fetchone()
+    settings = conn.execute("SELECT * FROM settings WHERE user_id=?", (uid,)).fetchone()
+    conn.close()
+    if not connection:
+        return JSONResponse({"ok": False, "error": "Connect a Deriv account first."}, status_code=400)
+    if connection["account_type"] != "demo":
+        return JSONResponse({"ok": False, "error": "Online bot execution is DEMO-ONLY right now. Connect the Demo account."}, status_code=403)
+    markets = json.loads(settings["markets"]) if settings else ["Volatility 25 Index"]
+    strategies = json.loads(settings["strategies"]) if settings else ["ABC Pattern"]
+    if "ABC Pattern" not in strategies:
+        return JSONResponse({"ok": False, "error": "Select ABC Pattern for the online worker."}, status_code=400)
+    if not markets:
+        return JSONResponse({"ok": False, "error": "Select at least one market."}, status_code=400)
+    BOT_STATE[uid] = {"running": False, "stop_requested": False, "mode": "demo", "message": "Startingâ¦", "trades": 0}
+    token = unprotect_token(connection["access_token_encrypted"])
+    task = asyncio.create_task(demo_bot_worker(uid, connection["account_id"], token, markets, float(settings["risk_trade"]), float(settings["reward_risk"])))
+    BOT_TASKS[uid] = task
+    return {"ok": True, "running": True, "mode": "demo", "message": "Demo trading worker started."}
+
+@app.post("/api/trading/stop")
+async def stop_trading(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    state = BOT_STATE.setdefault(uid, {})
+    state["stop_requested"] = True
+    task = BOT_TASKS.get(uid)
+    if task and not task.done():
+        task.cancel()
+    state["running"] = False
+    state["message"] = "Bot stopped. Existing demo contracts are left to Deriv to settle."
+    return {"ok": True, "running": False, "message": state["message"]}
+
+@app.get("/api/trading/state")
+async def trading_state(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False}, status_code=401)
+    uid = user["id"]
+    state = BOT_STATE.get(uid, {"running": False, "message": "Bot stopped.", "trades": 0})
+    return {"ok": True, **state}
 
 @app.get("/api/trading/test-connection")
 async def test_trading_connection(request: Request):
