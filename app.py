@@ -347,15 +347,45 @@ async def get_active_symbols(ws):
     return msg.get("active_symbols", [])
 
 def resolve_online_symbol(active_symbols, wanted):
+    # Deriv's current API renamed symbol/display fields and some synthetic
+    # indices may include variants such as "Volatility 25 (1s) Index".
+    import re
+
     target = wanted.lower().strip()
     aliases = {
-        "step index": ["step index", "step index 100"],
+        "step index": ["step index"],
+        "volatility 5 index": ["volatility 5"],
+        "volatility 10 index": ["volatility 10"],
+        "volatility 15 index": ["volatility 15"],
+        "volatility 25 index": ["volatility 25"],
+        "volatility 30 index": ["volatility 30"],
+        "volatility 50 index": ["volatility 50"],
+        "volatility 75 index": ["volatility 75"],
+        "volatility 100 index": ["volatility 100"],
     }
     names = aliases.get(target, [target])
+
+    def norm(value):
+        value = str(value or "").lower()
+        value = re.sub(r"\([^)]*\)", " ", value)
+        value = re.sub(r"[^a-z0-9]+", " ", value)
+        return " ".join(value.split())
+
+    wanted_names = [norm(n) for n in names]
     for item in active_symbols:
-        text = " ".join(str(item.get(k, "")) for k in ("display_name", "name", "market_display_name")).lower()
-        if any(n in text for n in names):
-            return item.get("symbol")
+        api_symbol = item.get("underlying_symbol") or item.get("symbol")
+        if not api_symbol:
+            continue
+        fields = (
+            item.get("underlying_symbol_name"),
+            item.get("underlying_symbol"),
+            item.get("display_name"),
+            item.get("name"),
+            item.get("symbol"),
+        )
+        normalized = [norm(v) for v in fields if v]
+        if any(w and any(w in value for value in normalized) for w in wanted_names):
+            return api_symbol
     return None
 
 def abc_signal(candles, swing_len=2):
