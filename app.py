@@ -241,7 +241,7 @@ async def deriv_connect(request: Request, mode: str = "demo"):
         "response_type": "code",
         "client_id": DERIV_CLIENT_ID,
         "redirect_uri": DERIV_REDIRECT_URI,
-        "scope": "trade account_manage",
+        "scope": "trade",
         "state": state,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
