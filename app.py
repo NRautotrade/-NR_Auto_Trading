@@ -475,12 +475,12 @@ async def demo_bot_worker(user_id, account_id, token, markets, risk, rr):
             active = await get_active_symbols(ws)
             balance_msg = await ws_request(ws, {"balance": 1}, 11)
 
-account_balance = float(
-    balance_msg.get("balance", {}).get("balance", 0) or 0
-)
+            account_balance = float(
+                balance_msg.get("balance", {}).get("balance", 0) or 0
+            )
 
-state["balance"] = account_balance
-state["equity"] = account_balance
+            state["balance"] = account_balance
+            state["equity"] = account_balance
             symbols = {m: resolve_online_symbol(active, m) for m in markets}
             symbols = {m: s for m, s in symbols.items() if s}
             if not symbols:
