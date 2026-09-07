@@ -1,25 +1,67 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ title }}</title>
-<link rel="stylesheet" href="/static/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title or "NR AUTO TRADING" }} - Register</title>
+    <style>
+        *{box-sizing:border-box}
+        body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#071426;color:#fff;font-family:Arial,sans-serif}
+        .card{width:100%;max-width:460px;background:#0d2038;border:1px solid #1d3b5c;border-radius:16px;padding:30px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+        .brand{text-align:center;font-size:28px;font-weight:800;margin-bottom:6px}
+        .subtitle{text-align:center;color:#9eb2c8;margin-bottom:26px}
+        .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        label{display:block;margin:14px 0 7px;color:#cbd8e6;font-size:13px;font-weight:700}
+        input{width:100%;padding:13px 14px;border:1px solid #31506f;border-radius:9px;background:#08182b;color:#fff;font-size:15px}
+        .error{background:#4b1d25;border:1px solid #8d3b48;color:#ffd8dd;border-radius:9px;padding:11px;margin-bottom:16px}
+        button{width:100%;margin-top:22px;padding:14px;border:0;border-radius:9px;background:#16a34a;color:#fff;font-size:16px;font-weight:800}
+        .login{text-align:center;margin-top:20px;color:#9eb2c8;font-size:14px}
+        .login a{color:#5eb0ff;text-decoration:none;font-weight:700}
+        @media(max-width:520px){.card{padding:24px 20px}.row{grid-template-columns:1fr}}
+    </style>
 </head>
 <body>
-<main class="card">
-<h1>CREATE ACCOUNT</h1>
-<p class="sub">NR AUTO TRADING • Demo & Real Accounts</p>
-{% if error %}<div class="error">{{ error }}</div>{% endif %}
-<form method="post" action="/register">
-<label>Username</label>
-<input name="username" required>
-<label>Password</label>
-<input name="password" type="password" required>
-<label>Confirm Password</label>
-<input name="confirm" type="password" required>
-<button>CREATE ACCOUNT</button>
-</form>
-<a class="secondary" href="/">BACK TO LOGIN</a>
-</main>
+<div class="card">
+    <div class="brand">NR AUTO TRADING</div>
+    <div class="subtitle">Create your trading account</div>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/register">
+
+        <div class="row">
+            <div>
+                <label>First Name</label>
+                <input name="first_name" type="text" required>
+            </div>
+
+            <div>
+                <label>Last Name</label>
+                <input name="last_name" type="text" required>
+            </div>
+        </div>
+
+        <label>Date of Birth</label>
+        <input name="date_of_birth" type="date" required>
+
+        <label>Email Address</label>
+        <input name="email" type="email" required>
+
+        <label>Password</label>
+        <input name="password" type="password" minlength="8" required>
+
+        <label>Confirm Password</label>
+        <input name="confirm" type="password" minlength="8" required>
+
+        <button type="submit">CREATE ACCOUNT</button>
+    </form>
+
+    <div class="login">
+        Already have an account?
+        <a href="/">Log In</a>
+    </div>
+</div>
 </body>
 </html>
