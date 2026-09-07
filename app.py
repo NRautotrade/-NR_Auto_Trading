@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -1484,6 +1483,29 @@ async def get_active_symbols(ws):
         [],
     )
 
+async def fetch_live_balance(account_id, token):
+    ws_url = await deriv_ws_url(account_id, token)
+
+    async with websockets.connect(
+        ws_url,
+        open_timeout=15,
+        close_timeout=5,
+        ping_interval=20,
+    ) as ws:
+        msg = await ws_request(
+            ws,
+            {"balance": 1},
+            901,
+            timeout=10,
+        )
+
+    data = msg.get("balance", {})
+    return (
+        float(data.get("balance", 0) or 0),
+        data.get("currency", "USD"),
+    )
+
+
 
 def resolve_online_symbol(
     active_symbols,
@@ -1714,20 +1736,30 @@ async def demo_bot_worker(
 ):
     state = BOT_STATE[user_id]
 
+    reconnecting = bool(state.pop("_reconnecting", False))
+
+    if not reconnecting:
+        state.update({
+            "trades": 0,
+            "balance": 0.0,
+            "equity": 0.0,
+            "today_pl": 0.0,
+            "wins": 0,
+            "losses": 0,
+            "positions": [],
+            "last_trade": None,
+            "activity": [],
+            "_position_map": {},
+        })
+
     state.update({
         "running": True,
         "mode": "demo",
-        "message": "Starting demo trading worker...",
-        "trades": 0,
-        "balance": 0.0,
-        "equity": 0.0,
-        "today_pl": 0.0,
-        "wins": 0,
-        "losses": 0,
-        "positions": [],
-        "last_trade": None,
-        "activity": [],
-        "_position_map": {},
+        "message": (
+            "Reconnecting to Deriv..."
+            if reconnecting
+            else "Starting demo trading worker..."
+        ),
     })
 
     try:
@@ -1959,6 +1991,8 @@ async def demo_bot_worker(
                             f"P/L ${profit:+.2f}"
                         )
 
+                    except websockets.exceptions.ConnectionClosed:
+                        raise
                     except Exception:
                         continue
 
@@ -2192,6 +2226,8 @@ async def demo_bot_worker(
 
                         state["activity"] = activity[:20]
 
+                    except websockets.exceptions.ConnectionClosed:
+                        raise
                     except Exception as exc:
                         state["message"] = (
                             f"{market}: "
@@ -2204,6 +2240,55 @@ async def demo_bot_worker(
     except asyncio.CancelledError:
         raise
 
+    except websockets.exceptions.ConnectionClosed as exc:
+        if state.get("stop_requested"):
+            state["message"] = "Bot stopped."
+            return
+
+        state["message"] = (
+            "Deriv connection closed. Reconnecting automatically..."
+        )
+        state["_reconnecting"] = True
+        state["_handoff"] = True
+
+        task = asyncio.create_task(
+            demo_bot_worker(
+                user_id,
+                account_id,
+                token,
+                markets,
+                risk,
+                rr,
+            )
+        )
+        BOT_TASKS[user_id] = task
+        return
+
+    except (asyncio.TimeoutError, OSError) as exc:
+        if state.get("stop_requested"):
+            state["message"] = "Bot stopped."
+            return
+
+        state["message"] = (
+            f"Connection problem ({type(exc).__name__}). "
+            "Reconnecting automatically..."
+        )
+        state["_reconnecting"] = True
+        state["_handoff"] = True
+
+        task = asyncio.create_task(
+            demo_bot_worker(
+                user_id,
+                account_id,
+                token,
+                markets,
+                risk,
+                rr,
+            )
+        )
+        BOT_TASKS[user_id] = task
+        return
+
     except Exception as exc:
         state["message"] = (
             f"Worker stopped: "
@@ -2211,8 +2296,9 @@ async def demo_bot_worker(
         )
 
     finally:
-        state["running"] = False
-        state["stop_requested"] = False
+        if not state.pop("_handoff", False):
+            state["running"] = False
+            state["stop_requested"] = False
 
 
 # ============================================================
@@ -2422,10 +2508,7 @@ async def trading_state(request: Request):
     user = current_user(request)
 
     if not user:
-        return JSONResponse(
-            {"ok": False},
-            status_code=401,
-        )
+        return JSONResponse({"ok": False}, status_code=401)
 
     uid = user["id"]
 
@@ -2446,87 +2529,71 @@ async def trading_state(request: Request):
         },
     )
 
+    # When the bot is stopped, keep this member's dashboard synced
+    # directly to the Deriv account they connected.
+    if not state.get("running"):
+        now = time.time()
+        last_refresh = float(
+            state.get("_account_refresh_at", 0) or 0
+        )
+
+        if now - last_refresh >= 8:
+            conn = db()
+            connection = conn.execute(
+                """SELECT account_id, account_type, access_token_encrypted
+                   FROM deriv_connections
+                   WHERE user_id=?""",
+                (uid,),
+            ).fetchone()
+            conn.close()
+
+            if connection:
+                try:
+                    token = unprotect_token(
+                        connection["access_token_encrypted"]
+                    )
+
+                    balance, currency = await fetch_live_balance(
+                        connection["account_id"],
+                        token,
+                    )
+
+                    state["balance"] = balance
+
+                    if not state.get("positions"):
+                        state["equity"] = balance
+
+                    state["currency"] = currency
+                    state["_account_refresh_at"] = now
+                    state.pop("account_error", None)
+
+                except Exception as exc:
+                    state["account_error"] = (
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
     return {
         "ok": True,
-        "running": bool(
-            state.get("running", False)
-        ),
-        "mode": state.get(
-            "mode",
-            "demo",
-        ),
-        "message": state.get(
-            "message",
-            "Bot stopped.",
-        ),
-        "balance": float(
-            state.get(
-                "balance",
-                0.0,
-            )
-            or 0.0
-        ),
+        "running": bool(state.get("running", False)),
+        "mode": state.get("mode", "demo"),
+        "message": state.get("message", "Bot stopped."),
+        "balance": float(state.get("balance", 0.0) or 0.0),
         "equity": float(
             state.get(
                 "equity",
-                state.get(
-                    "balance",
-                    0.0,
-                ),
-            )
-            or 0.0
+                state.get("balance", 0.0),
+            ) or 0.0
         ),
-        "today_pl": float(
-            state.get(
-                "today_pl",
-                0.0,
-            )
-            or 0.0
-        ),
-        "open_trades": len(
-            state.get(
-                "positions",
-                [],
-            )
-        ),
-        "wins": int(
-            state.get(
-                "wins",
-                0,
-            )
-            or 0
-        ),
-        "losses": int(
-            state.get(
-                "losses",
-                0,
-            )
-            or 0
-        ),
-        "positions": state.get(
-            "positions",
-            [],
-        ),
-        "last_trade": state.get(
-            "last_trade"
-        ),
-        "activity": state.get(
-            "activity",
-            [],
-        ),
-        "trades": int(
-            state.get(
-                "trades",
-                0,
-            )
-            or 0
-        ),
+        "today_pl": float(state.get("today_pl", 0.0) or 0.0),
+        "open_trades": len(state.get("positions", [])),
+        "wins": int(state.get("wins", 0) or 0),
+        "losses": int(state.get("losses", 0) or 0),
+        "positions": state.get("positions", []),
+        "last_trade": state.get("last_trade"),
+        "trades": int(state.get("trades", 0) or 0),
+        "activity": state.get("activity", []),
     }
 
-
-# ============================================================
-# SAFE CONNECTION TEST
-# ============================================================
 
 @app.get("/api/trading/test-connection")
 async def test_trading_connection(
@@ -2705,6 +2772,53 @@ async def test_trading_connection(
 # ============================================================
 # ACCOUNT STATUS
 # ============================================================
+
+@app.post("/deriv/disconnect")
+async def deriv_disconnect(request: Request):
+    user = current_user(request)
+
+    if not user:
+        return RedirectResponse("/", status_code=303)
+
+    uid = user["id"]
+
+    state = BOT_STATE.get(uid, {})
+    state["stop_requested"] = True
+
+    task = BOT_TASKS.get(uid)
+
+    if task and not task.done():
+        task.cancel()
+
+    conn = db()
+    conn.execute(
+        "DELETE FROM deriv_connections WHERE user_id=?",
+        (uid,),
+    )
+    conn.commit()
+    conn.close()
+
+    BOT_STATE[uid] = {
+        "running": False,
+        "message": "Deriv account disconnected.",
+        "trades": 0,
+        "balance": 0.0,
+        "equity": 0.0,
+        "today_pl": 0.0,
+        "wins": 0,
+        "losses": 0,
+        "positions": [],
+        "last_trade": None,
+        "activity": [],
+    }
+
+    BOT_TASKS.pop(uid, None)
+
+    return RedirectResponse(
+        "/dashboard?deriv_disconnected=1",
+        status_code=303,
+    )
+
 
 @app.get("/api/status")
 async def api_status(request: Request):
