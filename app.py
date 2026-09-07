@@ -455,12 +455,32 @@ async def fetch_m5_candles(ws, symbol):
 
 async def demo_bot_worker(user_id, account_id, token, markets, risk, rr):
     state = BOT_STATE[user_id]
-    state.update({"running": True, "mode": "demo", "message": "Starting demo trading workerâ¦", "trades": 0})
+    state.update({
+    "running": True,
+    "mode": "demo",
+    "message": "Starting demo trading worker...",
+    "trades": 0,
+    "balance": 0.0,
+    "equity": 0.0,
+    "today_pl": 0.0,
+    "wins": 0,
+    "losses": 0,
+    "positions": [],
+    "last_trade": None,
+})
     try:
         ws_url = await deriv_ws_url(account_id, token)
         async with websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as ws:
             await ws_request(ws, {"balance": 1}, 10)
             active = await get_active_symbols(ws)
+            balance_msg = await ws_request(ws, {"balance": 1}, 11)
+
+account_balance = float(
+    balance_msg.get("balance", {}).get("balance", 0) or 0
+)
+
+state["balance"] = account_balance
+state["equity"] = account_balance
             symbols = {m: resolve_online_symbol(active, m) for m in markets}
             symbols = {m: s for m, s in symbols.items() if s}
             if not symbols:
@@ -493,6 +513,16 @@ async def demo_bot_worker(user_id, account_id, token, markets, risk, rr):
                             "payout": c.get("payout", lt.get("payout")),
                         })
                         state["last_trade"] = lt
+                        state["positions"] = [
+    {
+        "symbol": market,
+        "direction": lt.get("direction", ""),
+        "entry": lt.get("entry_price", 0),
+        "current": lt.get("current_price", 0),
+        "profit": float(lt.get("profit", 0) or 0),
+        "status": lt.get("status", "OPEN"),
+    }
+]
                         if c.get("is_sold") or c.get("status") in {"won", "lost", "sold", "expired"}:
                             open_contracts.pop(market, None)
                             state["message"] = f"{market}: contract {c.get('status', 'closed').upper()} â P/L ${float(c.get('profit', 0) or 0):+.2f}"
@@ -618,11 +648,51 @@ async def stop_trading(request: Request):
 @app.get("/api/trading/state")
 async def trading_state(request: Request):
     user = current_user(request)
+
     if not user:
         return JSONResponse({"ok": False}, status_code=401)
+
     uid = user["id"]
-    state = BOT_STATE.get(uid, {"running": False, "message": "Bot stopped.", "trades": 0})
-    return {"ok": True, **state}
+
+    state = BOT_STATE.setdefault(uid, {
+        "running": False,
+        "message": "Bot stopped.",
+        "trades": 0,
+        "balance": 0.0,
+        "equity": 0.0,
+        "today_pl": 0.0,
+        "wins": 0,
+        "losses": 0,
+        "positions": [],
+        "last_trade": None,
+    })
+
+    # If we already have a live balance from the worker,
+    # return it immediately.
+    return {
+        "ok": True,
+        "running": bool(state.get("running", False)),
+        "mode": state.get("mode", "demo"),
+        "message": state.get("message", "Bot stopped."),
+
+        "balance": float(state.get("balance", 0.0) or 0.0),
+
+        "equity": float(state.get("equity", state.get("balance", 0.0)) or 0.0),
+
+        "today_pl": float(state.get("today_pl", 0.0) or 0.0),
+
+        "open_trades": len(state.get("positions", [])),
+
+        "wins": int(state.get("wins", 0) or 0),
+
+        "losses": int(state.get("losses", 0) or 0),
+
+        "positions": state.get("positions", []),
+
+        "last_trade": state.get("last_trade"),
+
+        "trades": int(state.get("trades", 0) or 0),
+    }
 
 @app.get("/api/trading/test-connection")
 async def test_trading_connection(request: Request):
