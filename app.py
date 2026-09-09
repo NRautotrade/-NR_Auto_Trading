@@ -146,7 +146,7 @@ def init_db():
             risk_trade REAL NOT NULL DEFAULT 50,
             reward_risk REAL NOT NULL DEFAULT 2,
             daily_target REAL NOT NULL DEFAULT 200,
-            max_daily_profit REAL NOT NULL DEFAULT 500,
+            max_daily_profit REAL NOT NULL DEFAULT 200,
             max_daily_loss REAL NOT NULL DEFAULT 50,
             protect_tp REAL NOT NULL DEFAULT 50,
             lock_profit_r REAL NOT NULL DEFAULT 1,
@@ -188,7 +188,7 @@ def init_db():
 
     if "max_daily_profit" not in settings_columns:
         conn.execute(
-            "ALTER TABLE settings ADD COLUMN max_daily_profit REAL NOT NULL DEFAULT 500"
+            "ALTER TABLE settings ADD COLUMN max_daily_profit REAL NOT NULL DEFAULT 200"
         )
 
     if "max_daily_loss" not in settings_columns:
@@ -446,7 +446,7 @@ def save_settings(user_id, form):
             float(form.get("risk_trade", 50)),
             float(form.get("reward_risk", 2)),
             float(form.get("daily_target", 200)),
-            float(form.get("max_daily_profit", 500)),
+            min(200.0, max(100.0, float(form.get("max_daily_profit", 200)))),
             float(form.get("max_daily_loss", 50)),
             # Keep the user's requested 50% protection setting.
             float(form.get("protect_tp", 50)),
@@ -1733,6 +1733,7 @@ async def demo_bot_worker(
     markets,
     risk,
     rr,
+    max_daily_profit=200.0,
 ):
     state = BOT_STATE[user_id]
 
@@ -2014,9 +2015,27 @@ async def demo_bot_worker(
                 )
 
                 # --------------------------------------------------------
+                # DAILY PROFIT CAP
+                # --------------------------------------------------------
+                daily_cap = min(200.0, max(100.0, float(max_daily_profit or 200)))
+                if float(state.get("today_pl", 0) or 0) >= daily_cap:
+                    state["message"] = (
+                        f"Daily profit limit ${daily_cap:.0f} reached. "
+                        "No new trades until the next day."
+                    )
+                    await asyncio.sleep(10)
+                    continue
+
+                # --------------------------------------------------------
                 # SCAN SELECTED MARKETS
                 # --------------------------------------------------------
                 for market, symbol in symbols.items():
+                    if float(state.get("today_pl", 0) or 0) >= daily_cap:
+                        state["message"] = (
+                            f"Daily profit limit ${daily_cap:.0f} reached. "
+                            "No new trades until the next day."
+                        )
+                        break
 
                     if (
                         market in open_contracts
@@ -2143,18 +2162,20 @@ async def demo_bot_worker(
                             payout - ask
                         )
 
-                        # Preserve selected RR.
-                        if (
-                            not proposal_id
-                            or expected_profit
-                            < stake * float(rr)
-                        ):
+                        # IMPORTANT: For Deriv fixed-payout CALL/PUT contracts,
+                        # the dashboard RR setting is not a CFD stop-loss/TP
+                        # ratio. Do not reject valid signals because payout
+                        # does not equal 2R. The contract itself controls the
+                        # fixed payout/loss.
+                        if not proposal_id:
                             state["message"] = (
-                                f"{market}: ABC "
-                                f"{direction} found; "
-                                "payout below selected RR, skipped."
+                                f"{market}: {direction} proposal was not returned."
                             )
                             continue
+
+                        state["message"] = (
+                            f"{market}: ABC {direction} confirmed; buying demo contract..."
+                        )
 
                         request_counter += 1
 
@@ -2230,10 +2251,11 @@ async def demo_bot_worker(
                         raise
                     except Exception as exc:
                         state["message"] = (
-                            f"{market}: "
-                            f"{type(exc).__name__} "
-                            "- waiting."
+                            f"{market}: trade execution error - {exc}"
                         )
+                        activity = state.setdefault("activity", [])
+                        activity.insert(0, f"{market}: ERROR - {exc}")
+                        state["activity"] = activity[:20]
 
                 await asyncio.sleep(10)
 
@@ -2259,6 +2281,7 @@ async def demo_bot_worker(
                 markets,
                 risk,
                 rr,
+                max_daily_profit,
             )
         )
         BOT_TASKS[user_id] = task
@@ -2284,6 +2307,7 @@ async def demo_bot_worker(
                 markets,
                 risk,
                 rr,
+                max_daily_profit,
             )
         )
         BOT_TASKS[user_id] = task
@@ -2446,6 +2470,7 @@ async def start_trading(request: Request):
             markets,
             float(settings["risk_trade"]),
             float(settings["reward_risk"]),
+            min(200.0, max(100.0, float(settings["max_daily_profit"]))),
         )
     )
 
