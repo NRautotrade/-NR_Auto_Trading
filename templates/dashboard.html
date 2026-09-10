@@ -26,4 +26,1386 @@ body{
     margin-bottom:18px;
 }
 .brand{font-size:25px;font-weight:800}
-.subtitle{color:#8ea8
+.subtitle{color:#8ea8c7;font-size:13px;margin-top:4px}
+.header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.status{
+    padding:8px 14px;
+    border-radius:20px;
+    background:#123d2a;
+    color:#42e58b;
+    font-size:12px;
+    font-weight:bold;
+}
+.btn{
+    border:0;
+    border-radius:7px;
+    padding:10px 15px;
+    cursor:pointer;
+    font-weight:bold;
+}
+.btn-green{background:#19c46b;color:white}
+.btn-red{background:#d83b4b;color:white}
+.btn-blue{background:#1769d1;color:white}
+.btn-gray{background:#243955;color:white}
+
+.card{
+    background:#0c203c;
+    border:1px solid #1b3d67;
+    border-radius:10px;
+    padding:18px;
+    margin-bottom:18px;
+}
+.card-title{
+    font-size:14px;
+    font-weight:bold;
+    margin-bottom:15px;
+    color:#dce9f8;
+}
+.account-buttons{display:flex;gap:10px;flex-wrap:wrap}
+.account-btn{
+    padding:10px 18px;
+    border-radius:7px;
+    border:1px solid #31537c;
+    background:#112b4b;
+    color:white;
+    cursor:pointer;
+    font-weight:bold;
+}
+.account-btn.active{
+    background:#159f59;
+    border-color:#21cf78;
+}
+.account-info{
+    margin-top:12px;
+    padding:10px 12px;
+    background:#08182e;
+    border-radius:7px;
+    color:#8fe5b5;
+    font-size:13px;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:10px;
+}
+.stat{
+    background:#08182e;
+    border:1px solid #17365b;
+    border-radius:8px;
+    padding:14px;
+}
+.stat-label{
+    color:#7895b7;
+    font-size:11px;
+    margin-bottom:7px;
+}
+.stat-value{font-size:20px;font-weight:bold}
+
+.grid{
+    display:grid;
+    grid-template-columns:1fr 1.4fr;
+    gap:18px;
+}
+.market-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:8px;
+}
+.check{
+    background:#08182e;
+    border:1px solid #17365b;
+    border-radius:7px;
+    padding:9px;
+    font-size:12px;
+}
+.check input{margin-right:7px}
+
+.strategy-list{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:8px;
+}
+.strategy{
+    background:#08182e;
+    border:1px solid #17365b;
+    border-radius:7px;
+    padding:10px;
+    font-size:12px;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+}
+.field label{
+    display:block;
+    color:#7895b7;
+    font-size:11px;
+    margin-bottom:6px;
+}
+.field input,.field select{
+    width:100%;
+    background:#08182e;
+    color:white;
+    border:1px solid #31537c;
+    border-radius:6px;
+    padding:10px;
+}
+.locked{
+    background:#123d2a;
+    border:1px solid #1c8c57;
+    color:#62e9a0;
+    border-radius:7px;
+    padding:11px;
+    font-size:12px;
+    margin-top:12px;
+}
+
+.controls{display:flex;gap:10px;flex-wrap:wrap}
+.message{
+    margin-top:12px;
+    padding:10px;
+    background:#08182e;
+    border-radius:7px;
+    color:#91a9c6;
+    font-size:12px;
+}
+
+table{width:100%;border-collapse:collapse}
+th{
+    text-align:left;
+    color:#718dab;
+    font-size:11px;
+    padding:10px;
+    border-bottom:1px solid #234568;
+}
+td{
+    padding:10px;
+    font-size:12px;
+    border-bottom:1px solid #173452;
+}
+.profit{color:#3ee58a}
+.loss{color:#ff6874}
+
+.direction-buy{
+    color:#3ee58a;
+    font-weight:bold;
+}
+.direction-sell{
+    color:#ff6874;
+    font-weight:bold;
+}
+
+.activity{
+    max-height:220px;
+    overflow:auto;
+    background:#08182e;
+    border-radius:7px;
+    padding:10px;
+}
+.activity div{
+    padding:7px 3px;
+    border-bottom:1px solid #173452;
+    font-size:12px;
+    color:#9eb4ce;
+}
+
+@media(max-width:900px){
+    .stats{grid-template-columns:repeat(3,1fr)}
+    .grid{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+    .container{padding:10px}
+    .header{align-items:flex-start;flex-direction:column}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .form-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<!-- HEADER -->
+<div class="header">
+    <div>
+        <div class="brand">NR AUTO TRADING</div>
+        <div class="subtitle">Online Trading Dashboard</div>
+    </div>
+
+    <div class="header-right">
+        <span class="status" id="topStatus">BOT RUNNING</span>
+
+        <form method="post" action="/logout">
+            <button class="btn btn-gray">LOG OUT</button>
+        </form>
+    </div>
+</div>
+
+
+<!-- TRADING ACCOUNT -->
+<div class="card">
+    <div class="card-title">TRADING ACCOUNT</div>
+
+    <div class="account-buttons">
+
+        <form method="get" action="/deriv/connect">
+            <input type="hidden" name="mode" value="demo">
+            <button class="account-btn {% if account_mode == 'demo' %}active{% endif %}">
+                DEMO ACCOUNT
+            </button>
+        </form>
+
+        <form method="get" action="/deriv/connect">
+            <input type="hidden" name="mode" value="real">
+            <button class="account-btn {% if account_mode == 'real' %}active{% endif %}">
+                REAL ACCOUNT
+            </button>
+        </form>
+
+        {% if deriv_connected %}
+        <form method="post" action="/deriv/disconnect">
+            <button class="btn btn-red">DISCONNECT DERIV</button>
+        </form>
+        {% endif %}
+
+    </div>
+
+    <div class="account-info" id="accountInfo">
+        {% if deriv_connected %}
+            {{ deriv_account_id }} / {{ account_mode|upper }} / CONNECTED
+        {% else %}
+            DERIV ACCOUNT NOT CONNECTED
+        {% endif %}
+    </div>
+</div>
+
+
+<!-- ACCOUNT / TODAY -->
+<div class="card">
+    <div class="card-title">ACCOUNT / TODAY</div>
+
+    <div class="stats">
+
+        <div class="stat">
+            <div class="stat-label">BALANCE</div>
+            <div class="stat-value" id="balance">$0.00</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">EQUITY</div>
+            <div class="stat-value" id="equity">$0.00</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">TODAY'S P/L</div>
+            <div class="stat-value" id="todayPL">$0.00</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">OPEN TRADES</div>
+            <div class="stat-value" id="openTrades">0</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">WINS</div>
+            <div class="stat-value" id="wins">0</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">LOSSES</div>
+            <div class="stat-value" id="losses">0</div>
+        </div>
+
+    </div>
+</div>
+
+
+<div class="grid">
+
+<div>
+
+<!-- MARKETS -->
+<div class="card">
+    <div class="card-title">MARKETS</div>
+
+    <div class="market-grid">
+
+        {% for market in [
+            "Step Index",
+            "Volatility 5 Index",
+            "Volatility 10 Index",
+            "Volatility 15 Index",
+            "Volatility 25 Index",
+            "Volatility 30 Index",
+            "Volatility 50 Index",
+            "Volatility 75 Index",
+            "Volatility 100 Index"
+        ] %}
+
+        <label class="check">
+            <input
+                type="checkbox"
+                name="market"
+                value="{{ market }}"
+                class="marketBox"
+                checked
+            >
+            {{ market }}
+        </label>
+
+        {% endfor %}
+
+    </div>
+</div>
+
+
+<!-- STRATEGIES -->
+<div class="card">
+    <div class="card-title">STRATEGIES</div>
+
+    <div class="strategy-list">
+
+        <label class="strategy">
+            <input type="checkbox"
+                   id="abcStrategy"
+                   checked>
+            ABC Pattern
+        </label>
+
+        <label class="strategy">
+            <input type="checkbox"
+                   id="breakoutStrategy">
+            Breakout
+        </label>
+
+        <label class="strategy">
+            <input type="checkbox"
+                   id="trendStrategy">
+            Trend
+        </label>
+
+        <label class="strategy">
+            <input type="checkbox"
+                   id="martingaleStrategy">
+            Martingale
+        </label>
+
+        <label class="strategy">
+            <input type="checkbox"
+                   id="flatStrategy"
+                   checked>
+            Flat Stake
+        </label>
+
+    </div>
+</div>
+
+
+<!-- RISK -->
+<div class="card">
+    <div class="card-title">RISK & PROTECTION</div>
+
+    <div class="form-grid">
+
+        <div class="field">
+            <label>Risk / Trade ($)</label>
+            <input id="risk"
+                   type="number"
+                   value="50"
+                   min="0.35"
+                   step="0.01">
+        </div>
+
+        <div class="field">
+            <label>Reward / Risk</label>
+            <input id="rr"
+                   type="number"
+                   value="2"
+                   min="1"
+                   step="0.1">
+        </div>
+
+        <div class="field">
+            <label>Daily Target ($)</label>
+            <input id="dailyTarget"
+                   type="number"
+                   value="100"
+                   min="100"
+                   max="200">
+        </div>
+
+        <div class="field">
+            <label>Max Daily Profit ($)</label>
+            <input id="maxProfit"
+                   type="number"
+                   value="200"
+                   min="100"
+                   max="200">
+        </div>
+
+        <div class="field">
+            <label>Max Daily Loss ($)</label>
+            <input id="maxLoss"
+                   type="number"
+                   value="50"
+                   min="0">
+        </div>
+
+        <div class="field">
+            <label>Protect at TP (%)</label>
+            <input id="protect"
+                   type="number"
+                   value="50"
+                   min="1"
+                   max="99">
+        </div>
+
+        <div class="field">
+            <label>Lock Profit (R)</label>
+            <input id="lockR"
+                   type="number"
+                   value="1"
+                   min="0"
+                   step="0.1">
+        </div>
+
+        <div class="field">
+            <label>Max Trades / Day</label>
+            <input id="maxTrades"
+                   type="number"
+                   value="15"
+                   min="1"
+                   max="15">
+        </div>
+
+        <div class="field">
+            <label>Martingale Multiplier</label>
+            <input id="martingaleMultiplier"
+                   type="number"
+                   value="2"
+                   min="1"
+                   max="5"
+                   step="0.1">
+        </div>
+
+        <div class="field">
+            <label>TP Adjustment (%)</label>
+            <input id="tpAdjust"
+                   type="number"
+                   value="90"
+                   min="50"
+                   max="99">
+        </div>
+
+    </div>
+
+    <div class="locked">
+        M5 locked • Protection 70% → 1R
+    </div>
+</div>
+
+</div>
+
+
+<div>
+
+<!-- BOT CONTROLS -->
+<div class="card">
+    <div class="card-title">BOT CONTROLS</div>
+
+    <div class="controls">
+
+        <button class="btn btn-green"
+                id="runBtn"
+                onclick="startBot()">
+            RUN BOT
+        </button>
+
+        <button class="btn btn-red"
+                id="stopBtn"
+                onclick="stopBot()">
+            STOP BOT
+        </button>
+
+        <button class="btn btn-blue"
+                id="pauseBtn"
+                onclick="pauseBot()">
+            PAUSE
+        </button>
+
+        <button class="btn btn-gray"
+                id="resumeBtn"
+                onclick="resumeBot()">
+            RESUME
+        </button>
+
+    </div>
+
+    <div class="message" id="botMessage">
+        Loading bot status...
+    </div>
+</div>
+
+
+<!-- OPEN POSITIONS -->
+<div class="card">
+    <div class="card-title">OPEN POSITIONS</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>MARKET</th>
+                <th>DIRECTION</th>
+                <th>ENTRY</th>
+                <th>CURRENT</th>
+                <th>P/L</th>
+                <th>STATUS</th>
+            </tr>
+        </thead>
+
+        <tbody id="positionsBody">
+            <tr>
+                <td colspan="6">No open trades</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+
+<!-- LAST TRADE -->
+<div class="card">
+    <div class="card-title">LAST TRADE</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>MARKET</th>
+                <th>DIRECTION</th>
+                <th>ENTRY</th>
+                <th>RESULT</th>
+                <th>P/L</th>
+            </tr>
+        </thead>
+
+        <tbody id="lastTradeBody">
+            <tr>
+                <td colspan="5">No trades yet</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+
+<!-- ACTIVITY -->
+<div class="card">
+    <div class="card-title">ACTIVITY</div>
+
+    <div class="activity" id="activity">
+        <div>Waiting for bot activity...</div>
+    </div>
+</div>
+
+</div>
+</div>
+</div>
+
+
+<script>
+
+let activityItems = [];
+
+
+function money(value){
+    let n = Number(value || 0);
+    return "$" + n.toFixed(2);
+}
+
+
+function setMessage(text){
+    document.getElementById("botMessage").textContent =
+        text || "No message";
+}
+
+
+function addActivity(text){
+
+    if(!text) return;
+
+    if(activityItems[0] === text) return;
+
+    activityItems.unshift(text);
+
+    if(activityItems.length > 30){
+        activityItems =
+            activityItems.slice(0,30);
+    }
+
+    document.getElementById("activity").innerHTML =
+        activityItems.map(
+            x => `<div>${escapeHtml(x)}</div>`
+        ).join("");
+}
+
+
+function escapeHtml(text){
+    return String(text)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+}
+
+
+function displayDirection(direction){
+
+    const value =
+        String(direction || "").toUpperCase();
+
+    if(value === "CALL" || value === "BUY"){
+        return '<span class="direction-buy">BUY</span>';
+    }
+
+    if(value === "PUT" || value === "SELL"){
+        return '<span class="direction-sell">SELL</span>';
+    }
+
+    return escapeHtml(direction || "-");
+}
+
+
+function getMarkets(){
+
+    return Array.from(
+        document.querySelectorAll(".marketBox:checked")
+    ).map(x => x.value);
+}
+
+
+function getStrategies(){
+
+    let strategies = [];
+
+    if(document.getElementById("abcStrategy").checked)
+        strategies.push("ABC Pattern");
+
+    if(document.getElementById("breakoutStrategy").checked)
+        strategies.push("Breakout");
+
+    if(document.getElementById("trendStrategy").checked)
+        strategies.push("Trend");
+
+    if(document.getElementById("martingaleStrategy").checked)
+        strategies.push("Martingale");
+
+    if(document.getElementById("flatStrategy").checked)
+        strategies.push("Flat Stake");
+
+    return strategies;
+}
+
+
+function getSettings(){
+
+    return {
+
+        lot:
+            Number(document.getElementById("risk").value || 50),
+
+        rr:
+            Number(document.getElementById("rr").value || 2),
+
+        daily_target:
+            Number(
+                document.getElementById("dailyTarget").value || 100
+            ),
+
+        max_daily_profit:
+            Number(
+                document.getElementById("maxProfit").value || 200
+            ),
+
+        max_daily_loss:
+            Number(
+                document.getElementById("maxLoss").value || 50
+            ),
+
+        protect:
+            Number(
+                document.getElementById("protect").value || 50
+            ),
+
+        lockR:
+            Number(
+                document.getElementById("lockR").value || 1
+            ),
+
+        max_trades:
+            Number(
+                document.getElementById("maxTrades").value || 15
+            ),
+
+        martingale_multiplier:
+            Number(
+                document.getElementById("martingaleMultiplier").value || 2
+            ),
+
+        tp_adjust_percent:
+            Number(
+                document.getElementById("tpAdjust").value || 90
+            ),
+
+        markets:
+            getMarkets(),
+
+        strategies:
+            getStrategies(),
+
+        account_mode:
+            "{{ account_mode or 'demo' }}",
+
+        username:
+            "{{ username or 'admin' }}"
+    };
+}
+
+
+async function saveSettings(){
+
+    try{
+
+        const response =
+            await fetch(
+                "/api/trading/settings",
+                {
+                    method:"POST",
+                    headers:{
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body:
+                        JSON.stringify(
+                            getSettings()
+                        )
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if(!response.ok){
+
+            throw new Error(
+                data.detail ||
+                "Unable to save settings"
+            );
+        }
+
+    }catch(error){
+
+        setMessage(error.message);
+
+        addActivity(
+            "Settings error: " +
+            error.message
+        );
+    }
+}
+
+
+async function startBot(){
+
+    await saveSettings();
+
+    try{
+
+        const response =
+            await fetch(
+                "/api/trading/start",
+                {
+                    method:"POST"
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if(!response.ok){
+
+            throw new Error(
+                data.detail ||
+                "Unable to start bot"
+            );
+        }
+
+        setMessage(
+            data.message ||
+            "Bot started."
+        );
+
+        addActivity(
+            data.message ||
+            "Bot started."
+        );
+
+        refreshState();
+
+    }catch(error){
+
+        setMessage(error.message);
+
+        addActivity(
+            "Start error: " +
+            error.message
+        );
+    }
+}
+
+
+async function stopBot(){
+
+    try{
+
+        const response =
+            await fetch(
+                "/api/trading/stop",
+                {
+                    method:"POST"
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if(!response.ok){
+
+            throw new Error(
+                data.detail ||
+                "Unable to stop bot"
+            );
+        }
+
+        setMessage(
+            data.message ||
+            "Bot stopped."
+        );
+
+        addActivity(
+            data.message ||
+            "Bot stopped."
+        );
+
+        refreshState();
+
+    }catch(error){
+
+        setMessage(error.message);
+
+        addActivity(
+            "Stop error: " +
+            error.message
+        );
+    }
+}
+
+
+async function pauseBot(){
+
+    try{
+
+        const response =
+            await fetch(
+                "/api/trading/pause",
+                {
+                    method:"POST"
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if(!response.ok){
+
+            throw new Error(
+                data.detail ||
+                "Unable to pause bot"
+            );
+        }
+
+        setMessage(
+            data.message ||
+            "Bot paused."
+        );
+
+        addActivity(
+            data.message ||
+            "Bot paused."
+        );
+
+        refreshState();
+
+    }catch(error){
+
+        setMessage(error.message);
+
+        addActivity(
+            "Pause error: " +
+            error.message
+        );
+    }
+}
+
+
+async function resumeBot(){
+
+    try{
+
+        const response =
+            await fetch(
+                "/api/trading/resume",
+                {
+                    method:"POST"
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if(!response.ok){
+
+            throw new Error(
+                data.detail ||
+                "Unable to resume bot"
+            );
+        }
+
+        setMessage(
+            data.message ||
+            "Bot resumed."
+        );
+
+        addActivity(
+            data.message ||
+            "Bot resumed."
+        );
+
+        refreshState();
+
+    }catch(error){
+
+        setMessage(error.message);
+
+        addActivity(
+            "Resume error: " +
+            error.message
+        );
+    }
+}
+
+
+function renderPositions(positions){
+
+    const body =
+        document.getElementById(
+            "positionsBody"
+        );
+
+    if(!positions ||
+       positions.length === 0){
+
+        body.innerHTML =
+            `<tr>
+                <td colspan="6">
+                    No open trades
+                </td>
+             </tr>`;
+
+        return;
+    }
+
+    body.innerHTML =
+        positions.map(p => {
+
+            const profit =
+                Number(
+                    p.profit ??
+                    p.pnl ??
+                    0
+                );
+
+            const cls =
+                profit >= 0
+                    ? "profit"
+                    : "loss";
+
+            return `
+            <tr>
+
+                <td>
+                    ${escapeHtml(
+                        p.symbol ||
+                        p.market ||
+                        "-"
+                    )}
+                </td>
+
+                <td>
+                    ${displayDirection(
+                        p.direction ||
+                        p.contract_type
+                    )}
+                </td>
+
+                <td>
+                    ${p.entry_price ??
+                      p.entry_spot ??
+                      "-"}
+                </td>
+
+                <td>
+                    ${p.current_price ??
+                      p.current_spot ??
+                      "-"}
+                </td>
+
+                <td class="${cls}">
+                    ${money(profit)}
+                </td>
+
+                <td>
+                    ${escapeHtml(
+                        p.status ||
+                        "OPEN"
+                    )}
+                </td>
+
+            </tr>`;
+        }).join("");
+}
+
+
+function renderLastTrade(trade){
+
+    const body =
+        document.getElementById(
+            "lastTradeBody"
+        );
+
+    if(!trade){
+
+        body.innerHTML =
+            `<tr>
+                <td colspan="5">
+                    No trades yet
+                </td>
+             </tr>`;
+
+        return;
+    }
+
+    const profit =
+        Number(
+            trade.profit ??
+            trade.pnl ??
+            0
+        );
+
+    const cls =
+        profit >= 0
+            ? "profit"
+            : "loss";
+
+    body.innerHTML = `
+        <tr>
+
+            <td>
+                ${escapeHtml(
+                    trade.symbol ||
+                    trade.market ||
+                    "-"
+                )}
+            </td>
+
+            <td>
+                ${displayDirection(
+                    trade.direction ||
+                    trade.contract_type
+                )}
+            </td>
+
+            <td>
+                ${trade.entry_price ??
+                  trade.entry_spot ??
+                  "-"}
+            </td>
+
+            <td>
+                ${escapeHtml(
+                    trade.result ||
+                    trade.status ||
+                    "-"
+                )}
+            </td>
+
+            <td class="${cls}">
+                ${money(profit)}
+            </td>
+
+        </tr>`;
+}
+
+
+async function refreshState(){
+
+    try{
+
+        const response =
+            await fetch(
+                "/api/trading/state",
+                {
+                    cache:"no-store"
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if(!response.ok){
+
+            throw new Error(
+                data.detail ||
+                "Unable to load state"
+            );
+        }
+
+
+        /* ACCOUNT */
+
+        const balance =
+            Number(
+                data.balance || 0
+            );
+
+        document.getElementById(
+            "balance"
+        ).textContent =
+            money(balance);
+
+
+        let equity =
+            Number(
+                data.equity ??
+                balance
+            );
+
+        document.getElementById(
+            "equity"
+        ).textContent =
+            money(equity);
+
+
+        document.getElementById(
+            "todayPL"
+        ).textContent =
+            money(
+                data.today_pl ??
+                data.daily_pl ??
+                0
+            );
+
+
+        document.getElementById(
+            "openTrades"
+        ).textContent =
+            data.open_trades ??
+            (data.positions || []).length;
+
+
+        document.getElementById(
+            "wins"
+        ).textContent =
+            data.wins ?? 0;
+
+
+        document.getElementById(
+            "losses"
+        ).textContent =
+            data.losses ?? 0;
+
+
+        /* BOT STATUS */
+
+        const running =
+            data.running === true ||
+            data.status === "running";
+
+        const paused =
+            data.paused === true;
+
+        const top =
+            document.getElementById(
+                "topStatus"
+            );
+
+
+        if(paused){
+
+            top.textContent =
+                "BOT PAUSED";
+
+            top.style.background =
+                "#5a4513";
+
+            top.style.color =
+                "#ffd36a";
+
+        }else if(running){
+
+            top.textContent =
+                "BOT RUNNING";
+
+            top.style.background =
+                "#123d2a";
+
+            top.style.color =
+                "#42e58b";
+
+        }else{
+
+            top.textContent =
+                "BOT STOPPED";
+
+            top.style.background =
+                "#44202a";
+
+            top.style.color =
+                "#ff6874";
+        }
+
+
+        setMessage(
+            data.message ||
+            data.status_message ||
+            (
+                paused
+                    ? "Bot is paused."
+                    : running
+                        ? "Bot is running."
+                        : "Bot is stopped."
+            )
+        );
+
+
+        /* POSITIONS */
+
+        renderPositions(
+            data.positions ||
+            data.open_positions ||
+            []
+        );
+
+
+        /* LAST TRADE */
+
+        renderLastTrade(
+            data.last_trade ||
+            null
+        );
+
+
+        /* ACTIVITY */
+
+        if(data.message){
+
+            addActivity(
+                data.message
+            );
+        }
+
+
+        if(data.activity &&
+           Array.isArray(data.activity)){
+
+            data.activity
+                .slice()
+                .reverse()
+                .forEach(x => {
+
+                    if(typeof x === "string"){
+
+                        addActivity(x);
+
+                    }else if(
+                        x &&
+                        x.message
+                    ){
+
+                        addActivity(
+                            x.message
+                        );
+                    }
+
+                });
+        }
+
+
+        /* ACCOUNT */
+
+        if(data.account_id){
+
+            document.getElementById(
+                "accountInfo"
+            ).textContent =
+                data.account_id +
+                " / " +
+                String(
+                    data.account_type ||
+                    "{{ account_mode or 'demo' }}"
+                ).toUpperCase() +
+                " / CONNECTED";
+        }
+
+    }catch(error){
+
+        setMessage(
+            "Connection error: " +
+            error.message
+        );
+    }
+}
+
+
+/* SAVE SETTINGS WHEN CHANGED */
+
+document.querySelectorAll(
+    "input,select"
+).forEach(el => {
+
+    el.addEventListener(
+        "change",
+        saveSettings
+    );
+
+});
+
+
+/* INITIAL LOAD */
+
+refreshState();
+
+
+/* LIVE REFRESH */
+
+setInterval(
+    refreshState,
+    3000
+);
+
+</script>
+
+</body>
+</html>
