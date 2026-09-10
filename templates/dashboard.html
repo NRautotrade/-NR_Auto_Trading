@@ -631,7 +631,7 @@ OFF
 <input
 id="martingaleToggle"
 type="checkbox"
-{% if settings and settings.stake_mode == 'Martingale' %}
+{% if settings and "Martingale" in (settings.strategies|from_json) %}
 checked
 {% endif %}
 >
@@ -1003,8 +1003,6 @@ class="activity"
 <script>
 
 
-/* POST */
-
 async function post(url){
 
 const r = await fetch(
@@ -1021,8 +1019,6 @@ return await r.json();
 
 }
 
-
-/* START */
 
 async function startBot(){
 
@@ -1042,8 +1038,6 @@ refresh();
 }
 
 
-/* STOP */
-
 async function stopBot(){
 
 const x = await post(
@@ -1061,8 +1055,6 @@ refresh();
 
 }
 
-
-/* PAUSE */
 
 async function pauseBot(){
 
@@ -1082,8 +1074,6 @@ refresh();
 }
 
 
-/* RESUME */
-
 async function resumeBot(){
 
 const x = await post(
@@ -1102,7 +1092,7 @@ refresh();
 }
 
 
-/* MARTINGALE SWITCH */
+/* MARTINGALE */
 
 function updateMartingaleLabel(){
 
@@ -1149,7 +1139,6 @@ this.querySelectorAll(
 e => e.remove()
 );
 
-
 const h =
 document.createElement("input");
 
@@ -1175,7 +1164,7 @@ this.appendChild(h);
 updateMartingaleLabel();
 
 
-/* BUY / SELL DISPLAY */
+/* BUY / SELL */
 
 function displayDirection(direction){
 
@@ -1217,7 +1206,7 @@ Number(v || 0)
 }
 
 
-/* REFRESH DASHBOARD */
+/* REFRESH */
 
 async function refresh(){
 
@@ -1278,8 +1267,6 @@ document.getElementById(
 ).textContent =
 x.losses || 0;
 
-
-/* BOT STATUS */
 
 document.getElementById(
 "botPill"
@@ -1349,7 +1336,11 @@ ${a.current ?? ""}
 </td>
 
 <td
-class="${Number(a.profit || 0) >= 0 ? "ok" : "bad"}"
+class="${
+Number(a.profit || 0) >= 0
+? "ok"
+: "bad"
+}"
 >
 ${money(a.profit)}
 </td>
@@ -1437,8 +1428,6 @@ document.getElementById(
 
 }
 
-
-/* START REFRESH */
 
 refresh();
 
