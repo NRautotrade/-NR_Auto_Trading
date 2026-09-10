@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -1736,26 +1737,62 @@ def abc_signal(
     return None
 
 
-async def fetch_m5_candles(
+async def fetch_candles(
     ws,
     symbol,
+    granularity,
+    count=100,
 ):
     msg = await ws_request(
         ws,
         {
             "ticks_history": symbol,
             "end": "latest",
-            "count": 100,
+            "count": count,
             "style": "candles",
-            "granularity": 300,
+            "granularity": granularity,
         },
-        200 + abs(hash(symbol)) % 1000,
+        200 + abs(hash((symbol, granularity))) % 1000,
     )
 
     return msg.get(
         "candles",
         [],
     )
+
+
+async def fetch_m5_candles(ws, symbol):
+    return await fetch_candles(ws, symbol, 300, 100)
+
+
+def higher_timeframe_trend(candles):
+    """Return BULLISH, BEARISH, or None using closed HTF candles.
+
+    The filter uses EMA20/EMA50 plus the latest closed candle.  A direction
+    is accepted only when price and both EMAs agree, which keeps the M5 ABC
+    entry from trading directly against the larger trend.
+    """
+    if len(candles) < 55:
+        return None
+
+    closes = [float(c["close"]) if isinstance(c, dict) else float(c[4]) for c in candles]
+
+    def ema(values, period):
+        k = 2.0 / (period + 1.0)
+        value = sum(values[:period]) / period
+        for price in values[period:]:
+            value = price * k + value * (1.0 - k)
+        return value
+
+    ema20 = ema(closes, 20)
+    ema50 = ema(closes, 50)
+    last = closes[-1]
+
+    if last > ema20 > ema50:
+        return "BULLISH"
+    if last < ema20 < ema50:
+        return "BEARISH"
+    return None
 
 
 # ============================================================
@@ -2160,6 +2197,20 @@ async def demo_bot_worker(
                         if not signal:
                             continue
 
+                        # Higher-timeframe confirmation: 4H establishes the
+                        # main trend and 1H must confirm it before an M5 ABC
+                        # entry is allowed.
+                        candles_1h = await fetch_candles(ws, symbol, 3600, 100)
+                        candles_4h = await fetch_candles(ws, symbol, 14400, 100)
+                        trend_1h = higher_timeframe_trend(candles_1h)
+                        trend_4h = higher_timeframe_trend(candles_4h)
+
+                        if not trend_1h or not trend_4h or trend_1h != trend_4h:
+                            state["message"] = (
+                                f"{market}: ABC found, but 1H/4H trend confirmation is not aligned; skipped."
+                            )
+                            continue
+
                         (
                             direction,
                             ai,
@@ -2170,11 +2221,20 @@ async def demo_bot_worker(
                             C,
                         ) = signal
 
+                        required_trend = "BULLISH" if direction == "CALL" else "BEARISH"
+                        if trend_1h != required_trend or trend_4h != required_trend:
+                            state["message"] = (
+                                f"{market}: ABC {direction} conflicts with the 1H/4H trend; skipped."
+                            )
+                            continue
+
                         key = (
                             direction,
                             ai,
                             bi,
                             ci,
+                            trend_1h,
+                            trend_4h,
                         )
 
                         if last_setup.get(market) == key:
@@ -2206,18 +2266,20 @@ async def demo_bot_worker(
 
                         state["balance"] = balance
 
-                        # Use the smallest stake enforced by this online bot.
-                        # Flat Stake stays at the minimum. Martingale is the only
-                        # mode allowed to increase it after a loss.
-                        minimum_stake = 0.35
+                        # Base stake is the configured risk, capped at 2% of
+                        # the member's live demo balance for safety.
+                        base_stake = min(
+                            float(risk),
+                            max(0.35, balance * 0.02),
+                        )
                         if stake_mode == "Martingale":
                             level = int(state.get("_stake_level", 0) or 0)
-                            stake = minimum_stake * (float(martingale_multiplier) ** level)
+                            stake = base_stake * (float(martingale_multiplier) ** level)
                             stake = min(stake, balance * 0.10)
                         else:
-                            stake = minimum_stake
+                            stake = base_stake
 
-                        stake = round(max(minimum_stake, stake), 2)
+                        stake = round(max(0.35, stake), 2)
 
                         if balance <= 0 or stake > balance:
                             continue
