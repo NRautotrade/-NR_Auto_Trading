@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -2207,20 +2206,18 @@ async def demo_bot_worker(
 
                         state["balance"] = balance
 
-                        # Base stake is the configured risk, capped at 2% of
-                        # the member's live demo balance for safety.
-                        base_stake = min(
-                            float(risk),
-                            max(0.35, balance * 0.02),
-                        )
+                        # Use the smallest stake enforced by this online bot.
+                        # Flat Stake stays at the minimum. Martingale is the only
+                        # mode allowed to increase it after a loss.
+                        minimum_stake = 0.35
                         if stake_mode == "Martingale":
                             level = int(state.get("_stake_level", 0) or 0)
-                            stake = base_stake * (float(martingale_multiplier) ** level)
+                            stake = minimum_stake * (float(martingale_multiplier) ** level)
                             stake = min(stake, balance * 0.10)
                         else:
-                            stake = base_stake
+                            stake = minimum_stake
 
-                        stake = round(max(0.35, stake), 2)
+                        stake = round(max(minimum_stake, stake), 2)
 
                         if balance <= 0 or stake > balance:
                             continue
