@@ -952,7 +952,9 @@ function renderPositions(positions){
             )}</td>
 
             <td>${escapeHtml(
-                p.direction || p.contract_type || "-"
+                (p.direction || p.contract_type || "-")
+                    .replace("CALL", "BUY")
+                    .replace("PUT", "SELL")
             )}</td>
 
             <td>${p.entry_price ?? p.entry_spot ?? "-"}</td>
