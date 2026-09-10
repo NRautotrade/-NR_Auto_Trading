@@ -150,6 +150,10 @@ def init_db():
             max_daily_loss REAL NOT NULL DEFAULT 50,
             protect_tp REAL NOT NULL DEFAULT 50,
             lock_profit_r REAL NOT NULL DEFAULT 1,
+            max_trades REAL NOT NULL DEFAULT 15,
+            stake_mode TEXT NOT NULL DEFAULT 'Flat Stake',
+            martingale_multiplier REAL NOT NULL DEFAULT 2,
+            tp_adjust_percent REAL NOT NULL DEFAULT 90,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
     """)
@@ -199,6 +203,26 @@ def init_db():
     if "protect_tp" not in settings_columns:
         conn.execute(
             "ALTER TABLE settings ADD COLUMN protect_tp REAL NOT NULL DEFAULT 50"
+        )
+
+    if "max_trades" not in settings_columns:
+        conn.execute(
+            "ALTER TABLE settings ADD COLUMN max_trades REAL NOT NULL DEFAULT 15"
+        )
+
+    if "stake_mode" not in settings_columns:
+        conn.execute(
+            "ALTER TABLE settings ADD COLUMN stake_mode TEXT NOT NULL DEFAULT 'Flat Stake'"
+        )
+
+    if "martingale_multiplier" not in settings_columns:
+        conn.execute(
+            "ALTER TABLE settings ADD COLUMN martingale_multiplier REAL NOT NULL DEFAULT 2"
+        )
+
+    if "tp_adjust_percent" not in settings_columns:
+        conn.execute(
+            "ALTER TABLE settings ADD COLUMN tp_adjust_percent REAL NOT NULL DEFAULT 90"
         )
 
     if "lock_profit_r" not in settings_columns:
@@ -424,9 +448,13 @@ def save_settings(user_id, form):
             max_daily_profit,
             max_daily_loss,
             protect_tp,
-            lock_profit_r
+            lock_profit_r,
+            max_trades,
+            stake_mode,
+            martingale_multiplier,
+            tp_adjust_percent
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(user_id) DO UPDATE SET
             markets=excluded.markets,
@@ -437,7 +465,11 @@ def save_settings(user_id, form):
             max_daily_profit=excluded.max_daily_profit,
             max_daily_loss=excluded.max_daily_loss,
             protect_tp=excluded.protect_tp,
-            lock_profit_r=excluded.lock_profit_r
+            lock_profit_r=excluded.lock_profit_r,
+            max_trades=excluded.max_trades,
+            stake_mode=excluded.stake_mode,
+            martingale_multiplier=excluded.martingale_multiplier,
+            tp_adjust_percent=excluded.tp_adjust_percent
         """,
         (
             user_id,
@@ -451,6 +483,10 @@ def save_settings(user_id, form):
             # Keep the user's requested 50% protection setting.
             float(form.get("protect_tp", 50)),
             float(form.get("lock_profit_r", 1)),
+            min(15.0, max(1.0, float(form.get("max_trades", 15)))),
+            ("Martingale" if "Martingale" in form.getlist("strategies") else "Flat Stake"),
+            min(5.0, max(1.0, float(form.get("martingale_multiplier", 2)))),
+            min(99.0, max(50.0, float(form.get("tp_adjust_percent", 90)))),
         ),
     )
 
@@ -1734,6 +1770,10 @@ async def demo_bot_worker(
     risk,
     rr,
     max_daily_profit=200.0,
+    max_trades=15,
+    stake_mode="Flat Stake",
+    martingale_multiplier=2.0,
+    tp_adjust_percent=90.0,
 ):
     state = BOT_STATE[user_id]
 
@@ -1751,6 +1791,9 @@ async def demo_bot_worker(
             "last_trade": None,
             "activity": [],
             "_position_map": {},
+            "_market_restart_at": {},
+            "_stake_level": 0,
+            "paused": False,
         })
 
     state.update({
@@ -1830,6 +1873,11 @@ async def demo_bot_worker(
             request_counter = 6000
 
             while not state.get("stop_requested"):
+
+                # PAUSE means keep the Deriv connection alive and monitor
+                # existing contracts, but do not open new contracts.
+                if state.get("paused"):
+                    state["message"] = "Bot paused. Existing demo trades are still monitored."
 
                 # --------------------------------------------------------
                 # UPDATE ALL OPEN CONTRACTS
@@ -1913,6 +1961,34 @@ async def demo_bot_worker(
 
                         state["_position_map"][market] = position
 
+                        # Fixed-duration CALL/PUT contracts do not have a
+                        # CFD-style price TP. Instead, optionally request an
+                        # early cash-out when the live profit reaches the
+                        # configured percentage of the maximum contract profit.
+                        if (
+                            not c.get("is_sold")
+                            and max(0.0, profit) > 0
+                            and float(position.get("max_profit", 0) or 0) > 0
+                            and profit >= float(position.get("max_profit", 0)) * (float(tp_adjust_percent) / 100.0)
+                            and not position.get("tp_requested")
+                        ):
+                            try:
+                                request_counter += 1
+                                await ws_request(
+                                    ws,
+                                    {"sell": contract_id, "price": 0},
+                                    request_counter,
+                                )
+                                position["tp_requested"] = True
+                                state["message"] = (
+                                    f"{market}: early TP requested at "
+                                    f"{float(tp_adjust_percent):.0f}% of max profit."
+                                )
+                            except Exception:
+                                # If early selling is unavailable for the contract,
+                                # leave it running to normal settlement.
+                                pass
+
                         settled = (
                             bool(c.get("is_sold"))
                             or status in {
@@ -1981,6 +2057,16 @@ async def demo_bot_worker(
                             None,
                         )
 
+                        # Restart this market only on the next 10-minute mark.
+                        now_ts = time.time()
+                        next_mark = (int(now_ts) // 600 + 1) * 600
+                        state.setdefault("_market_restart_at", {})[market] = next_mark
+
+                        if profit < 0 and stake_mode == "Martingale":
+                            state["_stake_level"] = min(6, int(state.get("_stake_level", 0)) + 1)
+                        elif profit >= 0:
+                            state["_stake_level"] = 0
+
                         open_contracts.pop(
                             market,
                             None,
@@ -2015,9 +2101,17 @@ async def demo_bot_worker(
                 )
 
                 # --------------------------------------------------------
-                # DAILY PROFIT CAP
+                # DAILY PROFIT CAP / MAX TRADES
                 # --------------------------------------------------------
                 daily_cap = min(200.0, max(100.0, float(max_daily_profit or 200)))
+                trade_cap = min(15, max(1, int(max_trades or 15)))
+                if int(state.get("trades", 0) or 0) >= trade_cap:
+                    state["message"] = (
+                        f"Maximum {trade_cap} trades reached for today. "
+                        "No new trades until the next day."
+                    )
+                    await asyncio.sleep(10)
+                    continue
                 if float(state.get("today_pl", 0) or 0) >= daily_cap:
                     state["message"] = (
                         f"Daily profit limit ${daily_cap:.0f} reached. "
@@ -2030,12 +2124,24 @@ async def demo_bot_worker(
                 # SCAN SELECTED MARKETS
                 # --------------------------------------------------------
                 for market, symbol in symbols.items():
+                    if state.get("paused"):
+                        break
+                    if int(state.get("trades", 0) or 0) >= trade_cap:
+                        state["message"] = (
+                            f"Maximum {trade_cap} trades reached for today. "
+                            "No new trades until the next day."
+                        )
+                        break
                     if float(state.get("today_pl", 0) or 0) >= daily_cap:
                         state["message"] = (
                             f"Daily profit limit ${daily_cap:.0f} reached. "
                             "No new trades until the next day."
                         )
                         break
+
+                    restart_at = float(state.get("_market_restart_at", {}).get(market, 0) or 0)
+                    if time.time() < restart_at:
+                        continue
 
                     if (
                         market in open_contracts
@@ -2100,14 +2206,20 @@ async def demo_bot_worker(
 
                         state["balance"] = balance
 
-                        # Existing online-demo safety cap.
-                        stake = min(
+                        # Base stake is the configured risk, capped at 2% of
+                        # the member's live demo balance for safety.
+                        base_stake = min(
                             float(risk),
-                            max(
-                                0.35,
-                                balance * 0.02,
-                            ),
+                            max(0.35, balance * 0.02),
                         )
+                        if stake_mode == "Martingale":
+                            level = int(state.get("_stake_level", 0) or 0)
+                            stake = base_stake * (float(martingale_multiplier) ** level)
+                            stake = min(stake, balance * 0.10)
+                        else:
+                            stake = base_stake
+
+                        stake = round(max(0.35, stake), 2)
 
                         if balance <= 0 or stake > balance:
                             continue
@@ -2202,12 +2314,15 @@ async def demo_bot_worker(
 
                         open_contracts[market] = contract_id
 
+                        max_profit = max(0.0, payout - ask)
                         position = {
                             "symbol": market,
                             "direction": direction,
                             "entry": ask,
                             "current": ask,
                             "profit": 0.0,
+                            "max_profit": max_profit,
+                            "tp_adjust_percent": float(tp_adjust_percent),
                             "status": "OPEN",
                             "contract_id": contract_id,
                         }
@@ -2282,6 +2397,10 @@ async def demo_bot_worker(
                 risk,
                 rr,
                 max_daily_profit,
+                max_trades,
+                stake_mode,
+                martingale_multiplier,
+                tp_adjust_percent,
             )
         )
         BOT_TASKS[user_id] = task
@@ -2308,6 +2427,10 @@ async def demo_bot_worker(
                 risk,
                 rr,
                 max_daily_profit,
+                max_trades,
+                stake_mode,
+                martingale_multiplier,
+                tp_adjust_percent,
             )
         )
         BOT_TASKS[user_id] = task
@@ -2350,6 +2473,7 @@ async def start_trading(request: Request):
         return {
             "ok": True,
             "running": True,
+            "paused": bool(BOT_STATE.get(uid, {}).get("paused", False)),
             "message": "Bot is already running.",
         }
 
@@ -2443,6 +2567,9 @@ async def start_trading(request: Request):
         "last_trade": None,
         "activity": [],
         "_position_map": {},
+        "_market_restart_at": {},
+        "_stake_level": 0,
+        "paused": False,
     }
 
     try:
@@ -2471,6 +2598,10 @@ async def start_trading(request: Request):
             float(settings["risk_trade"]),
             float(settings["reward_risk"]),
             min(200.0, max(100.0, float(settings["max_daily_profit"]))),
+            int(settings["max_trades"]),
+            str(settings["stake_mode"] or "Flat Stake"),
+            float(settings["martingale_multiplier"]),
+            float(settings["tp_adjust_percent"]),
         )
     )
 
@@ -2528,6 +2659,34 @@ async def stop_trading(request: Request):
     }
 
 
+@app.post("/api/trading/pause")
+async def pause_trading(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    state = BOT_STATE.setdefault(uid, {"running": False, "positions": []})
+    if not state.get("running"):
+        return JSONResponse({"ok": False, "error": "Bot is not running."}, status_code=400)
+    state["paused"] = True
+    state["message"] = "Bot paused. Existing demo trades are still monitored."
+    return {"ok": True, "paused": True, "message": state["message"]}
+
+
+@app.post("/api/trading/resume")
+async def resume_trading(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    state = BOT_STATE.setdefault(uid, {"running": False, "positions": []})
+    if not state.get("running"):
+        return JSONResponse({"ok": False, "error": "Bot is not running."}, status_code=400)
+    state["paused"] = False
+    state["message"] = "Bot resumed. Waiting for the next valid setup."
+    return {"ok": True, "paused": False, "message": state["message"]}
+
+
 @app.get("/api/trading/state")
 async def trading_state(request: Request):
     user = current_user(request)
@@ -2551,6 +2710,7 @@ async def trading_state(request: Request):
             "positions": [],
             "last_trade": None,
             "activity": [],
+            "paused": False,
         },
     )
 
@@ -2600,6 +2760,7 @@ async def trading_state(request: Request):
     return {
         "ok": True,
         "running": bool(state.get("running", False)),
+        "paused": bool(state.get("paused", False)),
         "mode": state.get("mode", "demo"),
         "message": state.get("message", "Bot stopped."),
         "balance": float(state.get("balance", 0.0) or 0.0),
@@ -2835,6 +2996,7 @@ async def deriv_disconnect(request: Request):
         "positions": [],
         "last_trade": None,
         "activity": [],
+        "paused": False,
     }
 
     BOT_TASKS.pop(uid, None)
