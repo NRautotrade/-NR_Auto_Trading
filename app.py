@@ -1737,12 +1737,7 @@ def abc_signal(
     return None
 
 
-async def fetch_candles(
-    ws,
-    symbol,
-    granularity,
-    count=100,
-):
+async def fetch_candles(ws, symbol, granularity, count=100):
     msg = await ws_request(
         ws,
         {
@@ -1754,44 +1749,20 @@ async def fetch_candles(
         },
         200 + abs(hash((symbol, granularity))) % 1000,
     )
-
-    return msg.get(
-        "candles",
-        [],
-    )
+    return msg.get("candles", [])
 
 
-async def fetch_m5_candles(ws, symbol):
-    return await fetch_candles(ws, symbol, 300, 100)
-
-
-def higher_timeframe_trend(candles):
-    """Return BULLISH, BEARISH, or None using closed HTF candles.
-
-    The filter uses EMA20/EMA50 plus the latest closed candle.  A direction
-    is accepted only when price and both EMAs agree, which keeps the M5 ABC
-    entry from trading directly against the larger trend.
-    """
-    if len(candles) < 55:
+def timeframe_trend(candles, fast=20, slow=50):
+    closes = [float(c.get("close", 0) or 0) for c in candles]
+    closes = [c for c in closes if c > 0]
+    if len(closes) < slow:
         return None
-
-    closes = [float(c["close"]) if isinstance(c, dict) else float(c[4]) for c in candles]
-
-    def ema(values, period):
-        k = 2.0 / (period + 1.0)
-        value = sum(values[:period]) / period
-        for price in values[period:]:
-            value = price * k + value * (1.0 - k)
-        return value
-
-    ema20 = ema(closes, 20)
-    ema50 = ema(closes, 50)
-    last = closes[-1]
-
-    if last > ema20 > ema50:
-        return "BULLISH"
-    if last < ema20 < ema50:
-        return "BEARISH"
+    fast_avg = sum(closes[-fast:]) / fast
+    slow_avg = sum(closes[-slow:]) / slow
+    if fast_avg > slow_avg:
+        return "CALL"
+    if fast_avg < slow_avg:
+        return "PUT"
     return None
 
 
@@ -2187,28 +2158,22 @@ async def demo_bot_worker(
                         continue
 
                     try:
-                        candles = await fetch_m5_candles(
-                            ws,
-                            symbol,
-                        )
+                        candles_4h = await fetch_candles(ws, symbol, 14400)
+                        candles_1h = await fetch_candles(ws, symbol, 3600)
+                        candles_15m = await fetch_candles(ws, symbol, 900)
 
-                        signal = abc_signal(candles)
+                        trend_4h = timeframe_trend(candles_4h)
+                        trend_1h = timeframe_trend(candles_1h)
+                        signal = abc_signal(candles_15m)
 
-                        if not signal:
+                        # Trade only when 4H and 1H agree and the 15M ABC
+                        # setup points in the same direction.
+                        if not trend_4h or trend_4h != trend_1h:
+                            continue
+                        if not signal or signal[0] != trend_4h:
                             continue
 
-                        # Higher-timeframe confirmation: 4H establishes the
-                        # main trend and 1H must confirm it before an M5 ABC
-                        # entry is allowed.
-                        candles_1h = await fetch_candles(ws, symbol, 3600, 100)
-                        candles_4h = await fetch_candles(ws, symbol, 14400, 100)
-                        trend_1h = higher_timeframe_trend(candles_1h)
-                        trend_4h = higher_timeframe_trend(candles_4h)
-
-                        if not trend_1h or not trend_4h or trend_1h != trend_4h:
-                            state["message"] = (
-                                f"{market}: ABC found, but 1H/4H trend confirmation is not aligned; skipped."
-                            )
+                        if not signal:
                             continue
 
                         (
@@ -2221,20 +2186,11 @@ async def demo_bot_worker(
                             C,
                         ) = signal
 
-                        required_trend = "BULLISH" if direction == "CALL" else "BEARISH"
-                        if trend_1h != required_trend or trend_4h != required_trend:
-                            state["message"] = (
-                                f"{market}: ABC {direction} conflicts with the 1H/4H trend; skipped."
-                            )
-                            continue
-
                         key = (
                             direction,
                             ai,
                             bi,
                             ci,
-                            trend_1h,
-                            trend_4h,
                         )
 
                         if last_setup.get(market) == key:
@@ -2300,7 +2256,7 @@ async def demo_bot_worker(
                                     "currency",
                                     "USD",
                                 ),
-                                "duration": 5,
+                                "duration": 15,
                                 "duration_unit": "m",
                                 "underlying_symbol": symbol,
                             },
@@ -2834,6 +2790,10 @@ async def trading_state(request: Request):
         "open_trades": len(state.get("positions", [])),
         "wins": int(state.get("wins", 0) or 0),
         "losses": int(state.get("losses", 0) or 0),
+        "win_rate": (
+            round(100.0 * int(state.get("wins", 0) or 0) /
+                  max(1, int(state.get("wins", 0) or 0) + int(state.get("losses", 0) or 0)), 2)
+        ),
         "positions": state.get("positions", []),
         "last_trade": state.get("last_trade"),
         "trades": int(state.get("trades", 0) or 0),
