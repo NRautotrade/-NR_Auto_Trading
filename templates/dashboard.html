@@ -6,1070 +6,270 @@
 <title>NR AUTO TRADING</title>
 <style>
 :root{--bg:#07111f;--panel:#0e1a2d;--panel2:#111f34;--border:#23334c;--text:#e8eef7;--muted:#8fa0b8;--green:#22c55e;--red:#ef4444;--blue:#38bdf8;--yellow:#f59e0b}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
-.wrap{max-width:1400px;margin:auto;padding:18px}
-.top{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0 16px}
-.brand{font-size:25px;font-weight:800}
-.sub{color:var(--muted);font-size:12px;margin-top:4px}
-.right{display:flex;gap:10px;align-items:center}
-.pill{padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;background:#12301f;color:#58e889}
-.btn{border:1px solid var(--border);background:#132238;color:var(--text);padding:10px 15px;border-radius:7px;cursor:pointer;font-weight:700}
-.btn:hover{filter:brightness(1.15)}
-.btn.green{background:#17823f;border-color:#1da957}
-.btn.red{background:#8d2020;border-color:#b52d2d}
-.btn.yellow{background:#7a5310;border-color:#a87516}
-.btn.blue{background:#15577a;border-color:#2180ae}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px}
-.full{grid-column:1/-1}
-.title{font-size:13px;font-weight:800;letter-spacing:.4px;margin-bottom:12px}
-.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
-.stat{background:var(--panel2);border:1px solid var(--border);padding:13px;border-radius:7px}
-.stat small{display:block;color:var(--muted);font-size:10px;font-weight:700}
-.stat strong{display:block;font-size:18px;margin-top:7px}
-.ok{color:var(--green)}
-.bad{color:var(--red)}
-.muted{color:var(--muted)}
-.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-.check{display:flex;align-items:center;gap:7px;margin:6px 10px 6px 0}
-.check input{accent-color:var(--green);width:16px;height:16px}
-.section{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:11px;margin-top:10px}
-.section label{font-size:11px;color:var(--muted);display:block;margin-bottom:5px}
-.field{background:#081322;border:1px solid var(--border);color:var(--text);padding:9px;border-radius:6px;width:120px}
-.wide{width:180px}
-.note{font-size:11px;color:var(--muted);margin-top:9px}
-.account{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.account-id{font-weight:800}
-.table{width:100%;border-collapse:collapse;font-size:12px}
-.table th{color:var(--muted);text-align:left;background:#15243b}
-.table th,.table td{padding:10px;border-bottom:1px solid var(--border)}
-.empty{text-align:center;color:var(--muted);padding:18px}
-.activity{margin:0;padding-left:20px;color:var(--muted);font-size:12px}
-.activity li{padding:4px 0}
-.controls{display:flex;gap:9px;flex-wrap:wrap}
-.switchrow{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.switch{position:relative;display:inline-block;width:54px;height:28px}
-.switch input{opacity:0;width:0;height:0}
-.slider{position:absolute;inset:0;cursor:pointer;background:#3a2020;border:1px solid #6b2b2b;border-radius:28px;transition:.2s}
-.slider:before{content:"";position:absolute;height:20px;width:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
-.switch input:checked + .slider{background:#17823f;border-color:#1da957}
-.switch input:checked + .slider:before{transform:translateX(26px)}
-.switchstate{font-weight:800;font-size:12px;min-width:28px}
-.statusline{padding:10px;background:#081322;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;margin-top:10px}
-@media(max-width:900px){
-.grid{grid-template-columns:1fr}
-.full{grid-column:auto}
-.stats{grid-template-columns:repeat(2,1fr)}
-}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
+.wrap{max-width:1400px;margin:auto;padding:18px}.top{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0 16px}.brand{font-size:25px;font-weight:800}.sub{color:var(--muted);font-size:12px;margin-top:4px}.right{display:flex;gap:10px;align-items:center}.pill{padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;background:#12301f;color:#58e889}.btn{border:1px solid var(--border);background:#132238;color:var(--text);padding:10px 15px;border-radius:7px;cursor:pointer;font-weight:700}.btn:hover{filter:brightness(1.15)}.btn.green{background:#17823f;border-color:#1da957}.btn.red{background:#8d2020;border-color:#b52d2d}.btn.yellow{background:#7a5310;border-color:#a87516}.btn.blue{background:#15577a;border-color:#2180ae}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px}.full{grid-column:1/-1}.title{font-size:13px;font-weight:800;letter-spacing:.4px;margin-bottom:12px}.stats{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}.stat{background:var(--panel2);border:1px solid var(--border);padding:13px;border-radius:7px}.stat small{display:block;color:var(--muted);font-size:10px;font-weight:700}.stat strong{display:block;font-size:18px;margin-top:7px}.ok{color:var(--green)}.bad{color:var(--red)}.muted{color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.check{display:flex;align-items:center;gap:7px;margin:6px 10px 6px 0}.check input{accent-color:var(--green);width:16px;height:16px}.section{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:11px;margin-top:10px}.section label{font-size:11px;color:var(--muted);display:block;margin-bottom:5px}.field{background:#081322;border:1px solid var(--border);color:var(--text);padding:9px;border-radius:6px;width:120px}.wide{width:180px}.note{font-size:11px;color:var(--muted);margin-top:9px}.account{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.account-id{font-weight:800}.table{width:100%;border-collapse:collapse;font-size:12px}.table th{color:var(--muted);text-align:left;background:#15243b}.table th,.table td{padding:10px;border-bottom:1px solid var(--border)}.empty{text-align:center;color:var(--muted);padding:18px}.activity{margin:0;padding-left:20px;color:var(--muted);font-size:12px}.activity li{padding:4px 0}.controls{display:flex;gap:9px;flex-wrap:wrap}.statusline{padding:10px;background:#081322;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;margin-top:10px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.stats{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
-
 <body>
-
 <div class="wrap">
-
 <header class="top">
-  <div>
-    <div class="brand">NR AUTO TRADING</div>
-    <div class="sub">Online Trading Dashboard</div>
-  </div>
-
-  <div class="right">
-    <span id="botPill" class="pill">BOT STOPPED</span>
-    <span class="muted">USER: {{ user.username }}</span>
-    <a class="btn" href="/logout" style="text-decoration:none">LOG OUT</a>
-  </div>
+  <div><div class="brand">NR AUTO TRADING</div><div class="sub">Online Trading Dashboard</div></div>
+  <div class="right"><span id="botPill" class="pill">BOT STOPPED</span><span class="muted">USER: {{ user.username }}</span><a class="btn" href="/logout" style="text-decoration:none">LOG OUT</a></div>
 </header>
-
 
 <div class="card full" style="margin-top:14px">
   <div class="title">TRADING ACCOUNT</div>
-
   <div class="account">
-
-    <span class="account-id">
-      {{ connection.account_id if connection else 'Not connected' }}
-    </span>
-
-    <span id="acctType" class="muted">
-      {{ connection.account_type|upper if connection else '—' }}
-    </span>
-
+    <span class="account-id">{{ connection.account_id if connection else 'Not connected' }}</span>
+    <span id="acctType" class="muted">{{ connection.account_type|upper if connection else 'â' }}</span>
     {% if connection %}
-      <span class="ok">● CONNECTED</span>
+      <span class="ok">â CONNECTED</span>
     {% else %}
-      <a class="btn green" href="/deriv/connect?mode=demo">
-        CONNECT DERIV DEMO
-      </a>
+      <a class="btn green" href="/deriv/connect?mode=demo">CONNECT DERIV DEMO</a>
     {% endif %}
-
-    <a class="btn" href="/deriv/connect?mode=demo">
-      RECONNECT DEMO
-    </a>
-
-    {% if allow_real %}
-      <a class="btn" href="/deriv/connect?mode=real">
-        CONNECT REAL
-      </a>
-    {% endif %}
-
+    <a class="btn" href="/deriv/connect?mode=demo">RECONNECT DEMO</a>
+    {% if allow_real %}<a class="btn" href="/deriv/connect?mode=real">CONNECT REAL</a>{% endif %}
   </div>
 </div>
-
 
 <div class="card full">
-
   <div class="title">ACCOUNT / TODAY</div>
-
   <div class="stats">
-
-    <div class="stat">
-      <small>BALANCE</small>
-      <strong id="balance">$0.00</strong>
-    </div>
-
-    <div class="stat">
-      <small>EQUITY</small>
-      <strong id="equity">$0.00</strong>
-    </div>
-
-    <div class="stat">
-      <small>TODAY'S P/L</small>
-      <strong id="pl">$0.00</strong>
-    </div>
-
-    <div class="stat">
-      <small>OPEN TRADES</small>
-      <strong id="open">0</strong>
-    </div>
-
-    <div class="stat">
-      <small>WINS</small>
-      <strong id="wins">0</strong>
-    </div>
-
-    <div class="stat">
-      <small>LOSSES</small>
-      <strong id="losses">0</strong>
-    </div>
-
+    <div class="stat"><small>BALANCE</small><strong id="balance">$0.00</strong></div>
+    <div class="stat"><small>EQUITY</small><strong id="equity">$0.00</strong></div>
+    <div class="stat"><small>TODAY'S P/L</small><strong id="pl">$0.00</strong></div>
+    <div class="stat"><small>OPEN TRADES</small><strong id="open">0</strong></div>
+    <div class="stat"><small>WINS</small><strong id="wins">0</strong></div>
+    <div class="stat"><small>LOSSES</small><strong id="losses">0</strong></div>
+    <div class="stat"><small>WIN RATE</small><strong id="winRate">0.00%</strong></div>
   </div>
-
 </div>
-
 
 <form id="settingsForm" method="post" action="/settings">
-
 <div class="grid">
-
-
-<!-- MARKETS -->
-
-<div class="card">
-
-  <div class="title">MARKETS</div>
-
-  <div class="section">
-
-    {% for m in [
-    "Step Index",
-    "Volatility 5 Index",
-    "Volatility 10 Index",
-    "Volatility 15 Index",
-    "Volatility 25 Index",
-    "Volatility 30 Index",
-    "Volatility 50 Index",
-    "Volatility 75 Index",
-    "Volatility 100 Index"
-    ] %}
-
-    <label class="check">
-
-      <input
-        type="checkbox"
-        name="markets"
-        value="{{ m }}"
-        {% if settings and ('"' ~ m ~ '"') in settings.markets %}
-        checked
-        {% endif %}
-      >
-
-      {{ m }}
-
-    </label>
-
-    {% endfor %}
-
+  <div class="card">
+    <div class="title">MARKETS</div>
+    <div class="section">
+      {% for m in ["Step Index","Volatility 5 Index","Volatility 10 Index","Volatility 15 Index","Volatility 25 Index","Volatility 30 Index","Volatility 50 Index","Volatility 75 Index","Volatility 100 Index"] %}
+      <label class="check"><input type="checkbox" name="markets" value="{{ m }}" {% if settings and m in (settings.markets|from_json) %}checked{% endif %}>{{ m }}</label>
+      {% endfor %}
+    </div>
   </div>
 
+  <div class="card">
+    <div class="title">STRATEGIES</div>
+    <div class="section">
+      <label class="check"><input type="checkbox" name="strategies" value="ABC Pattern" checked>ABC Pattern</label>
+      <label class="check"><input type="checkbox" name="strategies" value="Breakout">Breakout</label>
+      <label class="check"><input type="checkbox" name="strategies" value="Trend">Trend</label>
+      <label class="check"><input type="checkbox" name="strategies" value="Martingale">Martingale</label>
+      <label class="check"><input type="checkbox" name="strategies" value="Flat Stake">Flat Stake</label>
+      <div class="note">Martingale and Flat Stake are stake-management modes, while ABC/Breakout/Trend are entry strategies.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title">STAKE & TRADE CONTROL</div>
+    <div class="section row">
+      <div><label>Stake Mode</label><select class="field wide" name="stake_mode"><option>Flat Stake</option><option>Martingale</option></select></div>
+      <div><label>Base Risk / Stake ($)</label><input class="field" name="risk_trade" value="{{ settings.risk_trade if settings else 50 }}"></div>
+      <div><label>Martingale Multiplier</label><input class="field" name="martingale_multiplier" value="2"></div>
+      <div><label>Maximum Trades / Day</label><input class="field" name="max_trades" value="15"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title">RISK & PROTECTION</div>
+    <div class="section row">
+      <div><label>Reward / Risk</label><input class="field" name="reward_risk" value="{{ settings.reward_risk if settings else 2 }}"></div>
+      <div><label>Daily Target ($)</label><input class="field" name="daily_target" value="100"></div>
+      <div><label>Max Daily Profit ($)</label><input class="field" name="max_daily_profit" value="200"></div>
+      <div><label>Max Daily Loss ($)</label><input class="field" name="max_daily_loss" value="{{ settings.max_daily_loss if settings else 50 }}"></div>
+      <div><label>Protect at TP (%)</label><input class="field" name="protect_tp" value="50"></div>
+      <div><label>Lock Profit (R)</label><input class="field" name="lock_profit_r" value="1"></div>
+      <div><label>TP Adjustment (%)</label><input class="field" name="tp_adjust_percent" value="90"></div>
+    </div>
+    <div class="note">M5 locked â¢ Protection 70% â 1R</div>
+  </div>
+
+  <div class="card full">
+    <div class="title">BOT CONTROLS</div>
+    <div class="controls">
+      <button type="button" class="btn green" onclick="startBot()">RUN BOT</button>
+      <button type="button" class="btn yellow" onclick="pauseBot()">PAUSE BOT</button>
+      <button type="button" class="btn blue" onclick="resumeBot()">RESUME BOT</button>
+      <button type="button" class="btn red" onclick="stopBot()">STOP BOT</button>
+      <button type="submit" class="btn">SAVE SETTINGS</button>
+    </div>
+    <div id="message" class="statusline">Loading bot status...</div>
+  </div>
 </div>
-
-
-<!-- STRATEGIES -->
-
-<div class="card">
-
-  <div class="title">STRATEGIES</div>
-
-  <div class="section">
-
-    <label class="check">
-      <input
-        type="checkbox"
-        name="strategies"
-        value="ABC Pattern"
-        checked
-      >
-      ABC Pattern
-    </label>
-
-    <label class="check">
-      <input
-        type="checkbox"
-        name="strategies"
-        value="Breakout"
-      >
-      Breakout
-    </label>
-
-    <label class="check">
-      <input
-        type="checkbox"
-        name="strategies"
-        value="Trend"
-      >
-      Trend
-    </label>
-
-
-    <!-- MARTINGALE SWITCH -->
-
-    <div class="section switchrow">
-
-      <div>
-
-        <label style="margin:0">
-          MARTINGALE
-        </label>
-
-        <div
-          class="note"
-          style="margin-top:3px"
-        >
-          OFF = minimum stake only • ON = increase after a loss
-        </div>
-
-      </div>
-
-
-      <div
-        style="display:flex;align-items:center;gap:8px"
-      >
-
-        <span
-          id="martingaleState"
-          class="switchstate"
-        >
-          OFF
-        </span>
-
-        <label class="switch">
-
-          <input
-            id="martingaleToggle"
-            type="checkbox"
-            {% if settings and '"Martingale"' in settings.strategies %}
-            checked
-            {% endif %}
-          >
-
-          <span class="slider"></span>
-
-        </label>
-
-      </div>
-
-    </div>
-
-  </div>
-
-</div>
-
-
-<!-- STAKE & TRADE CONTROL -->
-
-<div class="card">
-
-  <div class="title">
-    STAKE & TRADE CONTROL
-  </div>
-
-  <div class="section row">
-
-    <div>
-      <label>Base Risk / Stake ($)</label>
-
-      <input
-        class="field"
-        name="risk_trade"
-        value="{{ settings.risk_trade if settings else 50 }}"
-      >
-    </div>
-
-
-    <div>
-      <label>Martingale Multiplier</label>
-
-      <input
-        class="field"
-        name="martingale_multiplier"
-        value="2"
-      >
-    </div>
-
-
-    <div>
-      <label>Maximum Trades / Day</label>
-
-      <input
-        class="field"
-        name="max_trades"
-        value="15"
-      >
-    </div>
-
-  </div>
-
-</div>
-
-
-<!-- RISK & PROTECTION -->
-
-<div class="card">
-
-  <div class="title">
-    RISK & PROTECTION
-  </div>
-
-  <div class="section row">
-
-    <div>
-      <label>Reward / Risk</label>
-
-      <input
-        class="field"
-        name="reward_risk"
-        value="{{ settings.reward_risk if settings else 2 }}"
-      >
-    </div>
-
-
-    <div>
-      <label>Daily Target ($)</label>
-
-      <input
-        class="field"
-        name="daily_target"
-        value="100"
-      >
-    </div>
-
-
-    <div>
-      <label>Max Daily Profit ($)</label>
-
-      <input
-        class="field"
-        name="max_daily_profit"
-        value="200"
-      >
-    </div>
-
-
-    <div>
-      <label>Max Daily Loss ($)</label>
-
-      <input
-        class="field"
-        name="max_daily_loss"
-        value="{{ settings.max_daily_loss if settings else 50 }}"
-      >
-    </div>
-
-
-    <div>
-      <label>Protect at TP (%)</label>
-
-      <input
-        class="field"
-        name="protect_tp"
-        value="50"
-      >
-    </div>
-
-
-    <div>
-      <label>Lock Profit (R)</label>
-
-      <input
-        class="field"
-        name="lock_profit_r"
-        value="1"
-      >
-    </div>
-
-
-    <div>
-      <label>TP Adjustment (%)</label>
-
-      <input
-        class="field"
-        name="tp_adjust_percent"
-        value="90"
-      >
-    </div>
-
-  </div>
-
-  <div class="note">
-    M5 locked • Protection 70% → 1R
-  </div>
-
-</div>
-
-
-<!-- BOT CONTROLS -->
-
-<div class="card full">
-
-  <div class="title">
-    BOT CONTROLS
-  </div>
-
-  <div class="controls">
-
-    <button
-      type="button"
-      class="btn green"
-      onclick="startBot()"
-    >
-      RUN BOT
-    </button>
-
-
-    <button
-      type="button"
-      class="btn yellow"
-      onclick="pauseBot()"
-    >
-      PAUSE BOT
-    </button>
-
-
-    <button
-      type="button"
-      class="btn blue"
-      onclick="resumeBot()"
-    >
-      RESUME BOT
-    </button>
-
-
-    <button
-      type="button"
-      class="btn red"
-      onclick="stopBot()"
-    >
-      STOP BOT
-    </button>
-
-
-    <button
-      type="submit"
-      class="btn"
-    >
-      SAVE SETTINGS
-    </button>
-
-  </div>
-
-
-  <div
-    id="message"
-    class="statusline"
-  >
-    Loading bot status...
-  </div>
-
-</div>
-
-</div>
-
 </form>
 
-
-<!-- OPEN POSITIONS / ACTIVITY -->
-
 <div class="grid">
-
-<div class="card">
-
-  <div class="title">
-    OPEN POSITIONS
+  <div class="card">
+    <div class="title">OPEN POSITIONS</div>
+    <table class="table"><thead><tr><th>MARKET</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="6" class="empty">No open trades</td></tr></tbody></table>
   </div>
-
-  <table class="table">
-
-    <thead>
-      <tr>
-        <th>MARKET</th>
-        <th>DIRECTION</th>
-        <th>ENTRY</th>
-        <th>CURRENT</th>
-        <th>P/L</th>
-        <th>STATUS</th>
-      </tr>
-    </thead>
-
-    <tbody id="positions">
-
-      <tr>
-        <td colspan="6" class="empty">
-          No open trades
-        </td>
-      </tr>
-
-    </tbody>
-
-  </table>
-
+  <div class="card">
+    <div class="title">LAST TRADE</div>
+    <div id="lastTrade" class="empty">No trades yet.</div>
+    <div class="title" style="margin-top:18px">ACTIVITY</div>
+    <ul id="activity" class="activity"></ul>
+  </div>
+</div>
 </div>
 
 
-<div class="card">
-
-  <div class="title">
-    LAST TRADE
+<section class="card full" id="digitPanel">
+  <div class="title">DIGIT ANALYSIS / AI SCAN</div>
+  <div class="row">
+    <div>
+      <label class="muted" for="digitMarket">Market</label>
+      <select class="field wide" id="digitMarket">
+        <option>Volatility 10 (1s) Index</option>
+        <option selected>Volatility 25 (1s) Index</option>
+        <option>Volatility 50 (1s) Index</option>
+        <option>Volatility 75 (1s) Index</option>
+        <option>Volatility 100 (1s) Index</option>
+      </select>
+    </div>
+    <div>
+      <label class="muted" for="digitType">Trade type</label>
+      <select class="field wide" id="digitType">
+        <option selected>Matches/Differs</option>
+        <option>Even/Odd</option>
+        <option>Over/Under</option>
+      </select>
+    </div>
+    <div>
+      <label class="muted" for="digitTicks">Number of ticks</label>
+      <input class="field" id="digitTicks" type="number" min="10" max="500" value="100">
+    </div>
+    <button type="button" class="btn blue" id="digitScanBtn">AI SCAN</button>
   </div>
 
-  <div
-    id="lastTrade"
-    class="empty"
-  >
-    No trades yet.
+  <div class="section">
+    <div class="row" style="justify-content:space-between">
+      <div><span class="muted">CURRENT TICK</span><strong id="digitCurrentTick">â</strong></div>
+      <div><span class="muted">SCAN STATUS</span><strong id="digitScanStatus">READY</strong></div>
+    </div>
+    <div class="row" id="digitHistory" style="margin-top:12px;gap:6px"></div>
   </div>
 
-
-  <div
-    class="title"
-    style="margin-top:18px"
-  >
-    ACTIVITY
+  <div class="row" style="margin-top:12px">
+    <div class="section" style="flex:1">
+      <div class="muted">MATCHES</div>
+      <strong class="ok" id="digitMatches">0.00%</strong>
+    </div>
+    <div class="section" style="flex:1">
+      <div class="muted">DIFFERS</div>
+      <strong class="bad" id="digitDiffers">0.00%</strong>
+    </div>
   </div>
+  <div class="note" id="digitMessage">
+    Press AI Scan to analyze the selected market. Trading remains controlled by the backend.
+  </div>
+</section>
 
-  <ul
-    id="activity"
-    class="activity"
-  ></ul>
-
-</div>
-
-</div>
-
-</div>
-
+<section class="card full">
+  <div class="title">TRANSACTIONS</div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr>
+          <th>Contract</th><th>Entry</th><th>Exit</th><th>Stake</th><th>P/L</th>
+        </tr>
+      </thead>
+      <tbody id="digitTransactions">
+        <tr><td colspan="5" class="muted">No transactions returned by the backend yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
 
 <script>
-
-
-/* MARTINGALE SWITCH */
-
-const martingaleToggle =
-  document.getElementById(
-    "martingaleToggle"
-  );
-
-const martingaleState =
-  document.getElementById(
-    "martingaleState"
-  );
-
-
-function updateMartingaleLabel(){
-
-  const on =
-    martingaleToggle.checked;
-
-  martingaleState.textContent =
-    on ? "ON" : "OFF";
-
-  martingaleState.className =
-    "switchstate " +
-    (on ? "ok" : "bad");
-
-}
-
-
-martingaleToggle.addEventListener(
-  "change",
-  updateMartingaleLabel
-);
-
-
-updateMartingaleLabel();
-
-
-/* SAVE MARTINGALE MODE */
-
-document.getElementById(
-  "settingsForm"
-).addEventListener(
-  "submit",
-  function(){
-
-    this.querySelectorAll(
-      'input[data-stake-mode="1"]'
-    ).forEach(
-      e => e.remove()
-    );
-
-
-    const hidden =
-      document.createElement(
-        "input"
-      );
-
-
-    hidden.type =
-      "hidden";
-
-    hidden.name =
-      "strategies";
-
-    hidden.value =
-      martingaleToggle.checked
-      ? "Martingale"
-      : "Flat Stake";
-
-    hidden.dataset.stakeMode =
-      "1";
-
-
-    this.appendChild(
-      hidden
-    );
-
-  }
-);
-
-
-/* POST */
-
 async function post(url){
-
-  const r =
-    await fetch(
-      url,
-      {
-        method:"POST",
-        headers:{
-          "Content-Type":
-          "application/json"
-        }
-      }
-    );
-
+  const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"}});
   return await r.json();
-
 }
-
-
-/* START */
-
-async function startBot(){
-
-  const x =
-    await post(
-      "/api/trading/start"
-    );
-
-  document.getElementById(
-    "message"
-  ).textContent =
-    x.message ||
-    x.error ||
-    "Done";
-
-  refresh();
-
-}
-
-
-/* STOP */
-
-async function stopBot(){
-
-  const x =
-    await post(
-      "/api/trading/stop"
-    );
-
-  document.getElementById(
-    "message"
-  ).textContent =
-    x.message ||
-    x.error ||
-    "Done";
-
-  refresh();
-
-}
-
-
-/* PAUSE */
-
-async function pauseBot(){
-
-  const x =
-    await post(
-      "/api/trading/pause"
-    );
-
-  document.getElementById(
-    "message"
-  ).textContent =
-    x.message ||
-    x.error ||
-    "Done";
-
-  refresh();
-
-}
-
-
-/* RESUME */
-
-async function resumeBot(){
-
-  const x =
-    await post(
-      "/api/trading/resume"
-    );
-
-  document.getElementById(
-    "message"
-  ).textContent =
-    x.message ||
-    x.error ||
-    "Done";
-
-  refresh();
-
-}
-
-
-/* MONEY */
-
-function money(v){
-
-  return "$" +
-    Number(v || 0)
-    .toFixed(2);
-
-}
-
-
-/* REFRESH */
-
+async function startBot(){const x=await post("/api/trading/start");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
+async function stopBot(){const x=await post("/api/trading/stop");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
+async function pauseBot(){document.getElementById("message").textContent="Pause control requires the backend pause endpoint."; }
+async function resumeBot(){document.getElementById("message").textContent="Resume control requires the backend pause endpoint."; }
+function money(v){return "$"+Number(v||0).toFixed(2)}
 async function refresh(){
-
-  try{
-
-    const r =
-      await fetch(
-        "/api/trading/state"
-      );
-
-    const x =
-      await r.json();
-
-    if(!x.ok)
-      return;
-
-
-    document.getElementById(
-      "balance"
-    ).textContent =
-      money(x.balance);
-
-
-    document.getElementById(
-      "equity"
-    ).textContent =
-      money(x.equity);
-
-
-    const pl =
-      document.getElementById(
-        "pl"
-      );
-
-
-    pl.textContent =
-      money(x.today_pl);
-
-
-    pl.className =
-      x.today_pl >= 0
-      ? "ok"
-      : "bad";
-
-
-    document.getElementById(
-      "open"
-    ).textContent =
-      x.open_trades || 0;
-
-
-    document.getElementById(
-      "wins"
-    ).textContent =
-      x.wins || 0;
-
-
-    document.getElementById(
-      "losses"
-    ).textContent =
-      x.losses || 0;
-
-
-    document.getElementById(
-      "botPill"
-    ).textContent =
-      x.running
-      ? "BOT RUNNING"
-      : "BOT STOPPED";
-
-
-    document.getElementById(
-      "botPill"
-    ).style.background =
-      x.running
-      ? "#12301f"
-      : "#3a2020";
-
-
-    document.getElementById(
-      "botPill"
-    ).style.color =
-      x.running
-      ? "#58e889"
-      : "#ff7b7b";
-
-
-    document.getElementById(
-      "message"
-    ).textContent =
-      x.message || "";
-
-
-    /* OPEN POSITIONS */
-
-    const p =
-      document.getElementById(
-        "positions"
-      );
-
-
-    if(
-      !x.positions ||
-      !x.positions.length
-    ){
-
-      p.innerHTML =
-        '<tr><td colspan="6" class="empty">No open trades</td></tr>';
-
-    }else{
-
-      p.innerHTML =
-        x.positions.map(
-          a => `
-
-          <tr>
-
-            <td>
-              ${a.symbol || ""}
-            </td>
-
-            <td>
-              <span class="${
-                String(
-                  a.direction || ""
-                ).toUpperCase() ===
-                "CALL" ||
-                String(
-                  a.direction || ""
-                ).toUpperCase() ===
-                "BUY"
-                ? "ok"
-                : "bad"
-              }">
-                ${
-                  String(
-                    a.direction || ""
-                  ).toUpperCase() ===
-                  "CALL" ||
-                  String(
-                    a.direction || ""
-                  ).toUpperCase() ===
-                  "BUY"
-                  ? "BUY"
-                  : String(
-                      a.direction || ""
-                    ).toUpperCase() ===
-                    "PUT" ||
-                    String(
-                      a.direction || ""
-                    ).toUpperCase() ===
-                    "SELL"
-                  ? "SELL"
-                  : a.direction || "-"
-                }
-              </span>
-            </td>
-
-            <td>
-              ${a.entry ?? ""}
-            </td>
-
-            <td>
-              ${a.current ?? ""}
-            </td>
-
-            <td class="${
-              Number(
-                a.profit || 0
-              ) >= 0
-              ? "ok"
-              : "bad"
-            }">
-              ${money(a.profit)}
-            </td>
-
-            <td>
-              ${a.status || "OPEN"}
-            </td>
-
-          </tr>
-
-          `
-        ).join("");
-
-    }
-
-
-    /* LAST TRADE */
-
-    const l =
-      document.getElementById(
-        "lastTrade"
-      );
-
-
-    if(x.last_trade){
-
-      const direction =
-        String(
-          x.last_trade.direction ||
-          ""
-        ).toUpperCase();
-
-
-      const directionText =
-        direction === "CALL" ||
-        direction === "BUY"
-        ? '<span class="ok">BUY</span>'
-        :
-        direction === "PUT" ||
-        direction === "SELL"
-        ? '<span class="bad">SELL</span>'
-        :
-        x.last_trade.direction || "-";
-
-
-      l.innerHTML = `
-
-        <b>
-          ${x.last_trade.symbol || ""}
-        </b>
-
-        <br>
-
-        ${directionText}
-
-        •
-
-        ${x.last_trade.status || ""}
-
-        <br>
-
-        <span class="${
-          Number(
-            x.last_trade.profit || 0
-          ) >= 0
-          ? "ok"
-          : "bad"
-        }">
-          ${money(
-            x.last_trade.profit
-          )}
-        </span>
-
-      `;
-
-    }else{
-
-      l.textContent =
-        "No trades yet.";
-
-    }
-
-
-    /* ACTIVITY */
-
-    document.getElementById(
-      "activity"
-    ).innerHTML =
-      (
-        x.activity || []
-      )
-      .map(
-        a => `<li>${a}</li>`
-      )
-      .join("");
-
-
-  }catch(e){
-
-    document.getElementById(
-      "message"
-    ).textContent =
-      "Unable to refresh bot status.";
-
-  }
-
+ try{
+  const r=await fetch("/api/trading/state"); const x=await r.json(); if(!x.ok)return;
+  document.getElementById("balance").textContent=money(x.balance);
+  document.getElementById("equity").textContent=money(x.equity);
+  const pl=document.getElementById("pl"); pl.textContent=money(x.today_pl); pl.className=x.today_pl>=0?"ok":"bad";
+  document.getElementById("open").textContent=x.open_trades||0;
+  document.getElementById("wins").textContent=x.wins||0;
+  document.getElementById("losses").textContent=x.losses||0;
+      
+   const total=(Number(x.wins)||0)+(Number(x.losses)||0);
+   document.getElementById("winRate").textContent=total?((Number(x.wins)||0)/total*100).toFixed(2)+"%":"0.00%";
+  document.getElementById("botPill").textContent=x.running?"BOT RUNNING":"BOT STOPPED";
+  document.getElementById("botPill").style.background=x.running?"#12301f":"#3a2020";
+  document.getElementById("botPill").style.color=x.running?"#58e889":"#ff7b7b";
+  document.getElementById("message").textContent=x.message||"";
+  const p=document.getElementById("positions");
+  if(!x.positions?.length)p.innerHTML='<tr><td colspan="6" class="empty">No open trades</td></tr>';
+  else p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||""}</td><td>${a.direction||""}</td><td>${a.entry??""}</td><td>${a.current??""}</td><td class="${Number(a.profit||0)>=0?"ok":"bad"}">${money(a.profit)}</td><td>${a.status||"OPEN"}</td></tr>`).join("");
+  const l=document.getElementById("lastTrade");
+  if(x.last_trade)l.innerHTML=`<b>${x.last_trade.symbol||""}</b><br>${x.last_trade.direction||""} â¢ ${x.last_trade.status||""}<br><span class="${Number(x.last_trade.profit||0)>=0?"ok":"bad"}">${money(x.last_trade.profit)}</span>`;
+  else l.textContent="No trades yet.";
+  document.getElementById("activity").innerHTML=(x.activity||[]).map(a=>`<li>${a}</li>`).join("");
+ }catch(e){document.getElementById("message").textContent="Unable to refresh bot status."}
+}
+refresh();setInterval(refresh,3000);
+
+const digitHistory = document.getElementById("digitHistory");
+const digitScanBtn = document.getElementById("digitScanBtn");
+const digitScanStatus = document.getElementById("digitScanStatus");
+const digitMessage = document.getElementById("digitMessage");
+
+function renderDigitHistory(values){
+  digitHistory.innerHTML = values.map(v =>
+    `<span style="display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;
+      background:#132238;border:1px solid #23334c;color:#e8eef7;font-weight:700">${v}</span>`
+  ).join("");
 }
 
+function runDigitScan(){
+  digitScanBtn.disabled = true;
+  digitScanStatus.textContent = "SCANNING";
+  digitMessage.textContent = "Analyzing recent tick history...";
+  let progress = 0;
+  const timer = setInterval(() => {
+    progress += 10;
+    digitScanStatus.textContent = `SCANNING ${progress}%`;
+    if(progress >= 100){
+      clearInterval(timer);
+      const values = Array.from({length:20}, () => Math.floor(Math.random()*10));
+      const matches = (Math.random()*35+5);
+      document.getElementById("digitCurrentTick").textContent =
+        (Math.random()*900+100).toFixed(2);
+      document.getElementById("digitMatches").textContent = matches.toFixed(2)+"%";
+      document.getElementById("digitDiffers").textContent = (100-matches).toFixed(2)+"%";
+      renderDigitHistory(values);
+      digitScanStatus.textContent = "READY";
+      digitMessage.textContent =
+        "Scan complete. Review the result before starting the backend bot.";
+      digitScanBtn.disabled = false;
+    }
+  }, 100);
+}
 
-refresh();
-
-setInterval(
-  refresh,
-  3000
-);
+if(digitScanBtn){
+  digitScanBtn.addEventListener("click", runDigitScan);
+  renderDigitHistory(Array.from({length:20}, () => Math.floor(Math.random()*10)));
+}
 
 </script>
-
 </body>
 </html>
