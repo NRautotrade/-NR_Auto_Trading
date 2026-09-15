@@ -342,11 +342,12 @@ function runDigitScan(){
 
   const result = document.getElementById("digitScanResult");
   if(result) result.textContent = "DIFFERS " + selectedDigit;
+  chooseDigit(selectedDigit);
 
   digitScanStatus.textContent = "READY";
   digitMessage.textContent =
     "Scan complete. Least-frequent digit selected: " + selectedDigit +
-    ". Review the contract before buying.";
+    ". DIFFERS contract is ready. Press BUY DIFFERS to place the demo trade.";
   digitScanBtn.disabled = false;
 }
 
