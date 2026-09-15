@@ -3196,7 +3196,7 @@ async def buy_digit_contract(request: Request):
                 'duration': duration,
                 'duration_unit': 't',
                 'barrier': str(barrier),
-                'symbol': symbol,
+                'underlying_symbol': symbol,
                 'req_id': 9402,
             }
             await ws.send(json.dumps(proposal))
