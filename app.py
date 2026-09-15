@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -3196,7 +3197,7 @@ async def buy_digit_contract(request: Request):
                 'duration': duration,
                 'duration_unit': 't',
                 'barrier': str(barrier),
-                'underlying_symbol': symbol,
+                'symbol': symbol,
                 'req_id': 9402,
             }
             await ws.send(json.dumps(proposal))
