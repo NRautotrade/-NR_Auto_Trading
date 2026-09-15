@@ -3049,3 +3049,92 @@ async def api_status(request: Request):
         ),
         "real_enabled": ALLOW_REAL_TRADING,
     }
+
+# ============================================================
+# LIVE DIGIT FEED (DEMO-ONLY, NO CONTRACT PURCHASES)
+# ============================================================
+DIGIT_TASKS = {}
+DIGIT_STATE = {}
+
+async def digit_feed_worker(uid, account_id, token, symbol):
+    state = DIGIT_STATE.setdefault(uid, {})
+    state.update({"running": True, "symbol": symbol, "digits": [0] * 10,
+                  "history": [], "last_digit": None,
+                  "message": "Connected to live Deriv tick feed.", "mode": "demo"})
+    try:
+        ws_url = await deriv_ws_url(account_id, token)
+        async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
+            await ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": 9101}))
+            while state.get("running"):
+                raw = await asyncio.wait_for(ws.recv(), timeout=35)
+                msg = json.loads(raw)
+                tick = msg.get("tick") or {}
+                quote = tick.get("quote")
+                if quote is None:
+                    if msg.get("error"):
+                        state["message"] = msg["error"].get("message", "Deriv tick error")
+                    continue
+                text = f"{float(quote):.2f}".replace(".", "")
+                digit = int(text[-1])
+                state["last_digit"] = digit
+                state["digits"][digit] += 1
+                state["history"].append(digit)
+                state["history"] = state["history"][-100:]
+                total = sum(state["digits"])
+                state["percentages"] = [round((n / total) * 100, 2) for n in state["digits"]] if total else [0] * 10
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        state["message"] = f"Digit feed stopped: {exc}"
+    finally:
+        state["running"] = False
+
+@app.post("/api/digits/start")
+async def start_digits(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    existing = DIGIT_TASKS.get(uid)
+    if existing and not existing.done():
+        return {"ok": True, "running": True, "message": "Digit feed already running."}
+    conn = db()
+    connection = conn.execute("SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?", (uid,)).fetchone()
+    conn.close()
+    if not connection or connection["account_type"] != "demo":
+        return JSONResponse({"ok": False, "error": "Connect a Deriv Demo account first."}, status_code=403)
+    try:
+        token = unprotect_token(connection["access_token_encrypted"])
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Reconnect your Deriv Demo account."}, status_code=400)
+    symbol = "R_25"
+    DIGIT_TASKS[uid] = asyncio.create_task(digit_feed_worker(uid, connection["account_id"], token, symbol))
+    return {"ok": True, "running": True, "mode": "demo", "symbol": symbol, "message": "Live digit feed started. No contracts are purchased."}
+
+@app.post("/api/digits/stop")
+async def stop_digits(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    state = DIGIT_STATE.setdefault(uid, {})
+    state["running"] = False
+    task = DIGIT_TASKS.get(uid)
+    if task and not task.done():
+        task.cancel()
+    state["message"] = "Digit feed stopped."
+    return {"ok": True, "running": False, "message": state["message"]}
+
+@app.get("/api/digits/state")
+async def digits_state(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False}, status_code=401)
+    state = DIGIT_STATE.get(user["id"], {})
+    return {"ok": True, "running": bool(state.get("running")), "mode": "demo",
+            "symbol": state.get("symbol", "R_25"), "last_digit": state.get("last_digit"),
+            "digits": state.get("digits", [0] * 10),
+            "percentages": state.get("percentages", [0] * 10),
+            "history": state.get("history", []),
+            "message": state.get("message", "Digit feed is stopped."),
+            "contracts_enabled": False}
