@@ -198,8 +198,8 @@ async function post(url){
 }
 async function startBot(){const x=await post("/api/trading/start");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
 async function stopBot(){const x=await post("/api/trading/stop");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
-async function pauseBot(){document.getElementById("message").textContent="Pause control requires the backend pause endpoint."; }
-async function resumeBot(){document.getElementById("message").textContent="Resume control requires the backend pause endpoint."; }
+async function pauseBot(){const x=await post("/api/trading/pause");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
+async function resumeBot(){const x=await post("/api/trading/resume");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
 function money(v){return "$"+Number(v||0).toFixed(2)}
 async function refresh(){
  try{
@@ -228,46 +228,114 @@ async function refresh(){
 }
 refresh();setInterval(refresh,3000);
 
+
 const digitHistory = document.getElementById("digitHistory");
 const digitScanBtn = document.getElementById("digitScanBtn");
 const digitScanStatus = document.getElementById("digitScanStatus");
 const digitMessage = document.getElementById("digitMessage");
+let latestDigitState = null;
 
 function renderDigitHistory(values){
-  digitHistory.innerHTML = values.map(v =>
+  digitHistory.innerHTML = (values || []).slice(-100).map(v =>
     `<span style="display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;
       background:#132238;border:1px solid #23334c;color:#e8eef7;font-weight:700">${v}</span>`
   ).join("");
 }
 
+function renderDigitPercentages(percentages){
+  (percentages || []).forEach((value, index) => {
+    const node = document.getElementById("digitPct" + index);
+    if(node) node.textContent = Number(value || 0).toFixed(2) + "%";
+  });
+}
+
+async function refreshDigits(){
+  try{
+    const response = await fetch("/api/digits/state");
+    const data = await response.json();
+    if(!data.ok) return;
+    latestDigitState = data;
+
+    document.getElementById("digitCurrentTick").textContent =
+      data.current_tick ?? "â";
+    renderDigitHistory(data.history || data.last_digits || []);
+    renderDigitPercentages(data.percentages || []);
+
+    if(data.running){
+      digitScanStatus.textContent = "LIVE";
+      digitMessage.textContent = "Live Deriv tick feed connected.";
+    } else {
+      digitScanStatus.textContent = "READY";
+    }
+  }catch(error){
+    digitMessage.textContent = "Live digit feed is not available yet.";
+  }
+}
+
+async function startDigitFeed(){
+  try{
+    const response = await fetch("/api/digits/start", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        symbol: document.getElementById("digitMarket")?.value || "",
+        history_length: Number(document.getElementById("digitTicks")?.value || 100)
+      })
+    });
+    const data = await response.json();
+    digitMessage.textContent = data.message || data.error || "Digit feed started.";
+    await refreshDigits();
+  }catch(error){
+    digitMessage.textContent = "Unable to start the live digit feed.";
+  }
+}
+
+async function stopDigitFeed(){
+  try{
+    const response = await fetch("/api/digits/stop", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"}
+    });
+    const data = await response.json();
+    digitMessage.textContent = data.message || data.error || "Digit feed stopped.";
+    await refreshDigits();
+  }catch(error){
+    digitMessage.textContent = "Unable to stop the live digit feed.";
+  }
+}
+
 function runDigitScan(){
+  if(!latestDigitState || !(latestDigitState.percentages || []).length){
+    digitMessage.textContent = "Start the live digit feed and wait for tick data first.";
+    return;
+  }
+
   digitScanBtn.disabled = true;
   digitScanStatus.textContent = "SCANNING";
-  digitMessage.textContent = "Analyzing recent tick history...";
-  let progress = 0;
-  const timer = setInterval(() => {
-    progress += 10;
-    digitScanStatus.textContent = `SCANNING ${progress}%`;
-    if(progress >= 100){
-      clearInterval(timer);
-      const values = Array.from({length:20}, () => Math.floor(Math.random()*10));
-      const matches = (Math.random()*35+5);
-      document.getElementById("digitCurrentTick").textContent =
-        (Math.random()*900+100).toFixed(2);
-      document.getElementById("digitMatches").textContent = matches.toFixed(2)+"%";
-      document.getElementById("digitDiffers").textContent = (100-matches).toFixed(2)+"%";
-      renderDigitHistory(values);
-      digitScanStatus.textContent = "READY";
-      digitMessage.textContent =
-        "Scan complete. Review the result before starting the backend bot.";
-      digitScanBtn.disabled = false;
-    }
-  }, 100);
+
+  const percentages = latestDigitState.percentages;
+  const selectedDigit = percentages.indexOf(Math.min(...percentages));
+  const differs = 100 - Number(percentages[selectedDigit] || 0);
+
+  document.getElementById("digitMatches").textContent =
+    Number(percentages[selectedDigit] || 0).toFixed(2) + "%";
+  document.getElementById("digitDiffers").textContent =
+    differs.toFixed(2) + "%";
+
+  const result = document.getElementById("digitScanResult");
+  if(result) result.textContent = "DIFFERS " + selectedDigit;
+
+  digitScanStatus.textContent = "READY";
+  digitMessage.textContent =
+    "Scan complete. Least-frequent digit selected: " + selectedDigit +
+    ". Review the contract before buying.";
+  digitScanBtn.disabled = false;
 }
 
 if(digitScanBtn){
   digitScanBtn.addEventListener("click", runDigitScan);
-  renderDigitHistory(Array.from({length:20}, () => Math.floor(Math.random()*10)));
+  refreshDigits();
+  setInterval(refreshDigits, 2000);
 }
 
 </script>
