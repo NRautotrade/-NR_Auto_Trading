@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -46,6 +45,10 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# Register the JSON filter used by dashboard.html:
+# {{ settings.markets | from_json }}
+templates.env.filters["from_json"] = json.loads
 
 # Each logged-in user has isolated in-memory bot state.
 BOT_TASKS = {}
@@ -1737,33 +1740,26 @@ def abc_signal(
     return None
 
 
-async def fetch_candles(ws, symbol, granularity, count=100):
+async def fetch_m5_candles(
+    ws,
+    symbol,
+):
     msg = await ws_request(
         ws,
         {
             "ticks_history": symbol,
             "end": "latest",
-            "count": count,
+            "count": 100,
             "style": "candles",
-            "granularity": granularity,
+            "granularity": 300,
         },
-        200 + abs(hash((symbol, granularity))) % 1000,
+        200 + abs(hash(symbol)) % 1000,
     )
-    return msg.get("candles", [])
 
-
-def timeframe_trend(candles, fast=20, slow=50):
-    closes = [float(c.get("close", 0) or 0) for c in candles]
-    closes = [c for c in closes if c > 0]
-    if len(closes) < slow:
-        return None
-    fast_avg = sum(closes[-fast:]) / fast
-    slow_avg = sum(closes[-slow:]) / slow
-    if fast_avg > slow_avg:
-        return "CALL"
-    if fast_avg < slow_avg:
-        return "PUT"
-    return None
+    return msg.get(
+        "candles",
+        [],
+    )
 
 
 # ============================================================
@@ -2158,20 +2154,12 @@ async def demo_bot_worker(
                         continue
 
                     try:
-                        candles_4h = await fetch_candles(ws, symbol, 14400)
-                        candles_1h = await fetch_candles(ws, symbol, 3600)
-                        candles_15m = await fetch_candles(ws, symbol, 900)
+                        candles = await fetch_m5_candles(
+                            ws,
+                            symbol,
+                        )
 
-                        trend_4h = timeframe_trend(candles_4h)
-                        trend_1h = timeframe_trend(candles_1h)
-                        signal = abc_signal(candles_15m)
-
-                        # Trade only when 4H and 1H agree and the 15M ABC
-                        # setup points in the same direction.
-                        if not trend_4h or trend_4h != trend_1h:
-                            continue
-                        if not signal or signal[0] != trend_4h:
-                            continue
+                        signal = abc_signal(candles)
 
                         if not signal:
                             continue
@@ -2256,7 +2244,7 @@ async def demo_bot_worker(
                                     "currency",
                                     "USD",
                                 ),
-                                "duration": 15,
+                                "duration": 5,
                                 "duration_unit": "m",
                                 "underlying_symbol": symbol,
                             },
@@ -2790,10 +2778,6 @@ async def trading_state(request: Request):
         "open_trades": len(state.get("positions", [])),
         "wins": int(state.get("wins", 0) or 0),
         "losses": int(state.get("losses", 0) or 0),
-        "win_rate": (
-            round(100.0 * int(state.get("wins", 0) or 0) /
-                  max(1, int(state.get("wins", 0) or 0) + int(state.get("losses", 0) or 0)), 2)
-        ),
         "positions": state.get("positions", []),
         "last_trade": state.get("last_trade"),
         "trades": int(state.get("trades", 0) or 0),
