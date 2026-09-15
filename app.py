@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -44,6 +43,8 @@ app.add_middleware(
     https_only=False,
 )
 
+os.makedirs("static", exist_ok=True)
+os.makedirs("templates", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -3060,7 +3061,10 @@ DIGIT_STATE = {}
 async def digit_feed_worker(uid, account_id, token, symbol):
     state = DIGIT_STATE.setdefault(uid, {})
     state.update({"running": True, "symbol": symbol, "digits": [0] * 10,
-                  "history": [], "last_digit": None,
+                  "history": [], "last_digit": None, "current_tick": None,
+                  "scan_status": "READY", "scan_result": None,
+                  "selected_digit": None, "matches_percent": 0.0,
+                  "differs_percent": 0.0, "transactions": [],
                   "message": "Connected to live Deriv tick feed.", "mode": "demo"})
     try:
         ws_url = await deriv_ws_url(account_id, token)
@@ -3075,6 +3079,7 @@ async def digit_feed_worker(uid, account_id, token, symbol):
                     if msg.get("error"):
                         state["message"] = msg["error"].get("message", "Deriv tick error")
                     continue
+                state["current_tick"] = float(quote)
                 text = f"{float(quote):.2f}".replace(".", "")
                 digit = int(text[-1])
                 state["last_digit"] = digit
@@ -3126,6 +3131,82 @@ async def stop_digits(request: Request):
     state["message"] = "Digit feed stopped."
     return {"ok": True, "running": False, "message": state["message"]}
 
+
+@app.post("/api/digits/scan")
+async def scan_digits(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    state = DIGIT_STATE.setdefault(uid, {})
+    percentages = state.get("percentages", [0] * 10)
+    if not state.get("history") or not any(percentages):
+        return JSONResponse({"ok": False, "error": "Start the digit feed and wait for tick data first."}, status_code=400)
+    selected = min(range(10), key=lambda i: percentages[i])
+    matches = float(percentages[selected])
+    differs = round(100.0 - matches, 2)
+    state.update({"scan_status": "READY", "scan_result": f"DIFFERS {selected}",
+                  "selected_digit": selected, "matches_percent": matches,
+                  "differs_percent": differs,
+                  "message": f"Scan complete. Least-frequent digit selected: {selected}. Review the contract before buying."})
+    return {"ok": True, "selected_digit": selected, "matches_percent": matches,
+            "differs_percent": differs, "scan_result": state["scan_result"],
+            "message": state["message"]}
+
+@app.post("/api/digits/purchase")
+async def purchase_digit(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    conn = db()
+    connection = conn.execute("SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?", (user["id"],)).fetchone()
+    conn.close()
+    if not connection or connection["account_type"] != "demo":
+        return JSONResponse({"ok": False, "error": "Connect a Deriv Demo account first."}, status_code=403)
+    state = DIGIT_STATE.setdefault(user["id"], {})
+    digit = state.get("selected_digit")
+    if digit is None:
+        return JSONResponse({"ok": False, "error": "Run AI Scan first."}, status_code=400)
+    body = await request.json()
+    contract = str(body.get("contract_type", "DIGITDIFF")).upper()
+    if contract not in {"DIGITMATCH", "DIGITDIFF"}:
+        return JSONResponse({"ok": False, "error": "Invalid digit contract type."}, status_code=400)
+    try:
+        stake = max(0.35, min(float(body.get("stake", 1)), 100.0))
+        duration = max(1, min(int(body.get("duration", 1)), 10))
+        token = unprotect_token(connection["access_token_encrypted"])
+        ws_url = await deriv_ws_url(connection["account_id"], token)
+        symbol = state.get("symbol", "R_25")
+        async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
+            proposal = await ws_request(ws, {"proposal": 1, "amount": stake, "basis": "stake", "contract_type": contract,
+                "currency": "USD", "duration": duration, "duration_unit": "t", "barrier": str(digit), "symbol": symbol}, 9201)
+            proposal_id = proposal.get("proposal", {}).get("id")
+            if not proposal_id:
+                raise RuntimeError("Deriv did not return a proposal ID.")
+            bought = await ws_request(ws, {"buy": proposal_id, "price": stake}, 9202)
+            buy = bought.get("buy", {})
+            tx = {"contract": contract.replace("DIGIT", "") + " " + str(digit), "entry": buy.get("buy_price", stake),
+                  "exit": "â", "stake": buy.get("buy_price", stake), "pnl": "OPEN", "contract_id": buy.get("contract_id"), "status": "OPEN"}
+            state.setdefault("transactions", []).insert(0, tx)
+            state["transactions"] = state["transactions"][:50]
+            state["message"] = f"Demo {contract} contract purchased for digit {digit}."
+            return {"ok": True, "buy": buy, "transactions": state["transactions"], "message": state["message"]}
+    except Exception as exc:
+        state["message"] = f"Unable to purchase contract: {exc}"
+        return JSONResponse({"ok": False, "error": state["message"]}, status_code=400)
+
+
+@app.post("/api/digits/auto")
+async def toggle_auto_digit(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    body = await request.json()
+    state = DIGIT_STATE.setdefault(user["id"], {})
+    state["auto_digit"] = bool(body.get("enabled", False))
+    state["message"] = "Automatic digit trading enabled." if state["auto_digit"] else "Automatic digit trading disabled."
+    return {"ok": True, "auto_digit": state["auto_digit"], "message": state["message"]}
+
 @app.get("/api/digits/state")
 async def digits_state(request: Request):
     user = current_user(request)
@@ -3137,113 +3218,12 @@ async def digits_state(request: Request):
             "digits": state.get("digits", [0] * 10),
             "percentages": state.get("percentages", [0] * 10),
             "history": state.get("history", []),
+            "current_tick": state.get("current_tick"),
+            "scan_status": state.get("scan_status", "READY"),
+            "scan_result": state.get("scan_result"),
+            "selected_digit": state.get("selected_digit"),
+            "matches_percent": state.get("matches_percent", 0.0),
+            "differs_percent": state.get("differs_percent", 0.0),
+            "transactions": state.get("transactions", []),
             "message": state.get("message", "Digit feed is stopped."),
-            "contracts_enabled": False}
-
-# ============================================================
-# DIGIT CONTRACT PURCHASE - DEMO ONLY
-# ============================================================
-@app.post('/api/digits/buy')
-async def buy_digit_contract(request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({'ok': False, 'error': 'Not logged in.'}, status_code=401)
-
-    uid = user['id']
-    payload = await request.json()
-    contract_type = str(payload.get('contract_type', '')).upper().strip()
-    symbol = str(payload.get('symbol', 'R_25')).strip()
-
-    if contract_type not in {'DIGITMATCH', 'DIGITDIFF'}:
-        return JSONResponse({'ok': False, 'error': 'Invalid digit contract type.'}, status_code=400)
-
-    try:
-        barrier = int(payload.get('barrier'))
-        stake = float(payload.get('stake', 1))
-        duration = int(payload.get('duration', 1))
-    except (TypeError, ValueError):
-        return JSONResponse({'ok': False, 'error': 'Barrier, stake, and duration must be valid numbers.'}, status_code=400)
-
-    if not 0 <= barrier <= 9:
-        return JSONResponse({'ok': False, 'error': 'Select a digit from 0 to 9.'}, status_code=400)
-    if not 0 < stake <= 1000:
-        return JSONResponse({'ok': False, 'error': 'Demo stake must be between 0 and 1000 USD.'}, status_code=400)
-    if not 1 <= duration <= 10:
-        return JSONResponse({'ok': False, 'error': 'Duration must be between 1 and 10 ticks.'}, status_code=400)
-
-    conn = db()
-    connection = conn.execute(
-        'SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?',
-        (uid,)
-    ).fetchone()
-    conn.close()
-
-    if not connection or connection['account_type'] != 'demo':
-        return JSONResponse({'ok': False, 'error': 'Connect a Deriv Demo account first.'}, status_code=403)
-
-    try:
-        token = unprotect_token(connection['access_token_encrypted'])
-        ws_url = await deriv_ws_url(connection['account_id'], token)
-        # The OTP WebSocket URL returned by Deriv is already authenticated.
-        # Sending the OAuth token again through `authorize` causes:
-        # `Input validation failed: authorize`.
-        async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
-            proposal = {
-                'proposal': 1,
-                'amount': round(stake, 2),
-                'basis': 'stake',
-                'contract_type': contract_type,
-                'currency': 'USD',
-                'duration': duration,
-                'duration_unit': 't',
-                'barrier': str(barrier),
-                'symbol': symbol,
-                'req_id': 9402,
-            }
-            await ws.send(json.dumps(proposal))
-            proposal_msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
-            if proposal_msg.get('error'):
-                raise RuntimeError(proposal_msg['error'].get('message', 'Proposal failed.'))
-
-            proposal_data = proposal_msg.get('proposal') or {}
-            proposal_id = proposal_data.get('id')
-            ask_price = float(proposal_data.get('ask_price') or stake)
-            payout = proposal_data.get('payout')
-            if not proposal_id:
-                raise RuntimeError('Deriv did not return a proposal ID.')
-
-            await ws.send(json.dumps({'buy': proposal_id, 'price': ask_price, 'req_id': 9403}))
-            buy_msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
-            if buy_msg.get('error'):
-                raise RuntimeError(buy_msg['error'].get('message', 'Purchase failed.'))
-
-            buy_data = buy_msg.get('buy') or {}
-            contract_id = buy_data.get('contract_id')
-            state = DIGIT_STATE.setdefault(uid, {})
-            transactions = state.setdefault('transactions', [])
-            transactions.insert(0, {
-                'contract_id': contract_id,
-                'symbol': symbol,
-                'contract_type': contract_type,
-                'barrier': barrier,
-                'stake': ask_price,
-                'payout': payout,
-                'status': 'OPEN',
-                'profit': None,
-            })
-            state['transactions'] = transactions[:50]
-            state['message'] = f'Demo {"MATCHES" if contract_type == "DIGITMATCH" else "DIFFERS"} contract purchased on digit {barrier}.'
-            return {
-                'ok': True,
-                'message': state['message'],
-                'contract_id': contract_id,
-                'proposal_id': proposal_id,
-                'stake': ask_price,
-                'payout': payout,
-                'status': 'OPEN',
-            }
-    except Exception as exc:
-        error_message = str(exc).strip() or 'Unknown Deriv error.'
-        state = DIGIT_STATE.setdefault(uid, {})
-        state['message'] = f'Unable to purchase contract: {error_message}'
-        return JSONResponse({'ok': False, 'error': state['message']}, status_code=400)
+            "contracts_enabled": True, "auto_digit": bool(state.get("auto_digit", False)), "total_stake": state.get("total_stake", 0), "total_payout": state.get("total_payout", 0), "total_profit": state.get("total_profit", 0), "wins": state.get("wins", 0), "losses": state.get("losses", 0)}
