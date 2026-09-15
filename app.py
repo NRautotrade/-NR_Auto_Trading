@@ -3125,63 +3125,6 @@ async def stop_digits(request: Request):
     state["message"] = "Digit feed stopped."
     return {"ok": True, "running": False, "message": state["message"]}
 
-
-@app.post("/api/digits/scan")
-async def scan_digits(request: Request):
-    """Analyze the current live digit history without placing a contract."""
-    user = request.session.get("user")
-    if not user:
-        return JSONResponse({"ok": False, "error": "Not authenticated"}, status_code=401)
-
-    state = DIGIT_STATES.setdefault(user["id"], {
-        "running": False,
-        "symbol": "",
-        "current_tick": None,
-        "history": [],
-        "digits": [0] * 10,
-        "percentages": [0] * 10,
-        "scan_status": "READY",
-        "scan_result": None,
-        "selected_digit": None,
-        "matches_percent": None,
-        "differs_percent": None,
-        "message": "Ready"
-    })
-
-    history = list(state.get("history") or [])
-    if len(history) < 10:
-        return JSONResponse({
-            "ok": False,
-            "error": "Not enough live ticks. Start the feed and wait for more data."
-        }, status_code=400)
-
-    percentages = list(state.get("percentages") or [0] * 10)
-    selected = min(range(10), key=lambda d: (percentages[d], d))
-    matches = float(percentages[selected])
-    differs = round(100.0 - matches, 2)
-
-    state.update({
-        "scan_status": "READY",
-        "scan_result": f"DIFFERS {selected}",
-        "selected_digit": selected,
-        "matches_percent": matches,
-        "differs_percent": differs,
-        "message": (
-            f"Scan complete. Digit {selected} is the least frequent in "
-            f"the latest {len(history)} ticks. Review before buying."
-        )
-    })
-
-    return JSONResponse({
-        "ok": True,
-        "scan_status": state["scan_status"],
-        "scan_result": state["scan_result"],
-        "selected_digit": selected,
-        "matches_percent": matches,
-        "differs_percent": differs,
-        "message": state["message"]
-    })
-
 @app.get("/api/digits/state")
 async def digits_state(request: Request):
     user = current_user(request)
