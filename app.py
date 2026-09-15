@@ -3183,12 +3183,10 @@ async def buy_digit_contract(request: Request):
     try:
         token = unprotect_token(connection['access_token_encrypted'])
         ws_url = await deriv_ws_url(connection['account_id'], token)
+        # The OTP WebSocket URL returned by Deriv is already authenticated.
+        # Sending the OAuth token again through `authorize` causes:
+        # `Input validation failed: authorize`.
         async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
-            await ws.send(json.dumps({'authorize': token, 'req_id': 9401}))
-            auth = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
-            if auth.get('error'):
-                raise RuntimeError(auth['error'].get('message', 'Authorization failed.'))
-
             proposal = {
                 'proposal': 1,
                 'amount': round(stake, 2),
