@@ -3138,3 +3138,113 @@ async def digits_state(request: Request):
             "history": state.get("history", []),
             "message": state.get("message", "Digit feed is stopped."),
             "contracts_enabled": False}
+
+# ============================================================
+# DIGIT CONTRACT PURCHASE - DEMO ONLY
+# ============================================================
+@app.post('/api/digits/buy')
+async def buy_digit_contract(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({'ok': False, 'error': 'Not logged in.'}, status_code=401)
+
+    uid = user['id']
+    payload = await request.json()
+    contract_type = str(payload.get('contract_type', '')).upper().strip()
+    symbol = str(payload.get('symbol', 'R_25')).strip()
+
+    if contract_type not in {'DIGITMATCH', 'DIGITDIFF'}:
+        return JSONResponse({'ok': False, 'error': 'Invalid digit contract type.'}, status_code=400)
+
+    try:
+        barrier = int(payload.get('barrier'))
+        stake = float(payload.get('stake', 1))
+        duration = int(payload.get('duration', 1))
+    except (TypeError, ValueError):
+        return JSONResponse({'ok': False, 'error': 'Barrier, stake, and duration must be valid numbers.'}, status_code=400)
+
+    if not 0 <= barrier <= 9:
+        return JSONResponse({'ok': False, 'error': 'Select a digit from 0 to 9.'}, status_code=400)
+    if not 0 < stake <= 1000:
+        return JSONResponse({'ok': False, 'error': 'Demo stake must be between 0 and 1000 USD.'}, status_code=400)
+    if not 1 <= duration <= 10:
+        return JSONResponse({'ok': False, 'error': 'Duration must be between 1 and 10 ticks.'}, status_code=400)
+
+    conn = db()
+    connection = conn.execute(
+        'SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?',
+        (uid,)
+    ).fetchone()
+    conn.close()
+
+    if not connection or connection['account_type'] != 'demo':
+        return JSONResponse({'ok': False, 'error': 'Connect a Deriv Demo account first.'}, status_code=403)
+
+    try:
+        token = unprotect_token(connection['access_token_encrypted'])
+        ws_url = await deriv_ws_url(connection['account_id'], token)
+        async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
+            await ws.send(json.dumps({'authorize': token, 'req_id': 9401}))
+            auth = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
+            if auth.get('error'):
+                raise RuntimeError(auth['error'].get('message', 'Authorization failed.'))
+
+            proposal = {
+                'proposal': 1,
+                'amount': round(stake, 2),
+                'basis': 'stake',
+                'contract_type': contract_type,
+                'currency': 'USD',
+                'duration': duration,
+                'duration_unit': 't',
+                'barrier': str(barrier),
+                'symbol': symbol,
+                'req_id': 9402,
+            }
+            await ws.send(json.dumps(proposal))
+            proposal_msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
+            if proposal_msg.get('error'):
+                raise RuntimeError(proposal_msg['error'].get('message', 'Proposal failed.'))
+
+            proposal_data = proposal_msg.get('proposal') or {}
+            proposal_id = proposal_data.get('id')
+            ask_price = float(proposal_data.get('ask_price') or stake)
+            payout = proposal_data.get('payout')
+            if not proposal_id:
+                raise RuntimeError('Deriv did not return a proposal ID.')
+
+            await ws.send(json.dumps({'buy': proposal_id, 'price': ask_price, 'req_id': 9403}))
+            buy_msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
+            if buy_msg.get('error'):
+                raise RuntimeError(buy_msg['error'].get('message', 'Purchase failed.'))
+
+            buy_data = buy_msg.get('buy') or {}
+            contract_id = buy_data.get('contract_id')
+            state = DIGIT_STATE.setdefault(uid, {})
+            transactions = state.setdefault('transactions', [])
+            transactions.insert(0, {
+                'contract_id': contract_id,
+                'symbol': symbol,
+                'contract_type': contract_type,
+                'barrier': barrier,
+                'stake': ask_price,
+                'payout': payout,
+                'status': 'OPEN',
+                'profit': None,
+            })
+            state['transactions'] = transactions[:50]
+            state['message'] = f'Demo {"MATCHES" if contract_type == "DIGITMATCH" else "DIFFERS"} contract purchased on digit {barrier}.'
+            return {
+                'ok': True,
+                'message': state['message'],
+                'contract_id': contract_id,
+                'proposal_id': proposal_id,
+                'stake': ask_price,
+                'payout': payout,
+                'status': 'OPEN',
+            }
+    except Exception as exc:
+        error_message = str(exc).strip() or 'Unknown Deriv error.'
+        state = DIGIT_STATE.setdefault(uid, {})
+        state['message'] = f'Unable to purchase contract: {error_message}'
+        return JSONResponse({'ok': False, 'error': state['message']}, status_code=400)
