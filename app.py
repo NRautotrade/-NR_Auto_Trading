@@ -1155,31 +1155,74 @@ def render_deriv_result(request: Request, message: str, status_code: int = 400):
 
 
 def deriv_account_type(account: dict) -> str:
-    account_id = str(account.get("id") or account.get("account_id") or "").upper()
+    """Return the normalized Deriv account type: demo or real."""
+    account_id = str(
+        account.get("id")
+        or account.get("account_id")
+        or account.get("loginid")
+        or ""
+    ).upper().strip()
 
     if account.get("is_virtual") is True:
         return "demo"
 
-    account_type = str(account.get("account_type") or "").lower().strip()
-    if account_type in {"demo", "virtual"}:
+    raw_type = str(
+        account.get("account_type")
+        or account.get("type")
+        or ""
+    ).lower().strip()
+
+    if raw_type in {"demo", "virtual", "practice"}:
         return "demo"
-    if account_type in {"real", "live"}:
+    if raw_type in {"real", "live"}:
         return "real"
-    if account_id.startswith("VRTC"):
+
+    if account_id.startswith(("VRTC", "VR")):
         return "demo"
 
     landing_company = str(
-        account.get("landing_company_name") or account.get("landing_company") or ""
+        account.get("landing_company_name")
+        or account.get("landing_company")
+        or ""
     ).lower()
-    if "virtual" in landing_company:
+
+    if "virtual" in landing_company or "demo" in landing_company:
         return "demo"
 
+    # Deriv real account IDs normally begin with CR, MF, or SVG.
+    if account_id.startswith(("CR", "MF", "SVG")):
+        return "real"
+
     return "real"
+
+
+def extract_deriv_accounts(payload: dict) -> list[dict]:
+    """Handle the account-list response whether data is a list or object."""
+    if not isinstance(payload, dict):
+        return []
+
+    data = payload.get("data", payload)
+
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+
+    if isinstance(data, dict):
+        for key in ("accounts", "items", "results"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+
+        # Some responses may contain one account directly in data.
+        if data.get("id") or data.get("account_id") or data.get("loginid"):
+            return [data]
+
+    return []
 
 
 @app.get("/deriv/connect")
 async def deriv_connect(request: Request, mode: str = "demo"):
     user = current_user(request)
+
     if not user:
         return RedirectResponse("/", status_code=303)
 
@@ -1195,8 +1238,8 @@ async def deriv_connect(request: Request, mode: str = "demo"):
 
     verifier = secrets.token_urlsafe(64)
     challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode()).digest()
-    ).rstrip(b"=").decode()
+        hashlib.sha256(verifier.encode("utf-8")).digest()
+    ).rstrip(b"=").decode("ascii")
     state = secrets.token_urlsafe(32)
 
     request.session["oauth_verifier"] = verifier
@@ -1230,6 +1273,7 @@ async def deriv_callback(
     error: str | None = None,
 ):
     user = current_user(request)
+
     if not user:
         return RedirectResponse("/", status_code=303)
 
@@ -1244,11 +1288,22 @@ async def deriv_callback(
     mode = request.session.pop("oauth_mode", "demo")
 
     if not code:
-        return render_deriv_result(request, "Deriv did not return an authorization code.")
+        return render_deriv_result(
+            request,
+            "Deriv did not return an authorization code.",
+        )
+
     if not state or state != saved_state:
-        return render_deriv_result(request, "OAuth security check failed. Please start again.")
+        return render_deriv_result(
+            request,
+            "OAuth security check failed. Please start again.",
+        )
+
     if not verifier:
-        return render_deriv_result(request, "OAuth session expired. Please start again.")
+        return render_deriv_result(
+            request,
+            "OAuth session expired. Please start again.",
+        )
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -1266,19 +1321,26 @@ async def deriv_callback(
         if token_resp.status_code >= 400:
             return render_deriv_result(
                 request,
-                "Deriv token exchange failed. Check the Deriv App ID and exact redirect URI.",
+                "Deriv token exchange failed. "
+                f"HTTP {token_resp.status_code}: "
+                f"{token_resp.text[:500]}",
             )
 
-        token = token_resp.json().get("access_token")
-        if not token:
-            return render_deriv_result(request, "Deriv did not return an access token.")
+        token_payload = token_resp.json()
+        token = token_payload.get("access_token")
 
+        if not token:
+            return render_deriv_result(
+                request,
+                "Deriv did not return an access token.",
+            )
+
+        # OAuth Bearer tokens do not need the Deriv-App-ID header.
         async with httpx.AsyncClient(timeout=30) as client:
             account_resp = await client.get(
                 "https://api.derivws.com/trading/v1/options/accounts",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "Deriv-App-ID": DERIV_CLIENT_ID,
                     "Accept": "application/json",
                 },
             )
@@ -1286,67 +1348,105 @@ async def deriv_callback(
         if account_resp.status_code >= 400:
             return render_deriv_result(
                 request,
-                "Deriv authorization succeeded, but the account list could not be retrieved.",
+                "Deriv authorization succeeded, but the account list "
+                f"could not be retrieved. HTTP {account_resp.status_code}: "
+                f"{account_resp.text[:500]}",
             )
 
-        payload = account_resp.json()
-        accounts = payload.get("data", [])
-        if isinstance(accounts, dict):
-            accounts = accounts.get("accounts") or accounts.get("items") or []
-        if not isinstance(accounts, list):
-            accounts = []
+        try:
+            account_payload = account_resp.json()
+        except ValueError:
+            return render_deriv_result(
+                request,
+                "Deriv returned an invalid account-list response.",
+            )
 
-        normalized_mode = "real" if mode == "real" else "demo"
-        matching_accounts = [
-            account for account in accounts
-            if isinstance(account, dict)
-            and (account.get("id") or account.get("account_id"))
-            and deriv_account_type(account) == normalized_mode
-        ]
+        accounts = extract_deriv_accounts(account_payload)
+        normalized_mode = "real" if str(mode).lower() == "real" else "demo"
+
+        matching_accounts = []
+        for account in accounts:
+            account_id = (
+                account.get("id")
+                or account.get("account_id")
+                or account.get("loginid")
+            )
+            if account_id and deriv_account_type(account) == normalized_mode:
+                matching_accounts.append(account)
 
         if not matching_accounts:
             available = []
             for account in accounts:
-                if isinstance(account, dict):
-                    account_id = account.get("id") or account.get("account_id")
-                    if account_id:
-                        available.append(f"{account_id} ({deriv_account_type(account)})")
+                account_id = (
+                    account.get("id")
+                    or account.get("account_id")
+                    or account.get("loginid")
+                )
+                if account_id:
+                    available.append(
+                        f"{account_id} ({deriv_account_type(account)})"
+                    )
+
             return render_deriv_result(
                 request,
-                f"No {normalized_mode} Deriv account was found. Accounts returned: {', '.join(available) or 'none'}",
+                f"No {normalized_mode} Deriv account was found. "
+                f"Accounts returned: {', '.join(available) or 'none'}",
             )
 
-        selected = matching_accounts[0]
-        account_id = selected.get("id") or selected.get("account_id")
+        selected_account = matching_accounts[0]
+        account_id = (
+            selected_account.get("id")
+            or selected_account.get("account_id")
+            or selected_account.get("loginid")
+        )
+
+        encrypted_token = protect_token(token)
 
         conn = db()
-        conn.execute(
-            """
-            INSERT INTO deriv_connections
-                (user_id, account_id, account_type, access_token_encrypted, updated_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id) DO UPDATE SET
-                account_id=excluded.account_id,
-                account_type=excluded.account_type,
-                access_token_encrypted=excluded.access_token_encrypted,
-                updated_at=CURRENT_TIMESTAMP
-            """,
-            (user["id"], str(account_id), normalized_mode, protect_token(token)),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                """
+                INSERT INTO deriv_connections
+                (
+                    user_id,
+                    account_id,
+                    account_type,
+                    access_token_encrypted,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    account_id=excluded.account_id,
+                    account_type=excluded.account_type,
+                    access_token_encrypted=excluded.access_token_encrypted,
+                    updated_at=CURRENT_TIMESTAMP
+                """,
+                (
+                    user["id"],
+                    str(account_id),
+                    normalized_mode,
+                    encrypted_token,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
         request.session["deriv_connected"] = True
         request.session["deriv_account_id"] = str(account_id)
         request.session["deriv_account_type"] = normalized_mode
 
-        return RedirectResponse("/dashboard?connected=1", status_code=303)
+        return RedirectResponse(
+            "/dashboard?connected=1",
+            status_code=303,
+        )
 
-    except httpx.RequestError:
+    except httpx.RequestError as exc:
         return render_deriv_result(
             request,
-            "Could not reach Deriv. Check the Render service network and try again.",
+            f"Could not reach Deriv: {type(exc).__name__}: {exc}",
         )
+
     except Exception as exc:
         return render_deriv_result(
             request,
