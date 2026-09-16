@@ -28,14 +28,11 @@ body{
   font-family:Arial,Helvetica,sans-serif;
 }
 
-button,
-input,
-select{
+button,input,select{
   font:inherit;
 }
 
-button,
-.nav-button{
+button{
   cursor:pointer;
 }
 
@@ -72,7 +69,13 @@ button,
 .status-pill{
   padding:8px 12px;
   border-radius:7px;
-  background:#12351f;
+  background:#421c1c;
+  color:#ff9999;
+  font-size:12px;
+  font-weight:bold;
+}
+
+.account-mode{
   color:#65ef9a;
   font-size:12px;
   font-weight:bold;
@@ -180,6 +183,7 @@ button,
   font-size:21px;
   font-weight:900;
   margin-top:8px;
+  overflow-wrap:anywhere;
 }
 
 .controls{
@@ -202,6 +206,7 @@ button,
 .btn-red{background:#8e2525}
 .btn-blue{background:#155b80}
 .btn-yellow{background:#80580f}
+.btn-purple{background:#5b3b91}
 
 .field{
   width:100%;
@@ -234,6 +239,7 @@ label{
   padding:12px;
   color:var(--muted);
   font-size:12px;
+  overflow-wrap:anywhere;
 }
 
 .digits{
@@ -299,22 +305,17 @@ th{
   text-align:left;
 }
 
-th,
-td{
+th,td{
   padding:11px;
   border-bottom:1px solid var(--border);
 }
 
-.green{
-  color:var(--green);
-}
+.green{color:var(--green)}
+.red{color:var(--red)}
+.muted{color:var(--muted)}
 
-.red{
-  color:var(--red);
-}
-
-.muted{
-  color:var(--muted);
+.hidden{
+  display:none!important;
 }
 
 @media(max-width:1050px){
@@ -377,7 +378,8 @@ td{
 
   <div class="account-area">
     <span id="botStatus" class="status-pill">BOT STOPPED</span>
-    <span class="muted">DEMO ACCOUNT</span>
+    <span id="accountMode" class="account-mode">DEMO ACCOUNT</span>
+    <button class="btn btn-green" onclick="connectAccount()">CONNECT ACCOUNT</button>
     <button class="btn" onclick="logoutUser()">LOG OUT</button>
   </div>
 </header>
@@ -395,11 +397,58 @@ td{
 
   <main class="content">
 
-    <!-- DASHBOARD PAGE -->
     <section id="dashboard" class="page active">
       <h1 class="page-title">Dashboard</h1>
+
       <div class="page-description">
         Monitor your account, bot activity, live market data, and trading performance.
+      </div>
+
+      <div class="card">
+        <div class="card-title">ACCOUNT CONNECTION</div>
+
+        <div class="form-grid">
+          <div>
+            <label>ACCOUNT MODE</label>
+            <select id="accountType" class="field" onchange="accountModeChanged()">
+              <option value="demo">Demo Account</option>
+              <option value="real">Real Account</option>
+            </select>
+          </div>
+
+          <div>
+            <label>ACCOUNT STATUS</label>
+            <input id="connectionStatus" class="field" value="Not connected" readonly>
+          </div>
+
+          <div>
+            <label>ACCOUNT ID</label>
+            <input id="accountId" class="field" value="—" readonly>
+          </div>
+
+          <div>
+            <label>CURRENCY</label>
+            <input id="accountCurrency" class="field" value="—" readonly>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button class="btn btn-green" onclick="connectAccount()">
+            CONNECT SELECTED ACCOUNT
+          </button>
+
+          <button class="btn btn-blue" onclick="refreshBalance()">
+            REFRESH BALANCE
+          </button>
+
+          <button class="btn btn-red" onclick="disconnectAccount()">
+            DISCONNECT
+          </button>
+        </div>
+
+        <div id="accountMessage" class="status-box">
+          Select Demo Account and connect before starting the bot.
+        </div>
       </div>
 
       <div class="card">
@@ -487,9 +536,7 @@ td{
               <select id="dashboardStrategy" class="field">
                 <option value="ABC Pattern">ABC Pattern</option>
                 <option value="ABCDE Sweep">ABCDE Sweep</option>
-                <option value="Digit Matches/Differs">
-                  Digit Matches/Differs
-                </option>
+                <option value="Digit Matches/Differs">Digit Matches/Differs</option>
               </select>
             </div>
           </div>
@@ -568,9 +615,9 @@ td{
       </div>
     </section>
 
-    <!-- ABC PAGE -->
     <section id="abc" class="page">
       <h1 class="page-title">ABC Pattern Trader</h1>
+
       <div class="page-description">
         Configure and control the ABC pattern trading strategy.
       </div>
@@ -633,9 +680,9 @@ td{
       </div>
     </section>
 
-    <!-- DIGIT PAGE -->
     <section id="digit" class="page">
       <h1 class="page-title">Digit Matches / Differs</h1>
+
       <div class="page-description">
         Scan the latest digits and configure digit contracts.
       </div>
@@ -714,9 +761,9 @@ td{
       </div>
     </section>
 
-    <!-- TRANSACTIONS PAGE -->
     <section id="transactions" class="page">
       <h1 class="page-title">Transactions</h1>
+
       <div class="page-description">
         Review recent entries, exits, stakes, payouts, and profit or loss.
       </div>
@@ -747,9 +794,9 @@ td{
       </div>
     </section>
 
-    <!-- TRANSFERS PAGE -->
     <section id="transfers" class="page">
       <h1 class="page-title">Transfers</h1>
+
       <div class="page-description">
         Prepare an account deposit or withdrawal request.
       </div>
@@ -778,9 +825,9 @@ td{
       </div>
     </section>
 
-    <!-- SETTINGS PAGE -->
     <section id="settings" class="page">
       <h1 class="page-title">Settings</h1>
+
       <div class="page-description">
         Save your default market and risk preferences.
       </div>
@@ -825,6 +872,9 @@ td{
 </div>
 
 <script>
+let connectedAccount = null;
+let selectedAccountMode = "demo";
+
 const navButtons = document.querySelectorAll(".nav-button");
 const pages = document.querySelectorAll(".page");
 
@@ -840,14 +890,169 @@ navButtons.forEach(button => {
   });
 });
 
+function accountModeChanged(){
+  selectedAccountMode = document.getElementById("accountType").value;
+
+  connectedAccount = null;
+
+  document.getElementById("connectionStatus").value = "Not connected";
+  document.getElementById("accountId").value = "—";
+  document.getElementById("accountCurrency").value = "—";
+  document.getElementById("balance").textContent = "$0.00";
+
+  document.getElementById("accountMode").textContent =
+    selectedAccountMode === "real" ? "REAL ACCOUNT" : "DEMO ACCOUNT";
+
+  document.getElementById("accountMessage").textContent =
+    "Account changed. Connect the selected account before trading.";
+}
+
+async function connectAccount(){
+  const mode = document.getElementById("accountType").value;
+  const message = document.getElementById("accountMessage");
+
+  if(mode === "real"){
+    const confirmed = confirm(
+      "You selected REAL ACCOUNT. Real-money trading can cause financial loss. Continue?"
+    );
+
+    if(!confirmed){
+      message.textContent = "Real account connection cancelled.";
+      return;
+    }
+  }
+
+  message.textContent = "Connecting to " + mode + " account...";
+
+  try{
+    const response = await fetch("/api/account/connect",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        account_type:mode
+      })
+    });
+
+    const data = await response.json();
+
+    if(!response.ok){
+      throw new Error(data.detail || data.message || "Connection failed.");
+    }
+
+    connectedAccount = mode;
+
+    document.getElementById("connectionStatus").value =
+      data.connected ? "Connected" : "Connected";
+
+    document.getElementById("accountId").value =
+      data.account_id || data.loginid || "—";
+
+    document.getElementById("accountCurrency").value =
+      data.currency || "—";
+
+    if(data.balance !== undefined){
+      document.getElementById("balance").textContent =
+        Number(data.balance).toFixed(2) + " " + (data.currency || "");
+    }
+
+    document.getElementById("accountMode").textContent =
+      mode === "real" ? "REAL ACCOUNT" : "DEMO ACCOUNT";
+
+    message.textContent =
+      data.message || "Successfully connected to " + mode + " account.";
+
+    await loadTradingState();
+
+  }catch(error){
+    connectedAccount = null;
+    document.getElementById("connectionStatus").value = "Connection failed";
+    message.textContent = error.message;
+  }
+}
+
+async function refreshBalance(){
+  const message = document.getElementById("accountMessage");
+
+  if(!connectedAccount){
+    message.textContent = "Connect an account first.";
+    return;
+  }
+
+  try{
+    const response = await fetch("/api/account/balance");
+
+    const data = await response.json();
+
+    if(!response.ok){
+      throw new Error(data.detail || data.message || "Unable to retrieve balance.");
+    }
+
+    if(data.balance !== undefined){
+      document.getElementById("balance").textContent =
+        Number(data.balance).toFixed(2) + " " + (data.currency || "");
+    }
+
+    if(data.account_id || data.loginid){
+      document.getElementById("accountId").value =
+        data.account_id || data.loginid;
+    }
+
+    if(data.currency){
+      document.getElementById("accountCurrency").value =
+        data.currency;
+    }
+
+    message.textContent = data.message || "Balance refreshed.";
+
+  }catch(error){
+    message.textContent = error.message;
+  }
+}
+
+async function disconnectAccount(){
+  try{
+    await fetch("/api/account/disconnect",{
+      method:"POST"
+    });
+  }catch(error){
+    console.log(error);
+  }
+
+  connectedAccount = null;
+
+  document.getElementById("connectionStatus").value = "Disconnected";
+  document.getElementById("accountId").value = "—";
+  document.getElementById("accountCurrency").value = "—";
+  document.getElementById("balance").textContent = "$0.00";
+  document.getElementById("accountMessage").textContent =
+    "Account disconnected.";
+}
+
 async function botRequest(url){
   const message = document.getElementById("botMessage");
+
+  if(!connectedAccount){
+    message.textContent = "Connect Demo or Real account before starting the bot.";
+    return;
+  }
+
+  if(url === "/api/trading/start" && connectedAccount === "real"){
+    const confirmed = confirm(
+      "You are about to start LIVE TRADING. This can use real money. Continue?"
+    );
+
+    if(!confirmed){
+      message.textContent = "Live trading cancelled.";
+      return;
+    }
+  }
 
   try{
     const response = await fetch(url,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
+        account_type:connectedAccount,
         symbol:document.getElementById("dashboardMarket").value,
         strategy:document.getElementById("dashboardStrategy").value,
         stake:Number(document.getElementById("dashboardStake").value),
@@ -858,21 +1063,35 @@ async function botRequest(url){
     });
 
     const data = await response.json();
-    message.textContent = data.message || data.detail || "Request completed.";
-    loadTradingState();
+
+    if(!response.ok){
+      throw new Error(data.detail || data.message || "Request failed.");
+    }
+
+    message.textContent =
+      data.message || "Request completed.";
+
+    await loadTradingState();
+
   }catch(error){
-    message.textContent = "Request failed: " + error.message;
+    message.textContent = error.message;
   }
 }
 
 async function startABC(){
   const message = document.getElementById("abcMessage");
 
+  if(!connectedAccount){
+    message.textContent = "Connect an account first.";
+    return;
+  }
+
   try{
     const response = await fetch("/api/trading/start",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
+        account_type:connectedAccount,
         symbol:document.getElementById("abcSymbol").value,
         strategy:"ABC Pattern",
         timeframe:document.getElementById("abcTimeframe").value,
@@ -884,7 +1103,13 @@ async function startABC(){
     });
 
     const data = await response.json();
-    message.textContent = data.message || data.detail || "ABC bot started.";
+
+    if(!response.ok){
+      throw new Error(data.detail || data.message || "Unable to start ABC bot.");
+    }
+
+    message.textContent = data.message || "ABC bot started.";
+
   }catch(error){
     message.textContent = error.message;
   }
@@ -894,9 +1119,13 @@ async function stopABC(){
   const message = document.getElementById("abcMessage");
 
   try{
-    const response = await fetch("/api/trading/stop",{method:"POST"});
+    const response = await fetch("/api/trading/stop",{
+      method:"POST"
+    });
+
     const data = await response.json();
-    message.textContent = data.message || data.detail || "ABC bot stopped.";
+    message.textContent = data.message || "ABC bot stopped.";
+
   }catch(error){
     message.textContent = error.message;
   }
@@ -940,6 +1169,7 @@ async function scanDigits(){
     }
 
     message.textContent = "Scan completed.";
+
   }catch(error){
     message.textContent = error.message;
   }
@@ -948,11 +1178,17 @@ async function scanDigits(){
 async function startDigitBot(){
   const message = document.getElementById("digitMessage");
 
+  if(!connectedAccount){
+    message.textContent = "Connect an account first.";
+    return;
+  }
+
   try{
     const response = await fetch("/api/digits/start",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
+        account_type:connectedAccount,
         symbol:document.getElementById("digitSymbol").value,
         contract_type:document.getElementById("digitContract").value,
         digit:Number(document.getElementById("selectedDigit").value),
@@ -962,7 +1198,13 @@ async function startDigitBot(){
     });
 
     const data = await response.json();
-    message.textContent = data.message || data.detail || "Digit bot started.";
+
+    if(!response.ok){
+      throw new Error(data.detail || data.message || "Unable to start digit bot.");
+    }
+
+    message.textContent = data.message || "Digit bot started.";
+
   }catch(error){
     message.textContent = error.message;
   }
@@ -972,9 +1214,13 @@ async function stopDigitBot(){
   const message = document.getElementById("digitMessage");
 
   try{
-    const response = await fetch("/api/digits/stop",{method:"POST"});
+    const response = await fetch("/api/digits/stop",{
+      method:"POST"
+    });
+
     const data = await response.json();
-    message.textContent = data.message || data.detail || "Digit bot stopped.";
+    message.textContent = data.message || "Digit bot stopped.";
+
   }catch(error){
     message.textContent = error.message;
   }
@@ -1008,12 +1254,12 @@ async function loadTradingState(){
 
     if(data.balance !== undefined){
       document.getElementById("balance").textContent =
-        "$" + Number(data.balance).toFixed(2);
+        Number(data.balance).toFixed(2) + " " + (data.currency || "");
     }
 
     if(data.today_pl !== undefined){
       document.getElementById("todayPL").textContent =
-        "$" + Number(data.today_pl).toFixed(2);
+        Number(data.today_pl).toFixed(2);
     }
 
     if(data.trades !== undefined){
@@ -1066,6 +1312,7 @@ async function loadTradingState(){
         table.appendChild(row);
       });
     }
+
   }catch(error){
     console.log(error);
   }
@@ -1090,7 +1337,7 @@ function logoutUser(){
 }
 
 loadTradingState();
-setInterval(loadTradingState,3000);
+setInterval(loadTradingState,5000);
 </script>
 
 </body>
