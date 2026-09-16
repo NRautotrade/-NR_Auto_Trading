@@ -1141,12 +1141,6 @@ async def update_settings(request: Request):
 # ============================================================
 @app.post("/api/account/connect")
 async def connect_account(request: Request):
-    """Start the real Deriv OAuth connection flow.
-
-    The dashboard must not require DERIV_DEMO_TOKEN or DERIV_REAL_TOKEN.
-    Those are not needed for OAuth; Deriv returns the account token after
-    the user authorizes the application.
-    """
     user = current_user(request)
 
     if not user:
@@ -1168,13 +1162,7 @@ async def connect_account(request: Request):
     ).strip().lower()
 
     if account_type not in {"demo", "real"}:
-        return JSONResponse(
-            {
-                "connected": False,
-                "error": "Invalid account type. Choose demo or real.",
-            },
-            status_code=400,
-        )
+        account_type = "demo"
 
     if account_type == "real" and not ALLOW_REAL_TRADING:
         return JSONResponse(
@@ -1189,18 +1177,16 @@ async def connect_account(request: Request):
         return JSONResponse(
             {
                 "connected": False,
-                "error": "DERIV_CLIENT_ID is missing from the environment.",
+                "error": "DERIV_CLIENT_ID is missing from Render.",
             },
             status_code=500,
         )
 
-    # Send the browser directly into the existing Deriv OAuth route.
-    # Returning JSON here leaves the dashboard stuck on "Redirecting..."
-    # because the frontend does not navigate using redirect_url.
     return RedirectResponse(
         url=f"/deriv/connect?mode={account_type}",
         status_code=303,
     )
+
 
 
 # DERIV OAUTH
