@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -130,13 +129,26 @@ def init_db():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS deriv_connections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER UNIQUE NOT NULL,
+            user_id INTEGER NOT NULL,
             account_id TEXT,
             account_type TEXT,
             access_token_encrypted TEXT,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
+    """)
+
+    # Allow one separate Deriv connection for demo and one for real.
+    indexes = conn.execute("PRAGMA index_list(deriv_connections)").fetchall()
+    for idx in indexes:
+        if idx[2]:
+            name = idx[1]
+            cols = [r[2] for r in conn.execute(f"PRAGMA index_info({name})").fetchall()]
+            if cols == ["user_id"]:
+                conn.execute(f"DROP INDEX IF EXISTS {name}")
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_deriv_user_account_type
+        ON deriv_connections(user_id, account_type)
     """)
 
     conn.execute("""
@@ -1404,26 +1416,14 @@ async def deriv_callback(
     conn.execute(
         """
         INSERT INTO deriv_connections
-        (
-            user_id,
-            account_id,
-            account_type,
-            access_token_encrypted
-        )
+        (user_id, account_id, account_type, access_token_encrypted)
         VALUES (?, ?, ?, ?)
-
-        ON CONFLICT(user_id) DO UPDATE SET
+        ON CONFLICT(user_id, account_type) DO UPDATE SET
             account_id=excluded.account_id,
-            account_type=excluded.account_type,
             access_token_encrypted=excluded.access_token_encrypted,
             updated_at=CURRENT_TIMESTAMP
         """,
-        (
-            user["id"],
-            account_id,
-            mode,
-            encrypted,
-        ),
+        (user["id"], account_id, mode, encrypted),
     )
 
     conn.commit()
@@ -2467,6 +2467,12 @@ async def start_trading(request: Request):
         )
 
     uid = user["id"]
+    body = await request.json()
+    selected_mode = str(body.get("account_mode", "demo")).lower()
+    if selected_mode not in {"demo", "real"}:
+        selected_mode = "demo"
+    if selected_mode == "real" and not ALLOW_REAL_TRADING:
+        return JSONResponse({"ok": False, "error": "Real trading is disabled. Set ALLOW_REAL_TRADING=true after testing demo mode."}, status_code=403)
 
     existing = BOT_TASKS.get(uid)
 
@@ -2487,9 +2493,9 @@ async def start_trading(request: Request):
             account_type,
             access_token_encrypted
         FROM deriv_connections
-        WHERE user_id=?
+        WHERE user_id=? AND account_type=?
         """,
-        (uid,),
+        (uid, selected_mode),
     ).fetchone()
 
     settings = conn.execute(
@@ -3050,38 +3056,36 @@ async def digits_scan(request: Request):
 @app.get("/api/status")
 async def api_status(request: Request):
     user = current_user(request)
-
     if not user:
-        return JSONResponse(
-            {"ok": False},
-            status_code=401,
-        )
+        return JSONResponse({"ok": False}, status_code=401)
 
     conn = db()
-
-    row = conn.execute(
-        """
-        SELECT account_id, account_type
-        FROM deriv_connections
-        WHERE user_id=?
-        """,
+    rows = conn.execute(
+        "SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?",
         (user["id"],),
-    ).fetchone()
-
+    ).fetchall()
     conn.close()
 
+    accounts = {}
+    for row in rows:
+        item = {"connected": True, "account_id": row["account_id"], "account_type": row["account_type"], "balance": None, "currency": None}
+        try:
+            token = unprotect_token(row["access_token_encrypted"])
+            balance, currency = await fetch_live_balance(row["account_id"], token)
+            item["balance"] = balance
+            item["currency"] = currency
+        except Exception as exc:
+            item["error"] = str(exc)
+        accounts[row["account_type"]] = item
+
+    active = accounts.get("demo") or accounts.get("real") or {"connected": False}
     return {
         "ok": True,
-        "connected": bool(row),
-        "account_id": (
-            row["account_id"]
-            if row
-            else None
-        ),
-        "account_type": (
-            row["account_type"]
-            if row
-            else None
-        ),
-        "real_enabled": ALLOW_REAL_TRADING,
+        "connected": bool(accounts),
+        "account_id": active.get("account_id"),
+        "account_type": active.get("account_type"),
+        "balance": active.get("balance"),
+        "currency": active.get("currency"),
+        "accounts": accounts,
+        "allow_real": ALLOW_REAL_TRADING,
     }
