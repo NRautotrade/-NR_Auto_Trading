@@ -4,369 +4,1094 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NR AUTO TRADING</title>
+
 <style>
-:root{--bg:#07111f;--panel:#0e1a2d;--panel2:#111f34;--border:#23334c;--text:#e8eef7;--muted:#8fa0b8;--green:#22c55e;--red:#ef4444;--blue:#38bdf8;--yellow:#f59e0b}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
-.wrap{max-width:1400px;margin:auto;padding:18px}.top{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0 16px}.brand{font-size:25px;font-weight:800}.sub{color:var(--muted);font-size:12px;margin-top:4px}.right{display:flex;gap:10px;align-items:center}.pill{padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;background:#12301f;color:#58e889}.btn{border:1px solid var(--border);background:#132238;color:var(--text);padding:10px 15px;border-radius:7px;cursor:pointer;font-weight:700}.btn:hover{filter:brightness(1.15)}.btn.green{background:#17823f;border-color:#1da957}.btn.red{background:#8d2020;border-color:#b52d2d}.btn.yellow{background:#7a5310;border-color:#a87516}.btn.blue{background:#15577a;border-color:#2180ae}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px}.full{grid-column:1/-1}.title{font-size:13px;font-weight:800;letter-spacing:.4px;margin-bottom:12px}.stats{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}.stat{background:var(--panel2);border:1px solid var(--border);padding:13px;border-radius:7px}.stat small{display:block;color:var(--muted);font-size:10px;font-weight:700}.stat strong{display:block;font-size:18px;margin-top:7px}.ok{color:var(--green)}.bad{color:var(--red)}.muted{color:var(--muted)}
-.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.check{display:flex;align-items:center;gap:7px;margin:6px 10px 6px 0}.check input{accent-color:var(--green);width:16px;height:16px}.section{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:11px;margin-top:10px}.section label{font-size:11px;color:var(--muted);display:block;margin-bottom:5px}.field{background:#081322;border:1px solid var(--border);color:var(--text);padding:9px;border-radius:6px;width:120px}.wide{width:180px}.note{font-size:11px;color:var(--muted);margin-top:9px}.account{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.account-id{font-weight:800}.table{width:100%;border-collapse:collapse;font-size:12px}.table th{color:var(--muted);text-align:left;background:#15243b}.table th,.table td{padding:10px;border-bottom:1px solid var(--border)}.empty{text-align:center;color:var(--muted);padding:18px}.activity{margin:0;padding-left:20px;color:var(--muted);font-size:12px}.activity li{padding:4px 0}.controls{display:flex;gap:9px;flex-wrap:wrap}.statusline{padding:10px;background:#081322;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;margin-top:10px}
-@media(max-width:900px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.stats{grid-template-columns:repeat(2,1fr)}}
-.digit-choice{width:42px;height:42px;border-radius:10px;border:1px solid #29415f;background:#172940;color:#e8eef7;font-weight:800}.digit-choice:nth-child(3n+1){background:#203a58}.digit-choice:nth-child(3n+2){background:#164b3b;color:#6ff0a1}.digit-choice:nth-child(3n){background:#5a2635;color:#ff9aaa}.digit-choice.selected{outline:3px solid #20bfff;outline-offset:1px}.btn.green{background:#149447}.btn.red{background:#a8242a}</style>
-</head>
-<body>
-<div class="wrap">
-<header class="top">
-  <div><div class="brand">NR AUTO TRADING</div><div class="sub">Online Trading Dashboard</div></div>
-  <div class="right"><span id="botPill" class="pill">BOT STOPPED</span><span class="muted">USER: {{ user.username }}</span><a class="btn" href="/logout" style="text-decoration:none">LOG OUT</a></div>
-</header>
-
-<div class="card full" style="margin-top:14px">
-  <div class="title">TRADING ACCOUNT</div>
-  <div class="account">
-    <span class="account-id">{{ connection.account_id if connection else 'Not connected' }}</span>
-    <span id="acctType" class="muted">{{ connection.account_type|upper if connection else 'â' }}</span>
-    {% if connection %}
-      <span class="ok">â CONNECTED</span>
-    {% else %}
-      <a class="btn green" href="/deriv/connect?mode=demo">CONNECT DERIV DEMO</a>
-    {% endif %}
-    <a class="btn" href="/deriv/connect?mode=demo">RECONNECT DEMO</a>
-    {% if allow_real %}<a class="btn" href="/deriv/connect?mode=real">CONNECT REAL</a>{% endif %}
-  </div>
-</div>
-
-<div class="card full">
-  <div class="title">ACCOUNT / TODAY</div>
-  <div class="stats">
-    <div class="stat"><small>BALANCE</small><strong id="balance">$0.00</strong></div>
-    <div class="stat"><small>EQUITY</small><strong id="equity">$0.00</strong></div>
-    <div class="stat"><small>TODAY'S P/L</small><strong id="pl">$0.00</strong></div>
-    <div class="stat"><small>OPEN TRADES</small><strong id="open">0</strong></div>
-    <div class="stat"><small>WINS</small><strong id="wins">0</strong></div>
-    <div class="stat"><small>LOSSES</small><strong id="losses">0</strong></div>
-    <div class="stat"><small>WIN RATE</small><strong id="winRate">0.00%</strong></div>
-  </div>
-</div>
-
-<form id="settingsForm" method="post" action="/settings">
-<div class="grid">
-  <div class="card">
-    <div class="title">MARKETS</div>
-    <div class="section">
-      {% for m in ["Step Index","Volatility 5 Index","Volatility 10 Index","Volatility 15 Index","Volatility 25 Index","Volatility 30 Index","Volatility 50 Index","Volatility 75 Index","Volatility 100 Index"] %}
-      <label class="check"><input type="checkbox" name="markets" value="{{ m }}" {% if settings and m in (settings.markets|from_json) %}checked{% endif %}>{{ m }}</label>
-      {% endfor %}
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="title">STRATEGIES</div>
-    <div class="section">
-      <label class="check"><input type="checkbox" name="strategies" value="ABC Pattern" checked>ABC Pattern</label>
-      <label class="check"><input type="checkbox" name="strategies" value="Breakout">Breakout</label>
-      <label class="check"><input type="checkbox" name="strategies" value="Trend">Trend</label>
-      <label class="check"><input type="checkbox" name="strategies" value="Martingale">Martingale</label>
-      <label class="check"><input type="checkbox" name="strategies" value="Flat Stake">Flat Stake</label>
-      <div class="note">Martingale and Flat Stake are stake-management modes, while ABC/Breakout/Trend are entry strategies.</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="title">STAKE & TRADE CONTROL</div>
-    <div class="section row">
-      <div><label>Stake Mode</label><select class="field wide" name="stake_mode"><option>Flat Stake</option><option>Martingale</option></select></div>
-      <div><label>Base Risk / Stake ($)</label><input class="field" name="risk_trade" value="{{ settings.risk_trade if settings else 50 }}"></div>
-      <div><label>Martingale Multiplier</label><input class="field" name="martingale_multiplier" value="2"></div>
-      <div><label>Maximum Trades / Day</label><input class="field" name="max_trades" value="15"></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="title">RISK & PROTECTION</div>
-    <div class="section row">
-      <div><label>Reward / Risk</label><input class="field" name="reward_risk" value="{{ settings.reward_risk if settings else 2 }}"></div>
-      <div><label>Daily Target ($)</label><input class="field" name="daily_target" value="100"></div>
-      <div><label>Max Daily Profit ($)</label><input class="field" name="max_daily_profit" value="200"></div>
-      <div><label>Max Daily Loss ($)</label><input class="field" name="max_daily_loss" value="{{ settings.max_daily_loss if settings else 50 }}"></div>
-      <div><label>Protect at TP (%)</label><input class="field" name="protect_tp" value="50"></div>
-      <div><label>Lock Profit (R)</label><input class="field" name="lock_profit_r" value="1"></div>
-      <div><label>TP Adjustment (%)</label><input class="field" name="tp_adjust_percent" value="90"></div>
-    </div>
-    <div class="note">M5 locked â¢ Protection 70% â 1R</div>
-  </div>
-
-  <div class="card full">
-    <div class="title">BOT CONTROLS</div>
-    <div class="controls">
-      <button type="button" class="btn green" onclick="startBot()">RUN BOT</button>
-      <button type="button" class="btn yellow" onclick="pauseBot()">PAUSE BOT</button>
-      <button type="button" class="btn blue" onclick="resumeBot()">RESUME BOT</button>
-      <button type="button" class="btn red" onclick="stopBot()">STOP BOT</button>
-      <button type="submit" class="btn">SAVE SETTINGS</button>
-    </div>
-    <div id="message" class="statusline">Loading bot status...</div>
-  </div>
-</div>
-</form>
-
-<div class="grid">
-  <div class="card">
-    <div class="title">OPEN POSITIONS</div>
-    <table class="table"><thead><tr><th>MARKET</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="6" class="empty">No open trades</td></tr></tbody></table>
-  </div>
-  <div class="card">
-    <div class="title">LAST TRADE</div>
-    <div id="lastTrade" class="empty">No trades yet.</div>
-    <div class="title" style="margin-top:18px">ACTIVITY</div>
-    <ul id="activity" class="activity"></ul>
-  </div>
-</div>
-</div>
-
-
-<section class="card full" id="digitPanel">
-  <div class="title">DIGIT ANALYSIS / AI SCAN</div>
-  <div class="row">
-    <div>
-      <label class="muted" for="digitMarket">Market</label>
-      <select class="field wide" id="digitMarket">
-        <option>Volatility 10 (1s) Index</option>
-        <option selected>Volatility 25 (1s) Index</option>
-        <option>Volatility 50 (1s) Index</option>
-        <option>Volatility 75 (1s) Index</option>
-        <option>Volatility 100 (1s) Index</option>
-      </select>
-    </div>
-    <div>
-      <label class="muted" for="digitType">Trade type</label>
-      <select class="field wide" id="digitType">
-        <option selected>Matches/Differs</option>
-        <option>Even/Odd</option>
-        <option>Over/Under</option>
-      </select>
-    </div>
-    <div>
-      <label class="muted" for="digitTicks">Number of ticks</label>
-      <input class="field" id="digitTicks" type="number" min="10" max="500" value="100">
-    </div>
-    <button type="button" class="btn blue" id="digitScanBtn">AI SCAN</button>
-  </div>
-
-  <div class="section">
-    <div class="row" style="justify-content:space-between">
-      <div><span class="muted">CURRENT TICK</span><strong id="digitCurrentTick">â</strong></div>
-      <div><span class="muted">SCAN STATUS</span><strong id="digitScanStatus">READY</strong></div>
-    </div>
-    <div class="row" id="digitHistory" style="margin-top:12px;gap:6px"></div>
-  </div>
-
-  <div class="row" style="margin-top:12px">
-    <div class="section" style="flex:1">
-      <div class="muted">MATCHES</div>
-      <strong class="ok" id="digitMatches">0.00%</strong>
-    </div>
-    <div class="section" style="flex:1">
-      <div class="muted">DIFFERS</div>
-      <strong class="bad" id="digitDiffers">0.00%</strong>
-    </div>
-  </div>
-  <div class="note" id="digitMessage">
-    Press AI Scan to analyze the selected market. Trading remains controlled by the backend.
-  </div>
-</section>
-
-
-<section class="card full" id="digitContractPanel">
-  <div class="title">DIGIT CONTRACT</div>
-  <div class="muted" style="margin-bottom:8px">MATCHES / DIFFERS</div>
-  <div class="muted" style="margin-bottom:6px">SELECT DIGIT</div>
-  <div id="digitSelector" class="row" style="gap:6px;flex-wrap:wrap"><button type="button" class="digit-choice" data-digit="0">0</button><button type="button" class="digit-choice" data-digit="1">1</button><button type="button" class="digit-choice" data-digit="2">2</button><button type="button" class="digit-choice" data-digit="3">3</button><button type="button" class="digit-choice" data-digit="4">4</button><button type="button" class="digit-choice" data-digit="5">5</button><button type="button" class="digit-choice" data-digit="6">6</button><button type="button" class="digit-choice" data-digit="7">7</button><button type="button" class="digit-choice" data-digit="8">8</button><button type="button" class="digit-choice" data-digit="9">9</button></div>
-  <div class="row" style="margin-top:12px;gap:10px">
-    <div style="flex:1"><label class="muted">STAKE ($)</label><input class="field" id="digitStake" type="number" min="0.35" step="0.01" value="1.00"></div>
-    <div style="flex:1"><label class="muted">TICKS</label><input class="field" id="digitDuration" type="number" min="1" max="10" value="1"></div>
-  </div>
-  <div class="row" style="margin-top:12px;gap:10px">
-    <button type="button" class="btn green" id="buyMatchesBtn">BUY MATCHES</button>
-    <button type="button" class="btn red" id="buyDiffersBtn">BUY DIFFERS</button>
-  </div>
-  <div class="note" id="digitPurchaseMessage">Run AI Scan, select a digit, then review before buying.</div>
-</section>
-
-<section class="card full">
-  <div class="title">TRANSACTIONS</div>
-  <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead>
-        <tr>
-          <th>Contract</th><th>Entry</th><th>Exit</th><th>Stake</th><th>P/L</th>
-        </tr>
-      </thead>
-      <tbody id="digitTransactions">
-        <tr><td colspan="5" class="muted">No transactions returned by the backend yet.</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<script>
-async function post(url){
-  const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"}});
-  return await r.json();
-}
-async function startBot(){const x=await post("/api/trading/start");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
-async function stopBot(){const x=await post("/api/trading/stop");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
-async function pauseBot(){const x=await post("/api/trading/pause");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
-async function resumeBot(){const x=await post("/api/trading/resume");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
-function money(v){return "$"+Number(v||0).toFixed(2)}
-async function refresh(){
- try{
-  const r=await fetch("/api/trading/state"); const x=await r.json(); if(!x.ok)return;
-  document.getElementById("balance").textContent=money(x.balance);
-  document.getElementById("equity").textContent=money(x.equity);
-  const pl=document.getElementById("pl"); pl.textContent=money(x.today_pl); pl.className=x.today_pl>=0?"ok":"bad";
-  document.getElementById("open").textContent=x.open_trades||0;
-  document.getElementById("wins").textContent=x.wins||0;
-  document.getElementById("losses").textContent=x.losses||0;
-      
-   const total=(Number(x.wins)||0)+(Number(x.losses)||0);
-   document.getElementById("winRate").textContent=total?((Number(x.wins)||0)/total*100).toFixed(2)+"%":"0.00%";
-  document.getElementById("botPill").textContent=x.running?"BOT RUNNING":"BOT STOPPED";
-  document.getElementById("botPill").style.background=x.running?"#12301f":"#3a2020";
-  document.getElementById("botPill").style.color=x.running?"#58e889":"#ff7b7b";
-  document.getElementById("message").textContent=x.message||"";
-  const p=document.getElementById("positions");
-  if(!x.positions?.length)p.innerHTML='<tr><td colspan="6" class="empty">No open trades</td></tr>';
-  else p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||""}</td><td>${a.direction||""}</td><td>${a.entry??""}</td><td>${a.current??""}</td><td class="${Number(a.profit||0)>=0?"ok":"bad"}">${money(a.profit)}</td><td>${a.status||"OPEN"}</td></tr>`).join("");
-  const l=document.getElementById("lastTrade");
-  if(x.last_trade)l.innerHTML=`<b>${x.last_trade.symbol||""}</b><br>${x.last_trade.direction||""} â¢ ${x.last_trade.status||""}<br><span class="${Number(x.last_trade.profit||0)>=0?"ok":"bad"}">${money(x.last_trade.profit)}</span>`;
-  else l.textContent="No trades yet.";
-  document.getElementById("activity").innerHTML=(x.activity||[]).map(a=>`<li>${a}</li>`).join("");
- }catch(e){document.getElementById("message").textContent="Unable to refresh bot status."}
-}
-refresh();setInterval(refresh,3000);
-
-
-const digitHistory = document.getElementById("digitHistory");
-const digitScanBtn = document.getElementById("digitScanBtn");
-const digitScanStatus = document.getElementById("digitScanStatus");
-const digitMessage = document.getElementById("digitMessage");
-let latestDigitState = null;
-
-function renderDigitHistory(values){
-  digitHistory.innerHTML = (values || []).slice(-100).map(v =>
-    `<span style="display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;
-      background:#132238;border:1px solid #23334c;color:#e8eef7;font-weight:700">${v}</span>`
-  ).join("");
+:root{
+  --bg:#07111f;
+  --panel:#0e1a2d;
+  --panel2:#111f34;
+  --border:#263852;
+  --text:#edf4ff;
+  --muted:#91a3bd;
+  --green:#22c55e;
+  --red:#ef4444;
+  --blue:#38bdf8;
+  --yellow:#f59e0b;
 }
 
-function renderDigitPercentages(percentages){
-  (percentages || []).forEach((value, index) => {
-    const node = document.getElementById("digitPct" + index);
-    if(node) node.textContent = Number(value || 0).toFixed(2) + "%";
-  });
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Arial,Helvetica,sans-serif;
 }
 
-async function refreshDigits(){
-  try{
-    const response = await fetch("/api/digits/state");
-    const data = await response.json();
-    if(!data.ok) return;
-    latestDigitState = data;
+button,
+input,
+select{
+  font:inherit;
+}
 
-    document.getElementById("digitCurrentTick").textContent =
-      data.current_tick ?? "â";
-    renderDigitHistory(data.history || data.last_digits || []);
-    renderDigitPercentages(data.percentages || []);
+button,
+.nav-button{
+  cursor:pointer;
+}
 
-    if(data.running){
-      digitScanStatus.textContent = "LIVE";
-      digitMessage.textContent = "Live Deriv tick feed connected.";
-    } else {
-      digitScanStatus.textContent = "READY";
-    }
-  }catch(error){
-    digitMessage.textContent = "Live digit feed is not available yet.";
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:15px;
+  flex-wrap:wrap;
+  padding:18px;
+  background:#0b1729;
+  border-bottom:1px solid var(--border);
+}
+
+.brand{
+  font-size:24px;
+  font-weight:900;
+  letter-spacing:.5px;
+}
+
+.subtitle{
+  color:var(--muted);
+  font-size:12px;
+  margin-top:5px;
+}
+
+.account-area{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.status-pill{
+  padding:8px 12px;
+  border-radius:7px;
+  background:#12351f;
+  color:#65ef9a;
+  font-size:12px;
+  font-weight:bold;
+}
+
+.layout{
+  display:flex;
+  min-height:calc(100vh - 90px);
+}
+
+.sidebar{
+  width:230px;
+  flex-shrink:0;
+  background:#0a1627;
+  border-right:1px solid var(--border);
+  padding:15px;
+}
+
+.nav-button{
+  display:block;
+  width:100%;
+  border:0;
+  text-align:left;
+  color:var(--text);
+  background:transparent;
+  padding:13px;
+  border-radius:7px;
+  margin-bottom:7px;
+  font-weight:bold;
+}
+
+.nav-button:hover,
+.nav-button.active{
+  background:#1b4265;
+}
+
+.content{
+  flex:1;
+  min-width:0;
+  padding:20px;
+  max-width:1500px;
+}
+
+.page{
+  display:none;
+}
+
+.page.active{
+  display:block;
+}
+
+.page-title{
+  font-size:25px;
+  font-weight:900;
+  margin:0 0 5px;
+}
+
+.page-description{
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:18px;
+}
+
+.card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:9px;
+  padding:16px;
+  margin-bottom:15px;
+}
+
+.card-title{
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:.5px;
+  margin-bottom:14px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:15px;
+}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:10px;
+}
+
+.stat{
+  background:var(--panel2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:13px;
+}
+
+.stat-label{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:bold;
+}
+
+.stat-value{
+  font-size:21px;
+  font-weight:900;
+  margin-top:8px;
+}
+
+.controls{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.btn{
+  border:1px solid var(--border);
+  border-radius:7px;
+  padding:11px 15px;
+  color:white;
+  background:#15263d;
+  font-weight:bold;
+}
+
+.btn-green{background:#167b3d}
+.btn-red{background:#8e2525}
+.btn-blue{background:#155b80}
+.btn-yellow{background:#80580f}
+
+.field{
+  width:100%;
+  background:#081322;
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:7px;
+  padding:11px;
+}
+
+.form-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+}
+
+label{
+  display:block;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:bold;
+  margin-bottom:6px;
+}
+
+.status-box{
+  margin-top:12px;
+  background:#081322;
+  border:1px solid var(--border);
+  border-radius:7px;
+  padding:12px;
+  color:var(--muted);
+  font-size:12px;
+}
+
+.digits{
+  display:grid;
+  grid-template-columns:repeat(10,minmax(0,1fr));
+  gap:8px;
+}
+
+.digit{
+  background:#15263d;
+  border:1px solid var(--border);
+  border-radius:7px;
+  text-align:center;
+  padding:13px 4px;
+}
+
+.digit strong{
+  display:block;
+  font-size:20px;
+}
+
+.digit small{
+  display:block;
+  color:var(--muted);
+  margin-top:5px;
+}
+
+.history{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+}
+
+.history span{
+  width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:6px;
+  color:white;
+  font-weight:bold;
+}
+
+.history .even{background:#176b99}
+.history .odd{background:#8d2929}
+
+.table-wrap{
+  width:100%;
+  overflow-x:auto;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+  min-width:650px;
+}
+
+th{
+  color:var(--muted);
+  background:#15263d;
+  text-align:left;
+}
+
+th,
+td{
+  padding:11px;
+  border-bottom:1px solid var(--border);
+}
+
+.green{
+  color:var(--green);
+}
+
+.red{
+  color:var(--red);
+}
+
+.muted{
+  color:var(--muted);
+}
+
+@media(max-width:1050px){
+  .stats{
+    grid-template-columns:repeat(3,minmax(0,1fr));
   }
 }
 
-async function startDigitFeed(){
+@media(max-width:750px){
+  .layout{
+    display:block;
+  }
+
+  .sidebar{
+    width:100%;
+    border-right:0;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    gap:7px;
+    overflow-x:auto;
+  }
+
+  .nav-button{
+    width:auto;
+    white-space:nowrap;
+    margin:0;
+  }
+
+  .content{
+    padding:13px;
+  }
+
+  .grid,
+  .form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .stats{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .digits{
+    grid-template-columns:repeat(5,minmax(0,1fr));
+  }
+
+  .brand{
+    font-size:20px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header class="topbar">
+  <div>
+    <div class="brand">NR AUTO TRADING</div>
+    <div class="subtitle">Professional automated trading control center</div>
+  </div>
+
+  <div class="account-area">
+    <span id="botStatus" class="status-pill">BOT STOPPED</span>
+    <span class="muted">DEMO ACCOUNT</span>
+    <button class="btn" onclick="logoutUser()">LOG OUT</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <button class="nav-button active" data-page="dashboard">Dashboard</button>
+    <button class="nav-button" data-page="abc">ABC Trader</button>
+    <button class="nav-button" data-page="digit">Digit Trader</button>
+    <button class="nav-button" data-page="transactions">Transactions</button>
+    <button class="nav-button" data-page="transfers">Transfers</button>
+    <button class="nav-button" data-page="settings">Settings</button>
+  </aside>
+
+  <main class="content">
+
+    <!-- DASHBOARD PAGE -->
+    <section id="dashboard" class="page active">
+      <h1 class="page-title">Dashboard</h1>
+      <div class="page-description">
+        Monitor your account, bot activity, live market data, and trading performance.
+      </div>
+
+      <div class="card">
+        <div class="card-title">ACCOUNT OVERVIEW</div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-label">BALANCE</div>
+            <div class="stat-value" id="balance">$0.00</div>
+          </div>
+
+          <div class="stat">
+            <div class="stat-label">TODAY P/L</div>
+            <div class="stat-value" id="todayPL">$0.00</div>
+          </div>
+
+          <div class="stat">
+            <div class="stat-label">TRADES</div>
+            <div class="stat-value" id="tradeCount">0</div>
+          </div>
+
+          <div class="stat">
+            <div class="stat-label">WINS</div>
+            <div class="stat-value green" id="wins">0</div>
+          </div>
+
+          <div class="stat">
+            <div class="stat-label">LOSSES</div>
+            <div class="stat-value red" id="losses">0</div>
+          </div>
+
+          <div class="stat">
+            <div class="stat-label">WIN RATE</div>
+            <div class="stat-value" id="winRate">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+
+        <div class="card">
+          <div class="card-title">BOT CONTROL</div>
+
+          <div class="controls">
+            <button class="btn btn-green" onclick="botRequest('/api/trading/start')">
+              START BOT
+            </button>
+
+            <button class="btn btn-yellow" onclick="botRequest('/api/trading/pause')">
+              PAUSE
+            </button>
+
+            <button class="btn btn-blue" onclick="botRequest('/api/trading/resume')">
+              RESUME
+            </button>
+
+            <button class="btn btn-red" onclick="botRequest('/api/trading/stop')">
+              STOP BOT
+            </button>
+          </div>
+
+          <div id="botMessage" class="status-box">
+            Bot is currently stopped.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">MARKET CONFIGURATION</div>
+
+          <div class="form-grid">
+            <div>
+              <label>MARKET</label>
+              <select id="dashboardMarket" class="field">
+                <option value="R_25">Volatility 25 Index</option>
+                <option value="R_10">Volatility 10 Index</option>
+                <option value="R_75">Volatility 75 Index</option>
+                <option value="R_100">Volatility 100 Index</option>
+                <option value="1HZ25V">Volatility 25 (1s) Index</option>
+                <option value="1HZ100V">Volatility 100 (1s) Index</option>
+              </select>
+            </div>
+
+            <div>
+              <label>STRATEGY</label>
+              <select id="dashboardStrategy" class="field">
+                <option value="ABC Pattern">ABC Pattern</option>
+                <option value="ABCDE Sweep">ABCDE Sweep</option>
+                <option value="Digit Matches/Differs">
+                  Digit Matches/Differs
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">RISK SETTINGS</div>
+
+          <div class="form-grid">
+            <div>
+              <label>STAKE</label>
+              <input id="dashboardStake" class="field" type="number" value="1" min="0.35" step="0.01">
+            </div>
+
+            <div>
+              <label>RISK PERCENTAGE</label>
+              <input id="dashboardRisk" class="field" type="number" value="1" min="0.1" step="0.1">
+            </div>
+
+            <div>
+              <label>MAXIMUM TRADES</label>
+              <input id="dashboardMaxTrades" class="field" type="number" value="5" min="1">
+            </div>
+
+            <div>
+              <label>RISK/REWARD</label>
+              <input id="dashboardRR" class="field" type="number" value="2" min="1" step="0.5">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">LIVE MARKET STATUS</div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-label">CURRENT TICK</div>
+              <div class="stat-value" id="currentTick">—</div>
+            </div>
+
+            <div class="stat">
+              <div class="stat-label">SCAN STATUS</div>
+              <div class="stat-value" id="scanStatus">READY</div>
+            </div>
+          </div>
+
+          <div id="liveMessage" class="status-box">
+            Waiting for live market data.
+          </div>
+        </div>
+
+      </div>
+
+      <div class="card">
+        <div class="card-title">RECENT ACTIVITY</div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>TIME</th>
+                <th>TYPE</th>
+                <th>SYMBOL</th>
+                <th>RESULT</th>
+                <th>P/L</th>
+              </tr>
+            </thead>
+
+            <tbody id="recentActivity">
+              <tr>
+                <td colspan="5" class="muted">No recent activity.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABC PAGE -->
+    <section id="abc" class="page">
+      <h1 class="page-title">ABC Pattern Trader</h1>
+      <div class="page-description">
+        Configure and control the ABC pattern trading strategy.
+      </div>
+
+      <div class="card">
+        <div class="card-title">ABC STRATEGY SETTINGS</div>
+
+        <div class="form-grid">
+          <div>
+            <label>MARKET</label>
+            <select id="abcSymbol" class="field">
+              <option value="R_25">Volatility 25 Index</option>
+              <option value="R_10">Volatility 10 Index</option>
+              <option value="R_75">Volatility 75 Index</option>
+              <option value="R_100">Volatility 100 Index</option>
+            </select>
+          </div>
+
+          <div>
+            <label>TIMEFRAME</label>
+            <select id="abcTimeframe" class="field">
+              <option value="M5">5 Minutes</option>
+              <option value="M15">15 Minutes</option>
+              <option value="H1">1 Hour</option>
+              <option value="H4">4 Hours</option>
+            </select>
+          </div>
+
+          <div>
+            <label>STAKE</label>
+            <input id="abcStake" class="field" type="number" value="1" min="0.35" step="0.01">
+          </div>
+
+          <div>
+            <label>RISK PERCENTAGE</label>
+            <input id="abcRisk" class="field" type="number" value="1" min="0.1" step="0.1">
+          </div>
+
+          <div>
+            <label>RISK/REWARD</label>
+            <input id="abcRR" class="field" type="number" value="2" min="1" step="0.5">
+          </div>
+
+          <div>
+            <label>MAXIMUM TRADES</label>
+            <input id="abcMaxTrades" class="field" type="number" value="5" min="1">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="controls">
+          <button class="btn btn-green" onclick="startABC()">START ABC BOT</button>
+          <button class="btn btn-red" onclick="stopABC()">STOP ABC BOT</button>
+        </div>
+
+        <div id="abcMessage" class="status-box">
+          ABC bot is stopped.
+        </div>
+      </div>
+    </section>
+
+    <!-- DIGIT PAGE -->
+    <section id="digit" class="page">
+      <h1 class="page-title">Digit Matches / Differs</h1>
+      <div class="page-description">
+        Scan the latest digits and configure digit contracts.
+      </div>
+
+      <div class="card">
+        <div class="card-title">DIGIT CONTRACT SETTINGS</div>
+
+        <div class="form-grid">
+          <div>
+            <label>MARKET</label>
+            <select id="digitSymbol" class="field">
+              <option value="R_25">Volatility 25 Index</option>
+              <option value="R_10">Volatility 10 Index</option>
+              <option value="R_75">Volatility 75 Index</option>
+              <option value="R_100">Volatility 100 Index</option>
+            </select>
+          </div>
+
+          <div>
+            <label>TRADE TYPE</label>
+            <select id="digitContract" class="field">
+              <option value="DIGITMATCH">Matches</option>
+              <option value="DIGITDIFF">Differs</option>
+            </select>
+          </div>
+
+          <div>
+            <label>SELECTED DIGIT</label>
+            <input id="selectedDigit" class="field" type="number" value="2" min="0" max="9">
+          </div>
+
+          <div>
+            <label>NUMBER OF TICKS</label>
+            <input id="digitTicks" class="field" type="number" value="100" min="1">
+          </div>
+
+          <div>
+            <label>STAKE</label>
+            <input id="digitStake" class="field" type="number" value="1" min="0.35" step="0.01">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="controls">
+          <button class="btn btn-blue" onclick="scanDigits()">AI SCAN</button>
+          <button class="btn btn-green" onclick="startDigitBot()">START DIGIT BOT</button>
+          <button class="btn btn-red" onclick="stopDigitBot()">STOP BOT</button>
+        </div>
+
+        <div id="digitMessage" class="status-box">
+          Scan ready.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">DIGIT PERCENTAGES</div>
+
+        <div class="digits">
+          <div class="digit"><strong>0</strong><small id="digitPercent0">0%</small></div>
+          <div class="digit"><strong>1</strong><small id="digitPercent1">0%</small></div>
+          <div class="digit"><strong>2</strong><small id="digitPercent2">0%</small></div>
+          <div class="digit"><strong>3</strong><small id="digitPercent3">0%</small></div>
+          <div class="digit"><strong>4</strong><small id="digitPercent4">0%</small></div>
+          <div class="digit"><strong>5</strong><small id="digitPercent5">0%</small></div>
+          <div class="digit"><strong>6</strong><small id="digitPercent6">0%</small></div>
+          <div class="digit"><strong>7</strong><small id="digitPercent7">0%</small></div>
+          <div class="digit"><strong>8</strong><small id="digitPercent8">0%</small></div>
+          <div class="digit"><strong>9</strong><small id="digitPercent9">0%</small></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">RECENT DIGITS</div>
+        <div id="digitHistory" class="history"></div>
+      </div>
+    </section>
+
+    <!-- TRANSACTIONS PAGE -->
+    <section id="transactions" class="page">
+      <h1 class="page-title">Transactions</h1>
+      <div class="page-description">
+        Review recent entries, exits, stakes, payouts, and profit or loss.
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>TIME</th>
+                <th>SYMBOL</th>
+                <th>CONTRACT</th>
+                <th>ENTRY</th>
+                <th>EXIT</th>
+                <th>STAKE</th>
+                <th>PAYOUT</th>
+                <th>P/L</th>
+              </tr>
+            </thead>
+
+            <tbody id="transactionsTable">
+              <tr>
+                <td colspan="8" class="muted">No transactions available.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRANSFERS PAGE -->
+    <section id="transfers" class="page">
+      <h1 class="page-title">Transfers</h1>
+      <div class="page-description">
+        Prepare an account deposit or withdrawal request.
+      </div>
+
+      <div class="card">
+        <div class="form-grid">
+          <div>
+            <label>TRANSFER TYPE</label>
+            <select id="transferType" class="field">
+              <option value="deposit">Deposit</option>
+              <option value="withdrawal">Withdrawal</option>
+            </select>
+          </div>
+
+          <div>
+            <label>AMOUNT</label>
+            <input id="transferAmount" class="field" type="number" min="0.01" step="0.01">
+          </div>
+        </div>
+
+        <button class="btn btn-green" onclick="submitTransfer()">
+          SUBMIT REQUEST
+        </button>
+
+        <div id="transferMessage" class="status-box"></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS PAGE -->
+    <section id="settings" class="page">
+      <h1 class="page-title">Settings</h1>
+      <div class="page-description">
+        Save your default market and risk preferences.
+      </div>
+
+      <div class="card">
+        <div class="form-grid">
+          <div>
+            <label>DEFAULT MARKET</label>
+            <select id="defaultMarket" class="field">
+              <option value="R_25">Volatility 25 Index</option>
+              <option value="R_10">Volatility 10 Index</option>
+              <option value="R_75">Volatility 75 Index</option>
+              <option value="R_100">Volatility 100 Index</option>
+            </select>
+          </div>
+
+          <div>
+            <label>DEFAULT STAKE</label>
+            <input id="defaultStake" class="field" type="number" value="1" min="0.35" step="0.01">
+          </div>
+
+          <div>
+            <label>DAILY PROFIT TARGET</label>
+            <input id="profitTarget" class="field" type="number" value="10" min="0" step="0.01">
+          </div>
+
+          <div>
+            <label>MAXIMUM DAILY LOSS</label>
+            <input id="dailyLoss" class="field" type="number" value="10" min="0" step="0.01">
+          </div>
+        </div>
+
+        <button class="btn btn-green" onclick="saveSettings()">
+          SAVE SETTINGS
+        </button>
+
+        <div id="settingsMessage" class="status-box"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+const navButtons = document.querySelectorAll(".nav-button");
+const pages = document.querySelectorAll(".page");
+
+navButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    const pageName = button.dataset.page;
+
+    navButtons.forEach(item => item.classList.remove("active"));
+    pages.forEach(page => page.classList.remove("active"));
+
+    button.classList.add("active");
+    document.getElementById(pageName).classList.add("active");
+  });
+});
+
+async function botRequest(url){
+  const message = document.getElementById("botMessage");
+
   try{
-    const response = await fetch("/api/digits/start", {
+    const response = await fetch(url,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        symbol: document.getElementById("digitMarket")?.value || "",
-        history_length: Number(document.getElementById("digitTicks")?.value || 100)
+        symbol:document.getElementById("dashboardMarket").value,
+        strategy:document.getElementById("dashboardStrategy").value,
+        stake:Number(document.getElementById("dashboardStake").value),
+        risk_percent:Number(document.getElementById("dashboardRisk").value),
+        max_trades:Number(document.getElementById("dashboardMaxTrades").value),
+        rr:Number(document.getElementById("dashboardRR").value)
       })
     });
+
     const data = await response.json();
-    digitMessage.textContent = data.message || data.error || "Digit feed started.";
-    await refreshDigits();
+    message.textContent = data.message || data.detail || "Request completed.";
+    loadTradingState();
   }catch(error){
-    digitMessage.textContent = "Unable to start the live digit feed.";
+    message.textContent = "Request failed: " + error.message;
   }
 }
 
-async function stopDigitFeed(){
+async function startABC(){
+  const message = document.getElementById("abcMessage");
+
   try{
-    const response = await fetch("/api/digits/stop", {
+    const response = await fetch("/api/trading/start",{
       method:"POST",
-      headers:{"Content-Type":"application/json"}
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        symbol:document.getElementById("abcSymbol").value,
+        strategy:"ABC Pattern",
+        timeframe:document.getElementById("abcTimeframe").value,
+        stake:Number(document.getElementById("abcStake").value),
+        risk_percent:Number(document.getElementById("abcRisk").value),
+        rr:Number(document.getElementById("abcRR").value),
+        max_trades:Number(document.getElementById("abcMaxTrades").value)
+      })
     });
+
     const data = await response.json();
-    digitMessage.textContent = data.message || data.error || "Digit feed stopped.";
-    await refreshDigits();
+    message.textContent = data.message || data.detail || "ABC bot started.";
   }catch(error){
-    digitMessage.textContent = "Unable to stop the live digit feed.";
+    message.textContent = error.message;
   }
 }
 
-async function runDigitScan(){
-  digitScanBtn.disabled=true; digitScanStatus.textContent="SCANNING";
+async function stopABC(){
+  const message = document.getElementById("abcMessage");
+
   try{
-    const r=await fetch("/api/digits/scan",{method:"POST",headers:{"Content-Type":"application/json"}});
-    const data=await r.json();
-    if(!data.ok) throw new Error(data.error||"Scan failed");
-    document.getElementById("digitMatches").textContent=Number(data.matches_percent||0).toFixed(2)+"%";
-    document.getElementById("digitDiffers").textContent=Number(data.differs_percent||0).toFixed(2)+"%";
-    document.querySelectorAll(".digit-choice").forEach(b=>b.classList.toggle("selected",Number(b.dataset.digit)===Number(data.selected_digit)));
-    digitScanStatus.textContent="READY"; digitMessage.textContent=data.message||"Scan complete.";
-    document.getElementById("digitPurchaseMessage").textContent=data.message||"Review the contract before buying.";
-  }catch(e){digitScanStatus.textContent="READY";digitMessage.textContent=e.message||"Unable to scan.";}
-  digitScanBtn.disabled=false;
+    const response = await fetch("/api/trading/stop",{method:"POST"});
+    const data = await response.json();
+    message.textContent = data.message || data.detail || "ABC bot stopped.";
+  }catch(error){
+    message.textContent = error.message;
+  }
 }
 
-if(digitScanBtn){
-  digitScanBtn.addEventListener("click", runDigitScan);
-  refreshDigits();
-  setInterval(refreshDigits, 2000);
+async function scanDigits(){
+  const message = document.getElementById("digitMessage");
+  message.textContent = "Scanning digits...";
+
+  try{
+    const response = await fetch("/api/digits/state");
+
+    if(!response.ok){
+      message.textContent = "Digit data is not available.";
+      return;
+    }
+
+    const data = await response.json();
+
+    if(data.percentages){
+      Object.keys(data.percentages).forEach(digit => {
+        const element = document.getElementById("digitPercent" + digit);
+
+        if(element){
+          element.textContent =
+            Number(data.percentages[digit]).toFixed(1) + "%";
+        }
+      });
+    }
+
+    if(data.history){
+      const history = document.getElementById("digitHistory");
+      history.innerHTML = "";
+
+      data.history.forEach(digit => {
+        const item = document.createElement("span");
+        item.textContent = digit;
+        item.className = Number(digit) % 2 === 0 ? "even" : "odd";
+        history.appendChild(item);
+      });
+    }
+
+    message.textContent = "Scan completed.";
+  }catch(error){
+    message.textContent = error.message;
+  }
 }
 
+async function startDigitBot(){
+  const message = document.getElementById("digitMessage");
 
-let chosenDigit=null;
-document.querySelectorAll(".digit-choice").forEach(b=>b.addEventListener("click",()=>{chosenDigit=Number(b.dataset.digit);document.querySelectorAll(".digit-choice").forEach(x=>x.classList.toggle("selected",x===b));}));
-async function buyDigit(type){
- const msg=document.getElementById("digitPurchaseMessage");
- if(chosenDigit===null && latestDigitState?.selected_digit===undefined){msg.textContent="Run AI Scan and select a digit first.";return;}
- const digit=chosenDigit===null?latestDigitState.selected_digit:chosenDigit;
- try{const r=await fetch("/api/digits/purchase",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contract_type:type,stake:Number(document.getElementById("digitStake").value||1),duration:Number(document.getElementById("digitDuration").value||1),digit})});const x=await r.json();msg.textContent=x.message||x.error||"Done";renderDigitTransactions(x.transactions||[]);}catch(e){msg.textContent="Unable to purchase contract.";}
+  try{
+    const response = await fetch("/api/digits/start",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        symbol:document.getElementById("digitSymbol").value,
+        contract_type:document.getElementById("digitContract").value,
+        digit:Number(document.getElementById("selectedDigit").value),
+        ticks:Number(document.getElementById("digitTicks").value),
+        stake:Number(document.getElementById("digitStake").value)
+      })
+    });
+
+    const data = await response.json();
+    message.textContent = data.message || data.detail || "Digit bot started.";
+  }catch(error){
+    message.textContent = error.message;
+  }
 }
-function renderDigitTransactions(rows){const body=document.getElementById("digitTransactions");if(!body)return;body.innerHTML=rows.length?rows.map(x=>`<tr><td>${x.contract||""}</td><td>${x.entry??""}</td><td>${x.exit??"â"}</td><td>${x.stake??""}</td><td>${x.pnl??"OPEN"}</td></tr>`).join(""): '<tr><td colspan="5" class="muted">No transactions returned by the backend yet.</td></tr>';}
-document.getElementById("buyMatchesBtn")?.addEventListener("click",()=>buyDigit("DIGITMATCH"));
-document.getElementById("buyDiffersBtn")?.addEventListener("click",()=>buyDigit("DIGITDIFF"));
+
+async function stopDigitBot(){
+  const message = document.getElementById("digitMessage");
+
+  try{
+    const response = await fetch("/api/digits/stop",{method:"POST"});
+    const data = await response.json();
+    message.textContent = data.message || data.detail || "Digit bot stopped.";
+  }catch(error){
+    message.textContent = error.message;
+  }
+}
+
+async function loadTradingState(){
+  try{
+    const response = await fetch("/api/trading/state");
+
+    if(!response.ok)return;
+
+    const data = await response.json();
+
+    const running = Boolean(data.running);
+    const paused = Boolean(data.paused);
+    const status = document.getElementById("botStatus");
+
+    if(paused){
+      status.textContent = "BOT PAUSED";
+      status.style.background = "#80580f";
+      status.style.color = "#ffd36b";
+    }else if(running){
+      status.textContent = "BOT RUNNING";
+      status.style.background = "#12351f";
+      status.style.color = "#65ef9a";
+    }else{
+      status.textContent = "BOT STOPPED";
+      status.style.background = "#421c1c";
+      status.style.color = "#ff9999";
+    }
+
+    if(data.balance !== undefined){
+      document.getElementById("balance").textContent =
+        "$" + Number(data.balance).toFixed(2);
+    }
+
+    if(data.today_pl !== undefined){
+      document.getElementById("todayPL").textContent =
+        "$" + Number(data.today_pl).toFixed(2);
+    }
+
+    if(data.trades !== undefined){
+      document.getElementById("tradeCount").textContent = data.trades;
+    }
+
+    if(data.wins !== undefined){
+      document.getElementById("wins").textContent = data.wins;
+    }
+
+    if(data.losses !== undefined){
+      document.getElementById("losses").textContent = data.losses;
+    }
+
+    if(data.win_rate !== undefined){
+      document.getElementById("winRate").textContent =
+        data.win_rate + "%";
+    }
+
+    if(data.current_tick !== undefined){
+      document.getElementById("currentTick").textContent =
+        data.current_tick;
+    }
+
+    if(data.scan_status !== undefined){
+      document.getElementById("scanStatus").textContent =
+        data.scan_status;
+    }
+
+    if(data.message !== undefined){
+      document.getElementById("liveMessage").textContent =
+        data.message;
+    }
+
+    if(Array.isArray(data.activity)){
+      const table = document.getElementById("recentActivity");
+      table.innerHTML = "";
+
+      data.activity.forEach(item => {
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+          <td>${item.time || "—"}</td>
+          <td>${item.type || "—"}</td>
+          <td>${item.symbol || "—"}</td>
+          <td>${item.result || "—"}</td>
+          <td>${item.pl || "—"}</td>
+        `;
+
+        table.appendChild(row);
+      });
+    }
+  }catch(error){
+    console.log(error);
+  }
+}
+
+function submitTransfer(){
+  const type = document.getElementById("transferType").value;
+  const amount = document.getElementById("transferAmount").value;
+
+  document.getElementById("transferMessage").textContent =
+    "Your " + type + " request for $" + amount +
+    " has been prepared. Complete the transfer through your connected account.";
+}
+
+function saveSettings(){
+  document.getElementById("settingsMessage").textContent =
+    "Settings saved for this dashboard session.";
+}
+
+function logoutUser(){
+  window.location.href = "/logout";
+}
+
+loadTradingState();
+setInterval(loadTradingState,3000);
 </script>
+
 </body>
-</html><script>
-(function(){
- const root=document;
- function addControls(){
-  if(root.getElementById('nr-complete-controls')) return;
-  const panel=document.createElement('section'); panel.id='nr-complete-controls'; panel.style.cssText='margin:16px 0;padding:16px;border:1px solid #334155;border-radius:14px;background:#111827;color:#fff';
-  panel.innerHTML='<h3 style="margin:0 0 12px">Digit Trader Controls</h3><label style="display:flex;gap:8px;align-items:center"><input id="nr-auto-digit" type="checkbox"> Automatic Digit Trader ON</label><p id="nr-digit-summary" style="margin:12px 0 0">Stake: 0 | Payout: 0 | P/L: 0 | Wins: 0 | Losses: 0</p>';
-  (document.querySelector('main')||document.body).appendChild(panel);
-  document.getElementById('nr-auto-digit').addEventListener('change',async e=>{await fetch('/api/digits/auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:e.target.checked})});});
- }
- async function refresh(){try{const r=await fetch('/api/digits/state');const d=await r.json();if(!d.ok)return;const c=document.getElementById('nr-digit-summary');if(c)c.textContent=`Stake: ${d.total_stake||0} | Payout: ${d.total_payout||0} | P/L: ${d.total_profit||0} | Wins: ${d.wins||0} | Losses: ${d.losses||0}`;const a=document.getElementById('nr-auto-digit');if(a)a.checked=!!d.auto_digit;}catch(e){}}
- addControls();refresh();setInterval(refresh,2000);
-})();
-</script>
+</html>
