@@ -1194,12 +1194,13 @@ async def connect_account(request: Request):
             status_code=500,
         )
 
-    return {
-        "connected": False,
-        "account_type": account_type,
-        "redirect_url": f"/deriv/connect?mode={account_type}",
-        "message": "Redirecting to Deriv authorization...",
-    }
+    # Send the browser directly into the existing Deriv OAuth route.
+    # Returning JSON here leaves the dashboard stuck on "Redirecting..."
+    # because the frontend does not navigate using redirect_url.
+    return RedirectResponse(
+        url=f"/deriv/connect?mode={account_type}",
+        status_code=303,
+    )
 
 
 # DERIV OAUTH
