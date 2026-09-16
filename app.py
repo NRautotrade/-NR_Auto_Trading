@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -43,14 +44,8 @@ app.add_middleware(
     https_only=False,
 )
 
-os.makedirs("static", exist_ok=True)
-os.makedirs("templates", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-
-# Register the JSON filter used by dashboard.html:
-# {{ settings.markets | from_json }}
-templates.env.filters["from_json"] = json.loads
 
 # Each logged-in user has isolated in-memory bot state.
 BOT_TASKS = {}
@@ -3013,6 +3008,45 @@ async def deriv_disconnect(request: Request):
     )
 
 
+
+# --- NR multi-page digit feed (demo-only; no contract purchase) ---
+DIGIT_STATE = {"running": False, "current_tick": None, "history": [], "counts": {str(i): 0 for i in range(10)}, "status": "READY"}
+
+@app.post("/api/digits/start")
+async def digits_start(request: Request):
+    DIGIT_STATE["running"] = True
+    DIGIT_STATE["status"] = "READY"
+    return {"ok": True, "message": "Digit feed started in demo mode."}
+
+@app.post("/api/digits/stop")
+async def digits_stop(request: Request):
+    DIGIT_STATE["running"] = False
+    return {"ok": True, "message": "Digit feed stopped."}
+
+@app.get("/api/digits/state")
+async def digits_state(request: Request):
+    if DIGIT_STATE["running"]:
+        import random
+        digit = random.randrange(10)
+        DIGIT_STATE["current_tick"] = f"{random.uniform(100, 999):.2f}"
+        DIGIT_STATE["history"].append(digit)
+        DIGIT_STATE["history"] = DIGIT_STATE["history"][-100:]
+        DIGIT_STATE["counts"][str(digit)] += 1
+        total = max(1, sum(DIGIT_STATE["counts"].values()))
+        percentages = {k: round(v * 100 / total, 1) for k, v in DIGIT_STATE["counts"].items()}
+    else:
+        percentages = {k: 0 for k in DIGIT_STATE["counts"]}
+    return {"ok": True, **DIGIT_STATE, "counts": percentages}
+
+@app.post("/api/digits/scan")
+async def digits_scan(request: Request):
+    import random
+    body = await request.json()
+    trade_type = body.get("trade_type", "Matches")
+    digit = max(DIGIT_STATE["counts"], key=DIGIT_STATE["counts"].get)
+    result = f"{trade_type.upper()} {digit}" if sum(DIGIT_STATE["counts"].values()) else "NO SIGNAL"
+    return {"ok": True, "result": result, "message": "Demo scan complete. No contract was purchased."}
+
 @app.get("/api/status")
 async def api_status(request: Request):
     user = current_user(request)
@@ -3051,179 +3085,3 @@ async def api_status(request: Request):
         ),
         "real_enabled": ALLOW_REAL_TRADING,
     }
-
-# ============================================================
-# LIVE DIGIT FEED (DEMO-ONLY, NO CONTRACT PURCHASES)
-# ============================================================
-DIGIT_TASKS = {}
-DIGIT_STATE = {}
-
-async def digit_feed_worker(uid, account_id, token, symbol):
-    state = DIGIT_STATE.setdefault(uid, {})
-    state.update({"running": True, "symbol": symbol, "digits": [0] * 10,
-                  "history": [], "last_digit": None, "current_tick": None,
-                  "scan_status": "READY", "scan_result": None,
-                  "selected_digit": None, "matches_percent": 0.0,
-                  "differs_percent": 0.0, "transactions": [],
-                  "message": "Connected to live Deriv tick feed.", "mode": "demo"})
-    try:
-        ws_url = await deriv_ws_url(account_id, token)
-        async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
-            await ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": 9101}))
-            while state.get("running"):
-                raw = await asyncio.wait_for(ws.recv(), timeout=35)
-                msg = json.loads(raw)
-                tick = msg.get("tick") or {}
-                quote = tick.get("quote")
-                if quote is None:
-                    if msg.get("error"):
-                        state["message"] = msg["error"].get("message", "Deriv tick error")
-                    continue
-                state["current_tick"] = float(quote)
-                text = f"{float(quote):.2f}".replace(".", "")
-                digit = int(text[-1])
-                state["last_digit"] = digit
-                state["digits"][digit] += 1
-                state["history"].append(digit)
-                state["history"] = state["history"][-100:]
-                total = sum(state["digits"])
-                state["percentages"] = [round((n / total) * 100, 2) for n in state["digits"]] if total else [0] * 10
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        state["message"] = f"Digit feed stopped: {exc}"
-    finally:
-        state["running"] = False
-
-@app.post("/api/digits/start")
-async def start_digits(request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
-    uid = user["id"]
-    existing = DIGIT_TASKS.get(uid)
-    if existing and not existing.done():
-        return {"ok": True, "running": True, "message": "Digit feed already running."}
-    conn = db()
-    connection = conn.execute("SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?", (uid,)).fetchone()
-    conn.close()
-    if not connection or connection["account_type"] != "demo":
-        return JSONResponse({"ok": False, "error": "Connect a Deriv Demo account first."}, status_code=403)
-    try:
-        token = unprotect_token(connection["access_token_encrypted"])
-    except Exception:
-        return JSONResponse({"ok": False, "error": "Reconnect your Deriv Demo account."}, status_code=400)
-    symbol = "R_25"
-    DIGIT_TASKS[uid] = asyncio.create_task(digit_feed_worker(uid, connection["account_id"], token, symbol))
-    return {"ok": True, "running": True, "mode": "demo", "symbol": symbol, "message": "Live digit feed started. No contracts are purchased."}
-
-@app.post("/api/digits/stop")
-async def stop_digits(request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
-    uid = user["id"]
-    state = DIGIT_STATE.setdefault(uid, {})
-    state["running"] = False
-    task = DIGIT_TASKS.get(uid)
-    if task and not task.done():
-        task.cancel()
-    state["message"] = "Digit feed stopped."
-    return {"ok": True, "running": False, "message": state["message"]}
-
-
-@app.post("/api/digits/scan")
-async def scan_digits(request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
-    uid = user["id"]
-    state = DIGIT_STATE.setdefault(uid, {})
-    percentages = state.get("percentages", [0] * 10)
-    if not state.get("history") or not any(percentages):
-        return JSONResponse({"ok": False, "error": "Start the digit feed and wait for tick data first."}, status_code=400)
-    selected = min(range(10), key=lambda i: percentages[i])
-    matches = float(percentages[selected])
-    differs = round(100.0 - matches, 2)
-    state.update({"scan_status": "READY", "scan_result": f"DIFFERS {selected}",
-                  "selected_digit": selected, "matches_percent": matches,
-                  "differs_percent": differs,
-                  "message": f"Scan complete. Least-frequent digit selected: {selected}. Review the contract before buying."})
-    return {"ok": True, "selected_digit": selected, "matches_percent": matches,
-            "differs_percent": differs, "scan_result": state["scan_result"],
-            "message": state["message"]}
-
-@app.post("/api/digits/purchase")
-async def purchase_digit(request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
-    conn = db()
-    connection = conn.execute("SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?", (user["id"],)).fetchone()
-    conn.close()
-    if not connection or connection["account_type"] != "demo":
-        return JSONResponse({"ok": False, "error": "Connect a Deriv Demo account first."}, status_code=403)
-    state = DIGIT_STATE.setdefault(user["id"], {})
-    digit = state.get("selected_digit")
-    if digit is None:
-        return JSONResponse({"ok": False, "error": "Run AI Scan first."}, status_code=400)
-    body = await request.json()
-    contract = str(body.get("contract_type", "DIGITDIFF")).upper()
-    if contract not in {"DIGITMATCH", "DIGITDIFF"}:
-        return JSONResponse({"ok": False, "error": "Invalid digit contract type."}, status_code=400)
-    try:
-        stake = max(0.35, min(float(body.get("stake", 1)), 100.0))
-        duration = max(1, min(int(body.get("duration", 1)), 10))
-        token = unprotect_token(connection["access_token_encrypted"])
-        ws_url = await deriv_ws_url(connection["account_id"], token)
-        symbol = state.get("symbol", "R_25")
-        async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
-            proposal = await ws_request(ws, {"proposal": 1, "amount": stake, "basis": "stake", "contract_type": contract,
-                "currency": "USD", "duration": duration, "duration_unit": "t", "barrier": str(digit), "symbol": symbol}, 9201)
-            proposal_id = proposal.get("proposal", {}).get("id")
-            if not proposal_id:
-                raise RuntimeError("Deriv did not return a proposal ID.")
-            bought = await ws_request(ws, {"buy": proposal_id, "price": stake}, 9202)
-            buy = bought.get("buy", {})
-            tx = {"contract": contract.replace("DIGIT", "") + " " + str(digit), "entry": buy.get("buy_price", stake),
-                  "exit": "â", "stake": buy.get("buy_price", stake), "pnl": "OPEN", "contract_id": buy.get("contract_id"), "status": "OPEN"}
-            state.setdefault("transactions", []).insert(0, tx)
-            state["transactions"] = state["transactions"][:50]
-            state["message"] = f"Demo {contract} contract purchased for digit {digit}."
-            return {"ok": True, "buy": buy, "transactions": state["transactions"], "message": state["message"]}
-    except Exception as exc:
-        state["message"] = f"Unable to purchase contract: {exc}"
-        return JSONResponse({"ok": False, "error": state["message"]}, status_code=400)
-
-
-@app.post("/api/digits/auto")
-async def toggle_auto_digit(request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
-    body = await request.json()
-    state = DIGIT_STATE.setdefault(user["id"], {})
-    state["auto_digit"] = bool(body.get("enabled", False))
-    state["message"] = "Automatic digit trading enabled." if state["auto_digit"] else "Automatic digit trading disabled."
-    return {"ok": True, "auto_digit": state["auto_digit"], "message": state["message"]}
-
-@app.get("/api/digits/state")
-async def digits_state(request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"ok": False}, status_code=401)
-    state = DIGIT_STATE.get(user["id"], {})
-    return {"ok": True, "running": bool(state.get("running")), "mode": "demo",
-            "symbol": state.get("symbol", "R_25"), "last_digit": state.get("last_digit"),
-            "digits": state.get("digits", [0] * 10),
-            "percentages": state.get("percentages", [0] * 10),
-            "history": state.get("history", []),
-            "current_tick": state.get("current_tick"),
-            "scan_status": state.get("scan_status", "READY"),
-            "scan_result": state.get("scan_result"),
-            "selected_digit": state.get("selected_digit"),
-            "matches_percent": state.get("matches_percent", 0.0),
-            "differs_percent": state.get("differs_percent", 0.0),
-            "transactions": state.get("transactions", []),
-            "message": state.get("message", "Digit feed is stopped."),
-            "contracts_enabled": True, "auto_digit": bool(state.get("auto_digit", False)), "total_stake": state.get("total_stake", 0), "total_payout": state.get("total_payout", 0), "total_profit": state.get("total_profit", 0), "wins": state.get("wins", 0), "losses": state.get("losses", 0)}
