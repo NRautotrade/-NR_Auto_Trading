@@ -1139,96 +1139,64 @@ async def update_settings(request: Request):
 
 
 # ============================================================
-@app.post("/api/account/connect")
-async def connect_account(request: Request):
-    user = current_user(request)
-
-    if not user:
-        return JSONResponse(
-            {
-                "connected": False,
-                "error": "Your session has expired. Please log in again.",
-            },
-            status_code=401,
-        )
-
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-
-    account_type = str(
-        body.get("account_type", body.get("account_mode", "demo"))
-    ).strip().lower()
-
-    if account_type not in {"demo", "real"}:
-        account_type = "demo"
-
-    if account_type == "real" and not ALLOW_REAL_TRADING:
-        return JSONResponse(
-            {
-                "connected": False,
-                "error": "Real trading is disabled. Connect the Demo account first.",
-            },
-            status_code=403,
-        )
-
-    if not DERIV_CLIENT_ID:
-        return JSONResponse(
-            {
-                "connected": False,
-                "error": "DERIV_CLIENT_ID is missing from Render.",
-            },
-            status_code=500,
-        )
-
-    return RedirectResponse(
-        url=f"/deriv/connect?mode={account_type}",
-        status_code=303,
-    )
-
-
-
 # DERIV OAUTH
 # ============================================================
 
-@app.get("/deriv/connect")
-async def deriv_connect(
-    request: Request,
-    mode: str = "demo",
-):
-    user = current_user(request)
+def render_deriv_result(request: Request, message: str, status_code: int = 400):
+    return templates.TemplateResponse(
+        "result.html",
+        {
+            "request": request,
+            "title": APP_NAME,
+            "message": message,
+        },
+        status_code=status_code,
+    )
 
+
+def deriv_account_type(account: dict) -> str:
+    account_id = str(account.get("id") or account.get("account_id") or "").upper()
+
+    if account.get("is_virtual") is True:
+        return "demo"
+
+    account_type = str(account.get("account_type") or "").lower().strip()
+    if account_type in {"demo", "virtual"}:
+        return "demo"
+    if account_type in {"real", "live"}:
+        return "real"
+    if account_id.startswith("VRTC"):
+        return "demo"
+
+    landing_company = str(
+        account.get("landing_company_name") or account.get("landing_company") or ""
+    ).lower()
+    if "virtual" in landing_company:
+        return "demo"
+
+    return "real"
+
+
+@app.get("/deriv/connect")
+async def deriv_connect(request: Request, mode: str = "demo"):
+    user = current_user(request)
     if not user:
         return RedirectResponse("/", status_code=303)
 
     if not DERIV_CLIENT_ID:
-        return RedirectResponse(
-            "/dashboard?oauth_error=client",
-            status_code=303,
-        )
+        return RedirectResponse("/dashboard?oauth_error=client", status_code=303)
 
+    mode = str(mode or "demo").lower().strip()
     if mode not in {"demo", "real"}:
         mode = "demo"
 
     if mode == "real" and not ALLOW_REAL_TRADING:
-        return RedirectResponse(
-            "/dashboard?oauth_error=real_locked",
-            status_code=303,
-        )
+        return RedirectResponse("/dashboard?oauth_error=real_locked", status_code=303)
 
     verifier = secrets.token_urlsafe(64)
-
-    challenge = (
-        base64.urlsafe_b64encode(
-            hashlib.sha256(
-                verifier.encode()
-            ).digest()
-        )
-        .rstrip(b"=")
-        .decode()
-    )
-
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()
+    ).rstrip(b"=").decode()
     state = secrets.token_urlsafe(32)
 
     request.session["oauth_verifier"] = verifier
@@ -1249,8 +1217,7 @@ async def deriv_connect(
         params["prompt"] = "registration"
 
     return RedirectResponse(
-        "https://auth.deriv.com/oauth2/auth?"
-        + urlencode(params),
+        "https://auth.deriv.com/oauth2/auth?" + urlencode(params),
         status_code=303,
     )
 
@@ -1263,230 +1230,128 @@ async def deriv_callback(
     error: str | None = None,
 ):
     user = current_user(request)
-
     if not user:
         return RedirectResponse("/", status_code=303)
 
     if error:
-        return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": (
-                    "Deriv authorization was not completed: "
-                    f"{error}"
-                ),
-            },
+        return render_deriv_result(
+            request,
+            f"Deriv authorization was not completed: {error}",
         )
 
-    saved_state = request.session.pop(
-        "oauth_state",
-        None,
-    )
+    saved_state = request.session.pop("oauth_state", None)
+    verifier = request.session.pop("oauth_verifier", None)
+    mode = request.session.pop("oauth_mode", "demo")
 
-    if (
-        not code
-        or not state
-        or state != saved_state
-    ):
-        return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": (
-                    "OAuth security check failed. "
-                    "Please start again."
-                ),
-            },
-            status_code=400,
-        )
-
-    verifier = request.session.pop(
-        "oauth_verifier",
-        None,
-    )
-
+    if not code:
+        return render_deriv_result(request, "Deriv did not return an authorization code.")
+    if not state or state != saved_state:
+        return render_deriv_result(request, "OAuth security check failed. Please start again.")
     if not verifier:
-        return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": (
-                    "OAuth session expired. "
-                    "Please start again."
-                ),
-            },
-            status_code=400,
-        )
+        return render_deriv_result(request, "OAuth session expired. Please start again.")
 
-    async with httpx.AsyncClient(timeout=20) as client:
-        token_resp = await client.post(
-            "https://auth.deriv.com/oauth2/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": DERIV_CLIENT_ID,
-                "code": code,
-                "code_verifier": verifier,
-                "redirect_uri": DERIV_REDIRECT_URI,
-            },
-        )
-
-    if token_resp.status_code >= 400:
-        return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": (
-                    "Deriv token exchange failed. "
-                    "Check the registered redirect URI and App ID."
-                ),
-            },
-            status_code=400,
-        )
-
-    token = token_resp.json().get(
-        "access_token"
-    )
-
-    if not token:
-        return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": (
-                    "Deriv did not return an access token."
-                ),
-            },
-            status_code=400,
-        )
-
-    async with httpx.AsyncClient(timeout=20) as client:
-        acct_resp = await client.get(
-            "https://api.derivws.com/trading/v1/options/accounts",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Deriv-App-ID": DERIV_CLIENT_ID,
-            },
-        )
-
-    if acct_resp.status_code >= 400:
-        return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": (
-                    "Could not retrieve the Deriv accounts "
-                    "for this authorization."
-                ),
-            },
-            status_code=400,
-        )
-
-    data = acct_resp.json().get(
-        "data",
-        [],
-    )
-
-    mode = request.session.pop(
-        "oauth_mode",
-        "demo",
-    )
-
-    wanted = [
-        account
-        for account in data
-        if str(
-            account.get(
-                "account_type",
-                "",
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            token_resp = await client.post(
+                "https://auth.deriv.com/oauth2/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": DERIV_CLIENT_ID,
+                    "code": code,
+                    "code_verifier": verifier,
+                    "redirect_uri": DERIV_REDIRECT_URI,
+                },
             )
-        ).lower() == mode
-    ]
 
-    if not wanted:
-        label = (
-            "real"
-            if mode == "real"
-            else "demo"
+        if token_resp.status_code >= 400:
+            return render_deriv_result(
+                request,
+                "Deriv token exchange failed. Check the Deriv App ID and exact redirect URI.",
+            )
+
+        token = token_resp.json().get("access_token")
+        if not token:
+            return render_deriv_result(request, "Deriv did not return an access token.")
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            account_resp = await client.get(
+                "https://api.derivws.com/trading/v1/options/accounts",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Deriv-App-ID": DERIV_CLIENT_ID,
+                    "Accept": "application/json",
+                },
+            )
+
+        if account_resp.status_code >= 400:
+            return render_deriv_result(
+                request,
+                "Deriv authorization succeeded, but the account list could not be retrieved.",
+            )
+
+        payload = account_resp.json()
+        accounts = payload.get("data", [])
+        if isinstance(accounts, dict):
+            accounts = accounts.get("accounts") or accounts.get("items") or []
+        if not isinstance(accounts, list):
+            accounts = []
+
+        normalized_mode = "real" if mode == "real" else "demo"
+        matching_accounts = [
+            account for account in accounts
+            if isinstance(account, dict)
+            and (account.get("id") or account.get("account_id"))
+            and deriv_account_type(account) == normalized_mode
+        ]
+
+        if not matching_accounts:
+            available = []
+            for account in accounts:
+                if isinstance(account, dict):
+                    account_id = account.get("id") or account.get("account_id")
+                    if account_id:
+                        available.append(f"{account_id} ({deriv_account_type(account)})")
+            return render_deriv_result(
+                request,
+                f"No {normalized_mode} Deriv account was found. Accounts returned: {', '.join(available) or 'none'}",
+            )
+
+        selected = matching_accounts[0]
+        account_id = selected.get("id") or selected.get("account_id")
+
+        conn = db()
+        conn.execute(
+            """
+            INSERT INTO deriv_connections
+                (user_id, account_id, account_type, access_token_encrypted, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET
+                account_id=excluded.account_id,
+                account_type=excluded.account_type,
+                access_token_encrypted=excluded.access_token_encrypted,
+                updated_at=CURRENT_TIMESTAMP
+            """,
+            (user["id"], str(account_id), normalized_mode, protect_token(token)),
         )
+        conn.commit()
+        conn.close()
 
-        return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": (
-                    f"No {label} Deriv trading account "
-                    "was returned for this authorization."
-                ),
-            },
-            status_code=400,
+        request.session["deriv_connected"] = True
+        request.session["deriv_account_id"] = str(account_id)
+        request.session["deriv_account_type"] = normalized_mode
+
+        return RedirectResponse("/dashboard?connected=1", status_code=303)
+
+    except httpx.RequestError:
+        return render_deriv_result(
+            request,
+            "Could not reach Deriv. Check the Render service network and try again.",
         )
-
-    account = wanted[0]
-
-    account_id = (
-        account.get("id")
-        or account.get("account_id")
-    )
-
-    if not account_id:
-        return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "message": (
-                    "Deriv returned an account without "
-                    "a usable account ID."
-                ),
-            },
-            status_code=400,
+    except Exception as exc:
+        return render_deriv_result(
+            request,
+            f"Deriv connection failed: {type(exc).__name__}: {exc}",
         )
-
-    encrypted = protect_token(token)
-
-    conn = db()
-
-    conn.execute(
-        """
-        INSERT INTO deriv_connections
-        (
-            user_id,
-            account_id,
-            account_type,
-            access_token_encrypted
-        )
-        VALUES (?, ?, ?, ?)
-
-        ON CONFLICT(user_id) DO UPDATE SET
-            account_id=excluded.account_id,
-            account_type=excluded.account_type,
-            access_token_encrypted=excluded.access_token_encrypted,
-            updated_at=CURRENT_TIMESTAMP
-        """,
-        (
-            user["id"],
-            account_id,
-            mode,
-            encrypted,
-        ),
-    )
-
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(
-        "/dashboard?connected=1",
-        status_code=303,
-    )
-
 
 # ============================================================
 # DERIV WEBSOCKET
