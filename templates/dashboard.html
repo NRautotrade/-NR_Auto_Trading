@@ -907,20 +907,15 @@ function accountModeChanged(){
     "Account changed. Connect the selected account before trading.";
 }
 
-async function connectAccount(){
-  const mode = document.getElementById("accountType").value;
-  const message = document.getElementById("accountMessage");
-
-  if(mode === "real"){
-    const confirmed = confirm(
-      "You selected REAL ACCOUNT. Real-money trading can cause financial loss. Continue?"
-    );
-
-    if(!confirmed){
-      message.textContent = "Real account connection cancelled.";
-      return;
+async function connectDerivAccount(accountType = "demo") {
+    try {
+        window.location.href =
+            `/deriv/connect?mode=${encodeURIComponent(accountType)}`;
+    } catch (error) {
+        console.error("Deriv connection error:", error);
+        alert("Connection failed. Please try again.");
     }
-  }
+}
 
   message.textContent = "Connecting to " + mode + " account...";
 
