@@ -1,5 +1,3 @@
-import os
-from fastapi import Request, HTTPException
 import smtplib
 from email.message import EmailMessage
 import os
@@ -1143,44 +1141,65 @@ async def update_settings(request: Request):
 # ============================================================
 @app.post("/api/account/connect")
 async def connect_account(request: Request):
+    """Start the real Deriv OAuth connection flow.
+
+    The dashboard must not require DERIV_DEMO_TOKEN or DERIV_REAL_TOKEN.
+    Those are not needed for OAuth; Deriv returns the account token after
+    the user authorizes the application.
+    """
+    user = current_user(request)
+
+    if not user:
+        return JSONResponse(
+            {
+                "connected": False,
+                "error": "Your session has expired. Please log in again.",
+            },
+            status_code=401,
+        )
+
     try:
         body = await request.json()
-        account_type = str(body.get("account_type", "demo")).lower()
+    except Exception:
+        body = {}
 
-        if account_type not in ["demo", "real"]:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid account type. Choose demo or real."
-            )
+    account_type = str(
+        body.get("account_type", body.get("account_mode", "demo"))
+    ).strip().lower()
 
-        token = (
-            os.getenv("DERIV_DEMO_TOKEN")
-            if account_type == "demo"
-            else os.getenv("DERIV_REAL_TOKEN")
+    if account_type not in {"demo", "real"}:
+        return JSONResponse(
+            {
+                "connected": False,
+                "error": "Invalid account type. Choose demo or real.",
+            },
+            status_code=400,
         )
 
-        if not token:
-            raise HTTPException(
-                status_code=500,
-                detail=f"{account_type.upper()} token is missing from the environment."
-            )
+    if account_type == "real" and not ALLOW_REAL_TRADING:
+        return JSONResponse(
+            {
+                "connected": False,
+                "error": "Real trading is disabled. Connect the Demo account first.",
+            },
+            status_code=403,
+        )
 
-        return {
-            "connected": False,
-            "account_type": account_type,
-            "message": (
-                f"{account_type.upper()} token was found. "
-                "The Deriv authorization connection still needs to be implemented."
-            )
-        }
-
-    except HTTPException:
-        raise
-    except Exception as error:
-        raise HTTPException(
+    if not DERIV_CLIENT_ID:
+        return JSONResponse(
+            {
+                "connected": False,
+                "error": "DERIV_CLIENT_ID is missing from the environment.",
+            },
             status_code=500,
-            detail=f"Connection error: {error}"
         )
+
+    return {
+        "connected": False,
+        "account_type": account_type,
+        "redirect_url": f"/deriv/connect?mode={account_type}",
+        "message": "Redirecting to Deriv authorization...",
+    }
 
 
 # DERIV OAUTH
