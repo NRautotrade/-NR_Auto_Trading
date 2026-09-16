@@ -1,3 +1,5 @@
+import os
+from fastapi import Request, HTTPException
 import smtplib
 from email.message import EmailMessage
 import os
@@ -45,6 +47,10 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# Register the JSON filter used by dashboard.html:
+# {{ settings.markets | from_json }}
+templates.env.filters["from_json"] = json.loads
 
 # Each logged-in user has isolated in-memory bot state.
 BOT_TASKS = {}
@@ -129,26 +135,13 @@ def init_db():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS deriv_connections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
+            user_id INTEGER UNIQUE NOT NULL,
             account_id TEXT,
             account_type TEXT,
             access_token_encrypted TEXT,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
-    """)
-
-    # Allow one separate Deriv connection for demo and one for real.
-    indexes = conn.execute("PRAGMA index_list(deriv_connections)").fetchall()
-    for idx in indexes:
-        if idx[2]:
-            name = idx[1]
-            cols = [r[2] for r in conn.execute(f"PRAGMA index_info({name})").fetchall()]
-            if cols == ["user_id"]:
-                conn.execute(f"DROP INDEX IF EXISTS {name}")
-    conn.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_deriv_user_account_type
-        ON deriv_connections(user_id, account_type)
     """)
 
     conn.execute("""
@@ -1148,6 +1141,48 @@ async def update_settings(request: Request):
 
 
 # ============================================================
+@app.post("/api/account/connect")
+async def connect_account(request: Request):
+    try:
+        body = await request.json()
+        account_type = str(body.get("account_type", "demo")).lower()
+
+        if account_type not in ["demo", "real"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid account type. Choose demo or real."
+            )
+
+        token = (
+            os.getenv("DERIV_DEMO_TOKEN")
+            if account_type == "demo"
+            else os.getenv("DERIV_REAL_TOKEN")
+        )
+
+        if not token:
+            raise HTTPException(
+                status_code=500,
+                detail=f"{account_type.upper()} token is missing from the environment."
+            )
+
+        return {
+            "connected": False,
+            "account_type": account_type,
+            "message": (
+                f"{account_type.upper()} token was found. "
+                "The Deriv authorization connection still needs to be implemented."
+            )
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Connection error: {error}"
+        )
+
+
 # DERIV OAUTH
 # ============================================================
 
@@ -1416,14 +1451,26 @@ async def deriv_callback(
     conn.execute(
         """
         INSERT INTO deriv_connections
-        (user_id, account_id, account_type, access_token_encrypted)
+        (
+            user_id,
+            account_id,
+            account_type,
+            access_token_encrypted
+        )
         VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, account_type) DO UPDATE SET
+
+        ON CONFLICT(user_id) DO UPDATE SET
             account_id=excluded.account_id,
+            account_type=excluded.account_type,
             access_token_encrypted=excluded.access_token_encrypted,
             updated_at=CURRENT_TIMESTAMP
         """,
-        (user["id"], account_id, mode, encrypted),
+        (
+            user["id"],
+            account_id,
+            mode,
+            encrypted,
+        ),
     )
 
     conn.commit()
@@ -2467,12 +2514,6 @@ async def start_trading(request: Request):
         )
 
     uid = user["id"]
-    body = await request.json()
-    selected_mode = str(body.get("account_mode", "demo")).lower()
-    if selected_mode not in {"demo", "real"}:
-        selected_mode = "demo"
-    if selected_mode == "real" and not ALLOW_REAL_TRADING:
-        return JSONResponse({"ok": False, "error": "Real trading is disabled. Set ALLOW_REAL_TRADING=true after testing demo mode."}, status_code=403)
 
     existing = BOT_TASKS.get(uid)
 
@@ -2493,9 +2534,9 @@ async def start_trading(request: Request):
             account_type,
             access_token_encrypted
         FROM deriv_connections
-        WHERE user_id=? AND account_type=?
+        WHERE user_id=?
         """,
-        (uid, selected_mode),
+        (uid,),
     ).fetchone()
 
     settings = conn.execute(
@@ -3014,78 +3055,130 @@ async def deriv_disconnect(request: Request):
     )
 
 
-
-# --- NR multi-page digit feed (demo-only; no contract purchase) ---
-DIGIT_STATE = {"running": False, "current_tick": None, "history": [], "counts": {str(i): 0 for i in range(10)}, "status": "READY"}
-
-@app.post("/api/digits/start")
-async def digits_start(request: Request):
-    DIGIT_STATE["running"] = True
-    DIGIT_STATE["status"] = "READY"
-    return {"ok": True, "message": "Digit feed started in demo mode."}
-
-@app.post("/api/digits/stop")
-async def digits_stop(request: Request):
-    DIGIT_STATE["running"] = False
-    return {"ok": True, "message": "Digit feed stopped."}
-
-@app.get("/api/digits/state")
-async def digits_state(request: Request):
-    if DIGIT_STATE["running"]:
-        import random
-        digit = random.randrange(10)
-        DIGIT_STATE["current_tick"] = f"{random.uniform(100, 999):.2f}"
-        DIGIT_STATE["history"].append(digit)
-        DIGIT_STATE["history"] = DIGIT_STATE["history"][-100:]
-        DIGIT_STATE["counts"][str(digit)] += 1
-        total = max(1, sum(DIGIT_STATE["counts"].values()))
-        percentages = {k: round(v * 100 / total, 1) for k, v in DIGIT_STATE["counts"].items()}
-    else:
-        percentages = {k: 0 for k in DIGIT_STATE["counts"]}
-    return {"ok": True, **DIGIT_STATE, "counts": percentages}
-
-@app.post("/api/digits/scan")
-async def digits_scan(request: Request):
-    import random
-    body = await request.json()
-    trade_type = body.get("trade_type", "Matches")
-    digit = max(DIGIT_STATE["counts"], key=DIGIT_STATE["counts"].get)
-    result = f"{trade_type.upper()} {digit}" if sum(DIGIT_STATE["counts"].values()) else "NO SIGNAL"
-    return {"ok": True, "result": result, "message": "Demo scan complete. No contract was purchased."}
-
 @app.get("/api/status")
 async def api_status(request: Request):
     user = current_user(request)
+
     if not user:
-        return JSONResponse({"ok": False}, status_code=401)
+        return JSONResponse(
+            {"ok": False},
+            status_code=401,
+        )
 
     conn = db()
-    rows = conn.execute(
-        "SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?",
+
+    row = conn.execute(
+        """
+        SELECT account_id, account_type
+        FROM deriv_connections
+        WHERE user_id=?
+        """,
         (user["id"],),
-    ).fetchall()
+    ).fetchone()
+
     conn.close()
 
-    accounts = {}
-    for row in rows:
-        item = {"connected": True, "account_id": row["account_id"], "account_type": row["account_type"], "balance": None, "currency": None}
-        try:
-            token = unprotect_token(row["access_token_encrypted"])
-            balance, currency = await fetch_live_balance(row["account_id"], token)
-            item["balance"] = balance
-            item["currency"] = currency
-        except Exception as exc:
-            item["error"] = str(exc)
-        accounts[row["account_type"]] = item
-
-    active = accounts.get("demo") or accounts.get("real") or {"connected": False}
     return {
         "ok": True,
-        "connected": bool(accounts),
-        "account_id": active.get("account_id"),
-        "account_type": active.get("account_type"),
-        "balance": active.get("balance"),
-        "currency": active.get("currency"),
-        "accounts": accounts,
-        "allow_real": ALLOW_REAL_TRADING,
+        "connected": bool(row),
+        "account_id": (
+            row["account_id"]
+            if row
+            else None
+        ),
+        "account_type": (
+            row["account_type"]
+            if row
+            else None
+        ),
+        "real_enabled": ALLOW_REAL_TRADING,
     }
+
+# ============================================================
+# LIVE DIGIT FEED (DEMO-ONLY, NO CONTRACT PURCHASES)
+# ============================================================
+DIGIT_TASKS = {}
+DIGIT_STATE = {}
+
+async def digit_feed_worker(uid, account_id, token, symbol):
+    state = DIGIT_STATE.setdefault(uid, {})
+    state.update({"running": True, "symbol": symbol, "digits": [0] * 10,
+                  "history": [], "last_digit": None,
+                  "message": "Connected to live Deriv tick feed.", "mode": "demo"})
+    try:
+        ws_url = await deriv_ws_url(account_id, token)
+        async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
+            await ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": 9101}))
+            while state.get("running"):
+                raw = await asyncio.wait_for(ws.recv(), timeout=35)
+                msg = json.loads(raw)
+                tick = msg.get("tick") or {}
+                quote = tick.get("quote")
+                if quote is None:
+                    if msg.get("error"):
+                        state["message"] = msg["error"].get("message", "Deriv tick error")
+                    continue
+                text = f"{float(quote):.2f}".replace(".", "")
+                digit = int(text[-1])
+                state["last_digit"] = digit
+                state["digits"][digit] += 1
+                state["history"].append(digit)
+                state["history"] = state["history"][-100:]
+                total = sum(state["digits"])
+                state["percentages"] = [round((n / total) * 100, 2) for n in state["digits"]] if total else [0] * 10
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        state["message"] = f"Digit feed stopped: {exc}"
+    finally:
+        state["running"] = False
+
+@app.post("/api/digits/start")
+async def start_digits(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    existing = DIGIT_TASKS.get(uid)
+    if existing and not existing.done():
+        return {"ok": True, "running": True, "message": "Digit feed already running."}
+    conn = db()
+    connection = conn.execute("SELECT account_id, account_type, access_token_encrypted FROM deriv_connections WHERE user_id=?", (uid,)).fetchone()
+    conn.close()
+    if not connection or connection["account_type"] != "demo":
+        return JSONResponse({"ok": False, "error": "Connect a Deriv Demo account first."}, status_code=403)
+    try:
+        token = unprotect_token(connection["access_token_encrypted"])
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Reconnect your Deriv Demo account."}, status_code=400)
+    symbol = "R_25"
+    DIGIT_TASKS[uid] = asyncio.create_task(digit_feed_worker(uid, connection["account_id"], token, symbol))
+    return {"ok": True, "running": True, "mode": "demo", "symbol": symbol, "message": "Live digit feed started. No contracts are purchased."}
+
+@app.post("/api/digits/stop")
+async def stop_digits(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    state = DIGIT_STATE.setdefault(uid, {})
+    state["running"] = False
+    task = DIGIT_TASKS.get(uid)
+    if task and not task.done():
+        task.cancel()
+    state["message"] = "Digit feed stopped."
+    return {"ok": True, "running": False, "message": state["message"]}
+
+@app.get("/api/digits/state")
+async def digits_state(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False}, status_code=401)
+    state = DIGIT_STATE.get(user["id"], {})
+    return {"ok": True, "running": bool(state.get("running")), "mode": "demo",
+            "symbol": state.get("symbol", "R_25"), "last_digit": state.get("last_digit"),
+            "digits": state.get("digits", [0] * 10),
+            "percentages": state.get("percentages", [0] * 10),
+            "history": state.get("history", []),
+            "message": state.get("message", "Digit feed is stopped."),
+            "contracts_enabled": False}
