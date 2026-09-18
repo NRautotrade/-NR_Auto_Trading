@@ -1157,15 +1157,26 @@ async def update_settings(request: Request):
 # ============================================================
 
 def render_deriv_result(request: Request, message: str, status_code: int = 400):
-    return templates.TemplateResponse(
-        "result.html",
-        {
-            "request": request,
-            "title": APP_NAME,
-            "message": message,
-        },
-        status_code=status_code,
-    )
+    # Render the OAuth failure directly instead of using result.html.
+    # This prevents the dashboard from hiding the real Deriv error behind
+    # a generic "Connection failed" message. Never include tokens/codes here.
+    safe = (str(message)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;"))
+    html = f"""<!doctype html>
+<html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
+<title>{APP_NAME} â Deriv Connection</title>
+<style>body{{margin:0;background:#071321;color:#edf3fb;font-family:Arial,sans-serif;padding:24px}}
+.card{{max-width:760px;margin:40px auto;background:#0d1a2d;border:1px solid #263a56;border-radius:14px;padding:28px}}
+h1{{font-size:24px;margin-top:0}}.error{{background:#21171b;border:1px solid #664949;border-radius:10px;padding:18px;line-height:1.55;white-space:pre-wrap;word-break:break-word}}
+a{{display:inline-block;margin-top:20px;padding:13px 20px;border-radius:9px;background:#16883f;color:white;text-decoration:none;font-weight:700}}
+small{{color:#91a4c0}}</style></head>
+<body><div class=\"card\"><h1>Deriv connection diagnostic</h1>
+<div class=\"error\">{safe}</div>
+<small>HTTP {status_code} â¢ No access token or authorization code is displayed here.</small><br>
+<a href=\"/dashboard\">Return to dashboard</a></div></body></html>"""
+    return HTMLResponse(content=html, status_code=status_code)
 
 
 def deriv_account_id(account: dict) -> str:
