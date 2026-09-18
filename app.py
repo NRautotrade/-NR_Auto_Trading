@@ -1157,26 +1157,37 @@ async def update_settings(request: Request):
 # ============================================================
 
 def render_deriv_result(request: Request, message: str, status_code: int = 400):
-    # Render the OAuth failure directly instead of using result.html.
-    # This prevents the dashboard from hiding the real Deriv error behind
-    # a generic "Connection failed" message. Never include tokens/codes here.
-    safe = (str(message)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;"))
-    html = f"""<!doctype html>
-<html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
-<title>{APP_NAME} â Deriv Connection</title>
-<style>body{{margin:0;background:#071321;color:#edf3fb;font-family:Arial,sans-serif;padding:24px}}
-.card{{max-width:760px;margin:40px auto;background:#0d1a2d;border:1px solid #263a56;border-radius:14px;padding:28px}}
-h1{{font-size:24px;margin-top:0}}.error{{background:#21171b;border:1px solid #664949;border-radius:10px;padding:18px;line-height:1.55;white-space:pre-wrap;word-break:break-word}}
-a{{display:inline-block;margin-top:20px;padding:13px 20px;border-radius:9px;background:#16883f;color:white;text-decoration:none;font-weight:700}}
-small{{color:#91a4c0}}</style></head>
-<body><div class=\"card\"><h1>Deriv connection diagnostic</h1>
+    # Do not route OAuth errors through result.html because that template can
+    # hide the real Deriv error behind a generic message such as
+    # "Connection failed". Show the sanitized server-side error directly.
+    safe = (str(message) or "Unknown Deriv connection error").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
+<title>{APP_NAME} â Deriv connection</title>
+<style>
+body{{font-family:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;background:#0b1220;color:#e5e7eb;margin:0;padding:32px}}
+.card{{max-width:760px;margin:40px auto;background:#111827;border:1px solid #374151;border-radius:16px;padding:28px;box-shadow:0 10px 30px rgba(0,0,0,.25)}}
+h1{{margin:0 0 18px;font-size:24px}}
+.error{{white-space:pre-wrap;word-break:break-word;background:#1f2937;border:1px solid #4b5563;border-radius:10px;padding:16px;line-height:1.5;color:#fca5a5}}
+.small{{margin-top:14px;color:#9ca3af;font-size:13px}}
+a{{display:inline-block;margin-top:18px;color:#93c5fd;text-decoration:none}}
+</style>
+</head>
+<body>
+<div class=\"card\">
+<h1>NR AUTO TRADING â Deriv connection</h1>
 <div class=\"error\">{safe}</div>
-<small>HTTP {status_code} â¢ No access token or authorization code is displayed here.</small><br>
-<a href=\"/dashboard\">Return to dashboard</a></div></body></html>"""
-    return HTMLResponse(content=html, status_code=status_code)
+<div class=\"small\">HTTP {status_code}. No access token or authorization code is displayed here.</div>
+<a href=\"/dashboard\">â Back to dashboard</a>
+</div>
+</body>
+</html>""",
+        status_code=status_code,
+    )
 
 
 def deriv_account_id(account: dict) -> str:
@@ -1309,11 +1320,9 @@ async def deriv_callback(
         return RedirectResponse("/", status_code=303)
 
     if error:
-        error_description = request.query_params.get("error_description") or ""
-        detail = f" â {error_description}" if error_description else ""
         return render_deriv_result(
             request,
-            f"Deriv authorization was not completed: {error}{detail}",
+            f"Deriv authorization was not completed: {error}",
         )
 
     saved_state = request.session.pop("oauth_state", None)
@@ -1347,13 +1356,15 @@ async def deriv_callback(
                     "code_verifier": verifier,
                     "redirect_uri": DERIV_REDIRECT_URI,
                 },
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
+                headers={"Accept": "application/json"},
             )
 
         if token_resp.status_code >= 400:
+            print(
+                f"[DERIV OAUTH] token exchange failed: HTTP {token_resp.status_code}: "
+                f"{token_resp.text[:700]}",
+                flush=True,
+            )
             return render_deriv_result(
                 request,
                 "Deriv token exchange failed. "
@@ -1378,6 +1389,11 @@ async def deriv_callback(
             )
 
         if account_resp.status_code >= 400:
+            print(
+                f"[DERIV OAUTH] account request failed: HTTP {account_resp.status_code}: "
+                f"{account_resp.text[:700]}",
+                flush=True,
+            )
             return render_deriv_result(
                 request,
                 "Deriv authorization succeeded, but the account list "
@@ -1502,7 +1518,6 @@ async def deriv_ws_url(
             ),
             headers={
                 "Authorization": f"Bearer {token}",
-                "Deriv-App-ID": DERIV_CLIENT_ID,
             },
         )
 
