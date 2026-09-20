@@ -187,8 +187,8 @@ a{text-decoration:none;color:inherit}
         <div class="card-title">RISK & PROTECTION</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Reward / Risk</label><input class="input" name="reward_risk" value="{{ settings.reward_risk if settings else 2 }}"></div>
-          <div class="form-group"><label class="form-label">Daily Target ($)</label><input class="input" name="daily_target" value="{{ settings.daily_target if settings else 200 }}"></div>
-          <div class="form-group"><label class="form-label">Max Daily Profit ($)</label><input class="input" name="max_daily_profit" value="{{ settings.max_daily_profit if settings else 200 }}"></div>
+          <div class="form-group"><label class="form-label">Daily Target ($)</label><input class="input" name="daily_target" value="{{ settings.daily_target if settings else 500 }}"></div>
+          <div class="form-group"><label class="form-label">Max Daily Profit ($)</label><input class="input" name="max_daily_profit" value="{{ settings.max_daily_profit if settings else 1200 }}"></div>
           <div class="form-group"><label class="form-label">Max Daily Loss ($)</label><input class="input" name="max_daily_loss" value="{{ settings.max_daily_loss if settings else 50 }}"></div>
           <div class="form-group"><label class="form-label">Protect at TP (%)</label><input class="input" name="protect_tp" value="{{ settings.protect_tp if settings else 50 }}"></div>
           <div class="form-group"><label class="form-label">Lock Profit (R)</label><input class="input" name="lock_profit_r" value="{{ settings.lock_profit_r if settings else 1 }}"></div>
