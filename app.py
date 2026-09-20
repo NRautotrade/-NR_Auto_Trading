@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -163,8 +164,8 @@ def init_db():
             strategies TEXT NOT NULL DEFAULT '["ABC Pattern"]',
             risk_trade REAL NOT NULL DEFAULT 50,
             reward_risk REAL NOT NULL DEFAULT 2,
-            daily_target REAL NOT NULL DEFAULT 200,
-            max_daily_profit REAL NOT NULL DEFAULT 200,
+            daily_target REAL NOT NULL DEFAULT 500,
+            max_daily_profit REAL NOT NULL DEFAULT 1200,
             max_daily_loss REAL NOT NULL DEFAULT 50,
             protect_tp REAL NOT NULL DEFAULT 50,
             lock_profit_r REAL NOT NULL DEFAULT 1,
@@ -205,13 +206,18 @@ def init_db():
 
     if "daily_target" not in settings_columns:
         conn.execute(
-            "ALTER TABLE settings ADD COLUMN daily_target REAL NOT NULL DEFAULT 200"
+            "ALTER TABLE settings ADD COLUMN daily_target REAL NOT NULL DEFAULT 500"
         )
 
     if "max_daily_profit" not in settings_columns:
         conn.execute(
-            "ALTER TABLE settings ADD COLUMN max_daily_profit REAL NOT NULL DEFAULT 200"
+            "ALTER TABLE settings ADD COLUMN max_daily_profit REAL NOT NULL DEFAULT 1200"
         )
+
+    # Upgrade legacy untouched defaults to the new online-bot defaults.
+    # Preserve any custom values the user has already saved.
+    conn.execute("UPDATE settings SET daily_target=500 WHERE daily_target=200")
+    conn.execute("UPDATE settings SET max_daily_profit=1200 WHERE max_daily_profit=200")
 
     if "max_daily_loss" not in settings_columns:
         conn.execute(
@@ -517,8 +523,8 @@ def save_settings(user_id, form):
             json.dumps(strategies),
             float(form.get("risk_trade", 50)),
             float(form.get("reward_risk", 2)),
-            float(form.get("daily_target", 200)),
-            min(200.0, max(100.0, float(form.get("max_daily_profit", 200)))),
+            float(form.get("daily_target", 500)),
+            max(0.0, float(form.get("max_daily_profit", 1200))),
             float(form.get("max_daily_loss", 50)),
             float(form.get("protect_tp", 50)),
             float(form.get("lock_profit_r", 1)),
@@ -1840,7 +1846,7 @@ async def demo_bot_worker(
     markets,
     risk,
     rr,
-    max_daily_profit=200.0,
+    max_daily_profit=1200.0,
     max_trades=15,
     stake_mode="Flat Stake",
     martingale_multiplier=2.0,
@@ -2174,7 +2180,7 @@ async def demo_bot_worker(
                 # --------------------------------------------------------
                 # DAILY PROFIT CAP / MAX TRADES
                 # --------------------------------------------------------
-                daily_cap = min(200.0, max(100.0, float(max_daily_profit or 200)))
+                daily_cap = max(0.0, float(max_daily_profit or 1200))
                 trade_cap = min(15, max(1, int(max_trades or 15)))
                 if int(state.get("trades", 0) or 0) >= trade_cap:
                     state["message"] = (
@@ -2613,7 +2619,7 @@ async def digit_bot_worker(
     min_confidence=65,
     magnet_stages=(10, 20, 50, 70),
     magnet_locks=(0, 0.5, 1, 1.5),
-    max_daily_profit=200.0,
+    max_daily_profit=1200.0,
     max_daily_loss=50.0,
 ):
     state = BOT_STATE[user_id]
@@ -2717,7 +2723,7 @@ async def digit_bot_worker(
                     return
                 if int(state.get("trades", 0) or 0) >= min(15, max(1, int(max_trades))):
                     return
-                if float(state.get("today_pl", 0) or 0) >= min(200.0, max(100.0, float(max_daily_profit))):
+                if float(state.get("today_pl", 0) or 0) >= max(0.0, float(max_daily_profit)):
                     return
                 if float(state.get("today_pl", 0) or 0) <= -abs(float(max_daily_loss or 0)):
                     return
@@ -2989,7 +2995,7 @@ async def digit_bot_worker(
                     req += 1
                     await trade_ws.send(json.dumps({"balance": 1, "req_id": req}))
 
-                if float(state.get("today_pl", 0) or 0) >= min(200.0, max(100.0, float(max_daily_profit))):
+                if float(state.get("today_pl", 0) or 0) >= max(0.0, float(max_daily_profit)):
                     state["message"] = "Daily profit limit reached â scanner remains live, new entries are paused."
                 elif float(state.get("today_pl", 0) or 0) <= -abs(float(max_daily_loss or 0)):
                     state["message"] = "Daily loss limit reached â scanner remains live, new entries are paused."
@@ -3193,7 +3199,7 @@ async def start_trading(request: Request):
                     float(settings["magnet_lock3"]),
                     float(settings["magnet_lock4"]),
                 ),
-                min(200.0, max(100.0, float(settings["max_daily_profit"]))),
+                max(0.0, float(settings["max_daily_profit"])),
                 float(settings["max_daily_loss"]),
             )
         )
@@ -3206,7 +3212,7 @@ async def start_trading(request: Request):
                 markets,
                 float(settings["risk_trade"]),
                 float(settings["reward_risk"]),
-                min(200.0, max(100.0, float(settings["max_daily_profit"]))),
+                max(0.0, float(settings["max_daily_profit"])),
                 int(settings["max_trades"]),
                 str(settings["stake_mode"] or "Flat Stake"),
                 float(settings["martingale_multiplier"]),
