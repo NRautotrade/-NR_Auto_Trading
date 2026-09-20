@@ -367,6 +367,7 @@ async function refresh(){
           <div class="scanner-head"><div><div class="scanner-name">${name}</div><div class="muted">${a.symbol||''} â¢ Ticks ${a.ticks||0}</div></div><div class="scanner-quote">${a.quote??'â'}</div></div>
           <div class="digit-row">${Array.from({length:10},(_,i)=>`<div class="digit-box"><strong>${i}</strong><span>${Number(p[i]||0).toFixed(1)}%</span></div>`).join('')}</div>
           <div class="signal-box">Last digit: <b>${a.last_digit??'â'}</b> ${sig?`â¢ <span class="signal-live">${sig.direction} ${sig.barrier} â ${Number(sig.confidence||0).toFixed(1)}%</span>`:'â¢ waiting for confidence threshold'}</div>
+          <div class="signal-box" style="margin-top:8px;">Market condition: <b>${a.market_condition||'WAITING FOR DATA'}</b></div>
         </div>`;
       }).join('');
     }
