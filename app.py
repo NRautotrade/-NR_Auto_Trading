@@ -243,6 +243,29 @@ def init_db():
             "ALTER TABLE settings ADD COLUMN tp_adjust_percent REAL NOT NULL DEFAULT 90"
         )
 
+    # Reference-bot / live digit scanner settings. These are additive so
+    # existing online-bot accounts and settings are preserved.
+    digit_columns = {
+        "digit_trade_type": "TEXT NOT NULL DEFAULT 'Over/Under'",
+        "digit_barrier": "INTEGER NOT NULL DEFAULT 5",
+        "digit_duration": "INTEGER NOT NULL DEFAULT 5",
+        "digit_duration_unit": "TEXT NOT NULL DEFAULT 't'",
+        "digit_min_confidence": "REAL NOT NULL DEFAULT 65",
+        "magnet_stage1": "REAL NOT NULL DEFAULT 10",
+        "magnet_lock1": "REAL NOT NULL DEFAULT 0",
+        "magnet_stage2": "REAL NOT NULL DEFAULT 20",
+        "magnet_lock2": "REAL NOT NULL DEFAULT 0.5",
+        "magnet_stage3": "REAL NOT NULL DEFAULT 50",
+        "magnet_lock3": "REAL NOT NULL DEFAULT 1",
+        "magnet_stage4": "REAL NOT NULL DEFAULT 70",
+        "magnet_lock4": "REAL NOT NULL DEFAULT 1.5",
+    }
+    for column, definition in digit_columns.items():
+        if column not in settings_columns:
+            conn.execute(
+                f"ALTER TABLE settings ADD COLUMN {column} {definition}"
+            )
+
     if "lock_profit_r" not in settings_columns:
         conn.execute(
             "ALTER TABLE settings ADD COLUMN lock_profit_r REAL NOT NULL DEFAULT 1"
@@ -453,58 +476,69 @@ def current_user(request: Request):
 def save_settings(user_id, form):
     conn = db()
 
+    strategies = form.getlist("strategies")
+    if "Flat Stake" in strategies or "Martingale" in strategies:
+        stake_mode = "Martingale" if "Martingale" in strategies else "Flat Stake"
+    else:
+        stake_mode = "Flat Stake"
+
     conn.execute(
         """
         INSERT INTO settings
         (
-            user_id,
-            markets,
-            strategies,
-            risk_trade,
-            reward_risk,
-            daily_target,
-            max_daily_profit,
-            max_daily_loss,
-            protect_tp,
-            lock_profit_r,
-            max_trades,
-            stake_mode,
-            martingale_multiplier,
-            tp_adjust_percent
+            user_id, markets, strategies, risk_trade, reward_risk,
+            daily_target, max_daily_profit, max_daily_loss, protect_tp,
+            lock_profit_r, max_trades, stake_mode, martingale_multiplier,
+            tp_adjust_percent, digit_trade_type, digit_barrier,
+            digit_duration, digit_duration_unit, digit_min_confidence,
+            magnet_stage1, magnet_lock1, magnet_stage2, magnet_lock2,
+            magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(user_id) DO UPDATE SET
-            markets=excluded.markets,
-            strategies=excluded.strategies,
-            risk_trade=excluded.risk_trade,
-            reward_risk=excluded.reward_risk,
-            daily_target=excluded.daily_target,
-            max_daily_profit=excluded.max_daily_profit,
-            max_daily_loss=excluded.max_daily_loss,
-            protect_tp=excluded.protect_tp,
-            lock_profit_r=excluded.lock_profit_r,
-            max_trades=excluded.max_trades,
-            stake_mode=excluded.stake_mode,
-            martingale_multiplier=excluded.martingale_multiplier,
-            tp_adjust_percent=excluded.tp_adjust_percent
+            markets=excluded.markets, strategies=excluded.strategies,
+            risk_trade=excluded.risk_trade, reward_risk=excluded.reward_risk,
+            daily_target=excluded.daily_target, max_daily_profit=excluded.max_daily_profit,
+            max_daily_loss=excluded.max_daily_loss, protect_tp=excluded.protect_tp,
+            lock_profit_r=excluded.lock_profit_r, max_trades=excluded.max_trades,
+            stake_mode=excluded.stake_mode, martingale_multiplier=excluded.martingale_multiplier,
+            tp_adjust_percent=excluded.tp_adjust_percent, digit_trade_type=excluded.digit_trade_type,
+            digit_barrier=excluded.digit_barrier, digit_duration=excluded.digit_duration,
+            digit_duration_unit=excluded.digit_duration_unit, digit_min_confidence=excluded.digit_min_confidence,
+            magnet_stage1=excluded.magnet_stage1, magnet_lock1=excluded.magnet_lock1,
+            magnet_stage2=excluded.magnet_stage2, magnet_lock2=excluded.magnet_lock2,
+            magnet_stage3=excluded.magnet_stage3, magnet_lock3=excluded.magnet_lock3,
+            magnet_stage4=excluded.magnet_stage4, magnet_lock4=excluded.magnet_lock4
         """,
         (
             user_id,
             json.dumps(form.getlist("markets")),
-            json.dumps(form.getlist("strategies")),
+            json.dumps(strategies),
             float(form.get("risk_trade", 50)),
             float(form.get("reward_risk", 2)),
             float(form.get("daily_target", 200)),
             min(200.0, max(100.0, float(form.get("max_daily_profit", 200)))),
             float(form.get("max_daily_loss", 50)),
-            # Keep the user's requested 50% protection setting.
             float(form.get("protect_tp", 50)),
             float(form.get("lock_profit_r", 1)),
             min(15.0, max(1.0, float(form.get("max_trades", 15)))),
-            ("Martingale" if "Martingale" in form.getlist("strategies") else "Flat Stake"),
+            stake_mode,
             min(5.0, max(1.0, float(form.get("martingale_multiplier", 2)))),
             min(99.0, max(50.0, float(form.get("tp_adjust_percent", 90)))),
+            str(form.get("digit_trade_type", "Over/Under")),
+            min(8, max(1, int(float(form.get("digit_barrier", 5))))),
+            min(10, max(1, int(float(form.get("digit_duration", 5))))),
+            str(form.get("digit_duration_unit", "t")),
+            min(95.0, max(50.0, float(form.get("digit_min_confidence", 65)))),
+            float(form.get("magnet_stage1", 10)),
+            float(form.get("magnet_lock1", 0)),
+            float(form.get("magnet_stage2", 20)),
+            float(form.get("magnet_lock2", 0.5)),
+            float(form.get("magnet_stage3", 50)),
+            float(form.get("magnet_lock3", 1)),
+            float(form.get("magnet_stage4", 70)),
+            float(form.get("magnet_lock4", 1.5)),
         ),
     )
 
@@ -1157,35 +1191,13 @@ async def update_settings(request: Request):
 # ============================================================
 
 def render_deriv_result(request: Request, message: str, status_code: int = 400):
-    # Do not route OAuth errors through result.html because that template can
-    # hide the real Deriv error behind a generic message such as
-    # "Connection failed". Show the sanitized server-side error directly.
-    safe = (str(message) or "Unknown Deriv connection error").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return HTMLResponse(
-        f"""<!doctype html>
-<html lang=\"en\">
-<head>
-<meta charset=\"utf-8\">
-<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
-<title>{APP_NAME} â Deriv connection</title>
-<style>
-body{{font-family:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;background:#0b1220;color:#e5e7eb;margin:0;padding:32px}}
-.card{{max-width:760px;margin:40px auto;background:#111827;border:1px solid #374151;border-radius:16px;padding:28px;box-shadow:0 10px 30px rgba(0,0,0,.25)}}
-h1{{margin:0 0 18px;font-size:24px}}
-.error{{white-space:pre-wrap;word-break:break-word;background:#1f2937;border:1px solid #4b5563;border-radius:10px;padding:16px;line-height:1.5;color:#fca5a5}}
-.small{{margin-top:14px;color:#9ca3af;font-size:13px}}
-a{{display:inline-block;margin-top:18px;color:#93c5fd;text-decoration:none}}
-</style>
-</head>
-<body>
-<div class=\"card\">
-<h1>NR AUTO TRADING â Deriv connection</h1>
-<div class=\"error\">{safe}</div>
-<div class=\"small\">HTTP {status_code}. No access token or authorization code is displayed here.</div>
-<a href=\"/dashboard\">â Back to dashboard</a>
-</div>
-</body>
-</html>""",
+    return templates.TemplateResponse(
+        "result.html",
+        {
+            "request": request,
+            "title": APP_NAME,
+            "message": message,
+        },
         status_code=status_code,
     )
 
@@ -1360,11 +1372,6 @@ async def deriv_callback(
             )
 
         if token_resp.status_code >= 400:
-            print(
-                f"[DERIV OAUTH] token exchange failed: HTTP {token_resp.status_code}: "
-                f"{token_resp.text[:700]}",
-                flush=True,
-            )
             return render_deriv_result(
                 request,
                 "Deriv token exchange failed. "
@@ -1384,16 +1391,12 @@ async def deriv_callback(
                 "https://api.derivws.com/trading/v1/options/accounts",
                 headers={
                     "Authorization": f"Bearer {token}",
+                    "Deriv-App-ID": str(DERIV_CLIENT_ID),
                     "Accept": "application/json",
                 },
             )
 
         if account_resp.status_code >= 400:
-            print(
-                f"[DERIV OAUTH] account request failed: HTTP {account_resp.status_code}: "
-                f"{account_resp.text[:700]}",
-                flush=True,
-            )
             return render_deriv_result(
                 request,
                 "Deriv authorization succeeded, but the account list "
@@ -1518,6 +1521,7 @@ async def deriv_ws_url(
             ),
             headers={
                 "Authorization": f"Bearer {token}",
+                "Deriv-App-ID": DERIV_CLIENT_ID,
             },
         )
 
@@ -2516,6 +2520,432 @@ async def demo_bot_worker(
 
 
 # ============================================================
+# LIVE DIGIT SCANNER / REFERENCE-BOT ENGINE
+# ============================================================
+
+def extract_last_digit(quote):
+    """Extract the final displayed decimal digit without losing trailing zeroes."""
+    try:
+        from decimal import Decimal
+        text = format(Decimal(str(quote)), "f")
+        digits = [c for c in text if c.isdigit()]
+        return int(digits[-1]) if digits else None
+    except Exception:
+        try:
+            return int(str(quote).replace(".", "")[-1])
+        except Exception:
+            return None
+
+
+def digit_percentages(digits):
+    counts = [0] * 10
+    for digit in digits:
+        if 0 <= int(digit) <= 9:
+            counts[int(digit)] += 1
+    total = sum(counts)
+    if not total:
+        return counts, [0.0] * 10
+    return counts, [round((n / total) * 100, 2) for n in counts]
+
+
+def digit_signal(digits, trade_type="Over/Under", fixed_barrier=5, min_confidence=65):
+    """Return the strongest recent Over/Under read from the live tick window."""
+    if len(digits) < 20:
+        return None
+
+    recent = list(digits[-50:])
+    candidates = []
+
+    if trade_type in {"Over/Under", "Auto"}:
+        barriers = [fixed_barrier] if trade_type == "Over/Under" else list(range(1, 9))
+        for barrier in barriers:
+            over = sum(d > barrier for d in recent) / len(recent) * 100
+            under = sum(d < barrier for d in recent) / len(recent) * 100
+            if over >= under:
+                candidates.append((over, "DIGITOVER", barrier, over))
+            else:
+                candidates.append((under, "DIGITUNDER", barrier, under))
+
+    if not candidates:
+        return None
+
+    confidence, contract_type, barrier, probability = max(candidates, key=lambda x: x[0])
+    if confidence < float(min_confidence):
+        return None
+
+    return {
+        "contract_type": contract_type,
+        "direction": "OVER" if contract_type == "DIGITOVER" else "UNDER",
+        "barrier": int(barrier),
+        "confidence": round(float(confidence), 2),
+        "probability": round(float(probability), 2),
+        "sample": len(recent),
+    }
+
+
+def magnet_lock_floor(stake, max_profit, peak_profit, stage_locks, stage_triggers, reached_stage):
+    """Calculate a progressive profit floor for a fixed-payout contract."""
+    floor = 0.0
+    stage = 0
+    for i, _trigger in enumerate(stage_triggers, start=1):
+        if reached_stage >= i:
+            stage = i
+            lock_r = float(stage_locks[i - 1])
+            desired = max(0.0, float(stake) * lock_r)
+            cap = max(0.0, float(peak_profit) * 0.90)
+            floor = max(floor, min(desired, cap))
+    return stage, round(floor, 6)
+
+
+async def digit_bot_worker(
+    user_id,
+    account_id,
+    token,
+    markets,
+    risk,
+    max_trades=15,
+    stake_mode="Flat Stake",
+    martingale_multiplier=2.0,
+    trade_type="Over/Under",
+    barrier=5,
+    duration=5,
+    duration_unit="t",
+    min_confidence=65,
+    magnet_stages=(10, 20, 50, 70),
+    magnet_locks=(0, 0.5, 1, 1.5),
+    max_daily_profit=200.0,
+    max_daily_loss=50.0,
+):
+    state = BOT_STATE[user_id]
+    state.update({
+        "running": True,
+        "mode": "demo",
+        "engine": "DIGIT_OVER_UNDER",
+        "message": "Connecting live market scanner...",
+        "market_data": {},
+        "signals": [],
+        "positions": [],
+        "_position_map": {},
+        "_stake_level": 0,
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "today_pl": 0.0,
+        "balance": 0.0,
+        "equity": 0.0,
+        "last_trade": None,
+        "trade_history": [],
+        "activity": [],
+        "paused": False,
+    })
+
+    req = 12000
+    open_contracts = {}
+    last_trade_tick = {}
+
+    try:
+        ws_url = await deriv_ws_url(account_id, token)
+        async with websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as market_ws, \
+                   websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as trade_ws:
+
+            active = await get_active_symbols(market_ws)
+            symbols = {m: resolve_online_symbol(active, m) for m in markets}
+            symbols = {m: s for m, s in symbols.items() if s}
+            if not symbols:
+                raise RuntimeError("None of the selected markets are available on Deriv.")
+
+            for market, symbol in symbols.items():
+                req += 1
+                hist = await ws_request(market_ws, {
+                    "ticks_history": symbol,
+                    "count": 80,
+                    "end": "latest",
+                    "style": "ticks",
+                }, req)
+                prices = hist.get("history", {}).get("prices", [])
+                seeded = [d for d in (extract_last_digit(q) for q in prices) if d is not None]
+                counts, pcts = digit_percentages(seeded[-50:])
+                state["market_data"][market] = {
+                    "symbol": symbol,
+                    "quote": prices[-1] if prices else None,
+                    "last_digit": seeded[-1] if seeded else None,
+                    "digits": seeded[-50:],
+                    "counts": counts,
+                    "percentages": pcts,
+                    "signal": None,
+                    "ticks": len(seeded),
+                }
+                req += 1
+                await market_ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": req}))
+
+            req += 1
+            balance_msg = await ws_request(trade_ws, {"balance": 1}, req)
+            balance_data = balance_msg.get("balance", {})
+            state["balance"] = float(balance_data.get("balance", 0) or 0)
+            state["equity"] = state["balance"]
+            state["currency"] = balance_data.get("currency", "USD")
+            state["symbols"] = symbols
+            state["message"] = "LIVE SCANNER RUNNING â waiting for a valid signal."
+
+            async def request_contract_updates(contract_id):
+                nonlocal req
+                req += 1
+                await trade_ws.send(json.dumps({
+                    "proposal_open_contract": 1,
+                    "contract_id": contract_id,
+                    "subscribe": 1,
+                    "req_id": req,
+                }))
+
+            async def execute_signal(market, symbol, signal):
+                nonlocal req
+                if market in open_contracts or state.get("paused"):
+                    return
+                if int(state.get("trades", 0) or 0) >= min(15, max(1, int(max_trades))):
+                    return
+                if float(state.get("today_pl", 0) or 0) >= min(200.0, max(100.0, float(max_daily_profit))):
+                    return
+                if float(state.get("today_pl", 0) or 0) <= -abs(float(max_daily_loss or 0)):
+                    return
+
+                now = time.time()
+                if now - float(last_trade_tick.get(market, 0) or 0) < 8:
+                    return
+
+                balance = float(state.get("balance", 0) or 0)
+                base_stake = min(float(risk), max(0.35, balance * 0.02))
+                if stake_mode == "Martingale":
+                    level = int(state.get("_stake_level", 0) or 0)
+                    stake = min(base_stake * (float(martingale_multiplier) ** level), balance * 0.10)
+                else:
+                    stake = base_stake
+                stake = round(max(0.35, stake), 2)
+                if balance <= 0 or stake > balance:
+                    return
+
+                req += 1
+                proposal_req = req
+                proposal_payload = {
+                    "proposal": 1,
+                    "amount": stake,
+                    "basis": "stake",
+                    "contract_type": signal["contract_type"],
+                    "currency": state.get("currency", "USD"),
+                    "duration": int(duration),
+                    "duration_unit": duration_unit,
+                    "underlying_symbol": symbol,
+                    "barrier": str(signal["barrier"]),
+                }
+                await trade_ws.send(json.dumps({**proposal_payload, "req_id": proposal_req}))
+                proposal = None
+                deadline = time.time() + 10
+                while time.time() < deadline:
+                    raw = await asyncio.wait_for(trade_ws.recv(), timeout=3)
+                    msg = json.loads(raw)
+                    if msg.get("req_id") == proposal_req:
+                        if msg.get("error"):
+                            raise RuntimeError(msg["error"].get("message", "Proposal rejected."))
+                        proposal = msg.get("proposal", {})
+                        break
+                if not proposal or not proposal.get("id"):
+                    return
+
+                ask = float(proposal.get("ask_price", stake) or stake)
+                payout = float(proposal.get("payout", 0) or 0)
+                req += 1
+                buy_req = req
+                await trade_ws.send(json.dumps({"buy": proposal["id"], "price": ask, "req_id": buy_req}))
+                buy = None
+                deadline = time.time() + 10
+                while time.time() < deadline:
+                    raw = await asyncio.wait_for(trade_ws.recv(), timeout=3)
+                    msg = json.loads(raw)
+                    if msg.get("req_id") == buy_req:
+                        if msg.get("error"):
+                            raise RuntimeError(msg["error"].get("message", "Buy rejected."))
+                        buy = msg.get("buy", {})
+                        break
+                contract_id = buy.get("contract_id") if buy else None
+                if not contract_id:
+                    return
+
+                max_profit = max(0.0, payout - ask)
+                position = {
+                    "symbol": market,
+                    "underlying_symbol": symbol,
+                    "direction": signal["direction"],
+                    "contract_type": signal["contract_type"],
+                    "barrier": signal["barrier"],
+                    "confidence": signal["confidence"],
+                    "entry": ask,
+                    "current": ask,
+                    "profit": 0.0,
+                    "max_profit": max_profit,
+                    "peak_profit": 0.0,
+                    "magnet_stage": 0,
+                    "profit_floor": 0.0,
+                    "status": "OPEN",
+                    "contract_id": contract_id,
+                    "stake": stake,
+                    "opened_at": time.time(),
+                }
+                open_contracts[market] = contract_id
+                state["_position_map"][market] = position
+                state["positions"] = list(state["_position_map"].values())
+                state["trades"] = int(state.get("trades", 0) or 0) + 1
+                last_trade_tick[market] = now
+                state["message"] = f"AUTO ENTRY: {market} {signal['direction']} {signal['barrier']} @ {signal['confidence']:.1f}%"
+                activity = state.setdefault("activity", [])
+                activity.insert(0, f"OPEN {market} {signal['direction']} {signal['barrier']} â¢ {signal['confidence']:.1f}%")
+                state["activity"] = activity[:30]
+                await request_contract_updates(contract_id)
+
+            while not state.get("stop_requested"):
+                try:
+                    raw = await asyncio.wait_for(market_ws.recv(), timeout=1.0)
+                    msg = json.loads(raw)
+                except asyncio.TimeoutError:
+                    msg = None
+
+                if msg and msg.get("msg_type") == "tick":
+                    tick = msg.get("tick", {})
+                    symbol = tick.get("symbol")
+                    market = next((m for m, s in symbols.items() if s == symbol), None)
+                    if market:
+                        quote = tick.get("quote")
+                        digit = extract_last_digit(quote)
+                        data = state["market_data"].setdefault(market, {"symbol": symbol, "digits": []})
+                        if digit is not None:
+                            data.setdefault("digits", []).append(digit)
+                            data["digits"] = data["digits"][-50:]
+                            counts, pcts = digit_percentages(data["digits"])
+                            data.update({
+                                "quote": quote,
+                                "last_digit": digit,
+                                "counts": counts,
+                                "percentages": pcts,
+                                "ticks": int(data.get("ticks", 0) or 0) + 1,
+                            })
+                            signal = digit_signal(data["digits"], trade_type, barrier, min_confidence)
+                            data["signal"] = signal
+                            if signal:
+                                state["signals"] = [{"market": market, **signal, "quote": quote, "last_digit": digit}]
+                                await execute_signal(market, symbol, signal)
+
+                for _ in range(8):
+                    try:
+                        raw = await asyncio.wait_for(trade_ws.recv(), timeout=0.02)
+                    except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed):
+                        break
+                    msg = json.loads(raw)
+                    if msg.get("msg_type") != "proposal_open_contract":
+                        continue
+                    c = msg.get("proposal_open_contract", {})
+                    contract_id = str(c.get("contract_id", ""))
+                    market = next((m for m, cid in open_contracts.items() if str(cid) == contract_id), None)
+                    if not market:
+                        continue
+                    position = state["_position_map"].get(market, {})
+                    profit = float(c.get("profit", 0) or 0)
+                    status = str(c.get("status", "open")).lower()
+                    position.update({
+                        "entry": float(c.get("buy_price", position.get("entry", 0)) or 0),
+                        "current": float(c.get("bid_price", c.get("current_spot", position.get("current", 0))) or 0),
+                        "profit": profit,
+                        "status": "OPEN" if not c.get("is_sold") else status.upper(),
+                        "current_spot": c.get("current_spot"),
+                        "exit_spot": c.get("exit_spot"),
+                    })
+                    position["peak_profit"] = max(float(position.get("peak_profit", 0) or 0), profit)
+                    max_profit = float(position.get("max_profit", 0) or 0)
+                    if max_profit <= 0:
+                        max_profit = max(0.0, float(c.get("payout", 0) or 0) - float(position.get("entry", 0) or 0))
+                        position["max_profit"] = max_profit
+                    progress = (position["peak_profit"] / max_profit * 100) if max_profit else 0
+                    reached = sum(progress >= float(t) for t in magnet_stages)
+                    stage, floor = magnet_lock_floor(
+                        position.get("stake", 0), max_profit, position["peak_profit"],
+                        magnet_locks, magnet_stages, reached,
+                    )
+                    if stage > int(position.get("magnet_stage", 0) or 0):
+                        position["magnet_stage"] = stage
+                        position["profit_floor"] = max(float(position.get("profit_floor", 0) or 0), floor)
+                        state["message"] = f"{market}: magnet stage {stage} active â floor ${position['profit_floor']:.2f}"
+
+                    floor = float(position.get("profit_floor", 0) or 0)
+                    if (not c.get("is_sold") and profit > 0 and stage > 0 and profit <= floor and not position.get("sell_requested")):
+                        position["sell_requested"] = True
+                        req += 1
+                        await trade_ws.send(json.dumps({"sell": contract_id, "price": 0, "req_id": req}))
+                        state["message"] = f"{market}: magnet protected ${floor:.2f}; closing trade."
+
+                    settled = bool(c.get("is_sold")) or status in {"won", "lost", "sold", "expired"}
+                    if settled:
+                        if status == "won" or profit > 0:
+                            state["wins"] = int(state.get("wins", 0) or 0) + 1
+                        elif status in {"lost", "expired"} or profit < 0:
+                            state["losses"] = int(state.get("losses", 0) or 0) + 1
+                        state["today_pl"] = float(state.get("today_pl", 0) or 0) + profit
+                        closed = {**position, "profit": profit, "status": status.upper(), "is_open": False}
+                        state["last_trade"] = closed
+                        history = state.setdefault("trade_history", [])
+                        history.insert(0, closed)
+                        state["trade_history"] = history[:50]
+                        activity = state.setdefault("activity", [])
+                        activity.insert(0, f"CLOSE {market} {status.upper()} â¢ P/L ${profit:+.2f}")
+                        state["activity"] = activity[:30]
+                        if profit < 0 and stake_mode == "Martingale":
+                            state["_stake_level"] = min(6, int(state.get("_stake_level", 0)) + 1)
+                        elif profit >= 0:
+                            state["_stake_level"] = 0
+                        state["_position_map"].pop(market, None)
+                        open_contracts.pop(market, None)
+
+                state["positions"] = list(state["_position_map"].values())
+                open_profit = sum(float(p.get("profit", 0) or 0) for p in state["positions"])
+                state["equity"] = float(state.get("balance", 0) or 0) + open_profit
+
+                # Non-blocking balance refresh every ~5 seconds.
+                if time.time() - float(state.get("_last_balance_request", 0) or 0) >= 5:
+                    state["_last_balance_request"] = time.time()
+                    req += 1
+                    await trade_ws.send(json.dumps({"balance": 1, "req_id": req}))
+
+                if float(state.get("today_pl", 0) or 0) >= min(200.0, max(100.0, float(max_daily_profit))):
+                    state["message"] = "Daily profit limit reached â scanner remains live, new entries are paused."
+                elif float(state.get("today_pl", 0) or 0) <= -abs(float(max_daily_loss or 0)):
+                    state["message"] = "Daily loss limit reached â scanner remains live, new entries are paused."
+                elif int(state.get("trades", 0) or 0) >= min(15, max(1, int(max_trades))):
+                    state["message"] = "Maximum daily trades reached â scanner remains live, new entries are paused."
+
+                # Drain balance messages without blocking.
+                for _ in range(3):
+                    try:
+                        raw = await asyncio.wait_for(trade_ws.recv(), timeout=0.01)
+                    except asyncio.TimeoutError:
+                        break
+                    msg2 = json.loads(raw)
+                    if msg2.get("msg_type") == "balance":
+                        bd = msg2.get("balance", {})
+                        state["balance"] = float(bd.get("balance", state.get("balance", 0)) or 0)
+                        state["currency"] = bd.get("currency", state.get("currency", "USD"))
+
+            state["message"] = "Bot stopped."
+
+    except asyncio.CancelledError:
+        raise
+    except websockets.exceptions.ConnectionClosed:
+        if not state.get("stop_requested"):
+            state["message"] = "Deriv connection closed. Restart the bot to reconnect."
+    except Exception as exc:
+        state["message"] = f"Digit engine stopped: {type(exc).__name__} - {exc}"
+    finally:
+        if not state.pop("_handoff", False):
+            state["running"] = False
+            state["stop_requested"] = False
+
+
+# ============================================================
 # BOT START / STOP / STATE
 # ============================================================
 
@@ -2598,14 +3028,12 @@ async def start_trading(request: Request):
         else ["ABC Pattern"]
     )
 
-    if "ABC Pattern" not in strategies:
+    supported = {"ABC Pattern", "Digit Over/Under"}
+    if not any(strategy in supported for strategy in strategies):
         return JSONResponse(
             {
                 "ok": False,
-                "error": (
-                    "Select ABC Pattern for "
-                    "the online worker."
-                ),
+                "error": "Select ABC Pattern or Digit Over/Under for the online worker.",
             },
             status_code=400,
         )
@@ -2637,6 +3065,9 @@ async def start_trading(request: Request):
         "_market_restart_at": {},
         "_stake_level": 0,
         "paused": False,
+        "market_data": {},
+        "signals": [],
+        "engine": "ABC",
     }
 
     try:
@@ -2656,21 +3087,54 @@ async def start_trading(request: Request):
             status_code=400,
         )
 
-    task = asyncio.create_task(
-        demo_bot_worker(
-            uid,
-            connection["account_id"],
-            token,
-            markets,
-            float(settings["risk_trade"]),
-            float(settings["reward_risk"]),
-            min(200.0, max(100.0, float(settings["max_daily_profit"]))),
-            int(settings["max_trades"]),
-            str(settings["stake_mode"] or "Flat Stake"),
-            float(settings["martingale_multiplier"]),
-            float(settings["tp_adjust_percent"]),
+    if "Digit Over/Under" in strategies:
+        task = asyncio.create_task(
+            digit_bot_worker(
+                uid,
+                connection["account_id"],
+                token,
+                markets,
+                float(settings["risk_trade"]),
+                int(settings["max_trades"]),
+                str(settings["stake_mode"] or "Flat Stake"),
+                float(settings["martingale_multiplier"]),
+                str(settings["digit_trade_type"] or "Over/Under"),
+                int(settings["digit_barrier"] or 5),
+                int(settings["digit_duration"] or 5),
+                str(settings["digit_duration_unit"] or "t"),
+                float(settings["digit_min_confidence"] or 65),
+                (
+                    float(settings["magnet_stage1"]),
+                    float(settings["magnet_stage2"]),
+                    float(settings["magnet_stage3"]),
+                    float(settings["magnet_stage4"]),
+                ),
+                (
+                    float(settings["magnet_lock1"]),
+                    float(settings["magnet_lock2"]),
+                    float(settings["magnet_lock3"]),
+                    float(settings["magnet_lock4"]),
+                ),
+                min(200.0, max(100.0, float(settings["max_daily_profit"]))),
+                float(settings["max_daily_loss"]),
+            )
         )
-    )
+    else:
+        task = asyncio.create_task(
+            demo_bot_worker(
+                uid,
+                connection["account_id"],
+                token,
+                markets,
+                float(settings["risk_trade"]),
+                float(settings["reward_risk"]),
+                min(200.0, max(100.0, float(settings["max_daily_profit"]))),
+                int(settings["max_trades"]),
+                str(settings["stake_mode"] or "Flat Stake"),
+                float(settings["martingale_multiplier"]),
+                float(settings["tp_adjust_percent"]),
+            )
+        )
 
     BOT_TASKS[uid] = task
 
@@ -2843,9 +3307,31 @@ async def trading_state(request: Request):
         "losses": int(state.get("losses", 0) or 0),
         "positions": state.get("positions", []),
         "last_trade": state.get("last_trade"),
+        "trade_history": state.get("trade_history", []),
         "trades": int(state.get("trades", 0) or 0),
         "activity": state.get("activity", []),
+        "engine": state.get("engine", "ABC"),
+        "market_data": state.get("market_data", {}),
+        "signals": state.get("signals", []),
     }
+
+
+@app.post("/api/trading/scan")
+async def scan_trading(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    uid = user["id"]
+    state = BOT_STATE.get(uid, {})
+    data = state.get("market_data", {})
+    signals = []
+    for market, item in data.items():
+        signal = item.get("signal")
+        if signal:
+            signals.append({"market": market, **signal, "quote": item.get("quote"), "last_digit": item.get("last_digit")})
+    state["signals"] = signals[:20]
+    state["message"] = f"AI scan complete â {len(signals)} live signal(s)." if signals else "AI scan complete â no signal currently meets the confidence threshold."
+    return {"ok": True, "signals": signals, "message": state["message"]}
 
 
 @app.get("/api/trading/test-connection")
