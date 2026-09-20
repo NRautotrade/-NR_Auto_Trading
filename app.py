@@ -2644,9 +2644,27 @@ async def digit_bot_worker(
     last_trade_tick = {}
 
     try:
+        # Deriv OTP URLs are single-use. The previous implementation opened
+        # TWO WebSocket connections with the SAME OTP URL, which caused the
+        # second connection to be rejected with HTTP 401.
+        #
+        # Market data is public and does not need an OTP, so keep the scanner
+        # on the public market-data channel and reserve the one authenticated
+        # OTP connection for account/trading operations.
         ws_url = await deriv_ws_url(account_id, token)
-        async with websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as market_ws, \
-                   websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as trade_ws:
+        public_ws_url = "wss://api.derivws.com/trading/v1/options/ws/public"
+
+        async with websockets.connect(
+            public_ws_url,
+            open_timeout=15,
+            close_timeout=5,
+            ping_interval=20,
+        ) as market_ws, websockets.connect(
+            ws_url,
+            open_timeout=15,
+            close_timeout=5,
+            ping_interval=20,
+        ) as trade_ws:
 
             active = await get_active_symbols(market_ws)
             symbols = {m: resolve_online_symbol(active, m) for m in markets}
