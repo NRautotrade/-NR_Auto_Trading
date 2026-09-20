@@ -2644,27 +2644,9 @@ async def digit_bot_worker(
     last_trade_tick = {}
 
     try:
-        # Deriv OTP URLs are single-use. The previous implementation opened
-        # TWO WebSocket connections with the SAME OTP URL, which caused the
-        # second connection to be rejected with HTTP 401.
-        #
-        # Market data is public and does not need an OTP, so keep the scanner
-        # on the public market-data channel and reserve the one authenticated
-        # OTP connection for account/trading operations.
         ws_url = await deriv_ws_url(account_id, token)
-        public_ws_url = "wss://api.derivws.com/trading/v1/options/ws/public"
-
-        async with websockets.connect(
-            public_ws_url,
-            open_timeout=15,
-            close_timeout=5,
-            ping_interval=20,
-        ) as market_ws, websockets.connect(
-            ws_url,
-            open_timeout=15,
-            close_timeout=5,
-            ping_interval=20,
-        ) as trade_ws:
+        async with websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as market_ws, \
+                   websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as trade_ws:
 
             active = await get_active_symbols(market_ws)
             symbols = {m: resolve_online_symbol(active, m) for m in markets}
@@ -2801,7 +2783,10 @@ async def digit_bot_worker(
                     "max_profit": max_profit,
                     "peak_profit": 0.0,
                     "magnet_stage": 0,
+                    "magnet_progress": 0.0,
                     "profit_floor": 0.0,
+                    "locked_profit": 0.0,
+                    "magnet_active": False,
                     "status": "OPEN",
                     "contract_id": contract_id,
                     "stake": stake,
@@ -2885,13 +2870,30 @@ async def digit_bot_worker(
                         position.get("stake", 0), max_profit, position["peak_profit"],
                         magnet_locks, magnet_stages, reached,
                     )
+                    # Magnet protection is monotonic: once a stage is reached,
+                    # its floor can never move backwards.  This is deliberately
+                    # based on the contract's live profit/payout, not a fixed TP.
                     if stage > int(position.get("magnet_stage", 0) or 0):
                         position["magnet_stage"] = stage
-                        position["profit_floor"] = max(float(position.get("profit_floor", 0) or 0), floor)
-                        state["message"] = f"{market}: magnet stage {stage} active â floor ${position['profit_floor']:.2f}"
+                        position["magnet_active"] = True
+
+                    if stage > 0:
+                        position["profit_floor"] = max(
+                            float(position.get("profit_floor", 0) or 0),
+                            float(floor),
+                        )
+
+                    position["locked_profit"] = float(position.get("profit_floor", 0) or 0)
+                    position["magnet_progress"] = round(float(progress), 2)
 
                     floor = float(position.get("profit_floor", 0) or 0)
-                    if (not c.get("is_sold") and profit > 0 and stage > 0 and profit <= floor and not position.get("sell_requested")):
+                    if (
+                        not c.get("is_sold")
+                        and profit > 0
+                        and stage > 0
+                        and profit <= floor
+                        and not position.get("sell_requested")
+                    ):
                         position["sell_requested"] = True
                         req += 1
                         await trade_ws.send(json.dumps({"sell": contract_id, "price": 0, "req_id": req}))
@@ -3331,6 +3333,22 @@ async def trading_state(request: Request):
         "engine": state.get("engine", "ABC"),
         "market_data": state.get("market_data", {}),
         "signals": state.get("signals", []),
+        "magnet": {
+            "stage": max([int(p.get("magnet_stage", 0) or 0) for p in state.get("positions", [])] or [0]),
+            "open_locked_profit": round(sum(float(p.get("locked_profit", 0) or 0) for p in state.get("positions", [])), 2),
+            "open_peak_profit": round(sum(float(p.get("peak_profit", 0) or 0) for p in state.get("positions", [])), 2),
+            "positions": [
+                {
+                    "market": p.get("symbol"),
+                    "stage": int(p.get("magnet_stage", 0) or 0),
+                    "progress": float(p.get("magnet_progress", 0) or 0),
+                    "peak_profit": float(p.get("peak_profit", 0) or 0),
+                    "locked_profit": float(p.get("locked_profit", 0) or 0),
+                    "profit_floor": float(p.get("profit_floor", 0) or 0),
+                }
+                for p in state.get("positions", [])
+            ],
+        },
     }
 
 
