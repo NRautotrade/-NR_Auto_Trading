@@ -2,1338 +2,326 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NR AUTO TRADING</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>{{ title or 'NR AUTO TRADING' }}</title>
 <style>
 :root{
-  --bg:#07111f;
-  --panel:#0e1a2d;
-  --panel2:#111f34;
-  --border:#263852;
-  --text:#edf4ff;
-  --muted:#91a3bd;
-  --green:#22c55e;
-  --red:#ef4444;
-  --blue:#38bdf8;
-  --yellow:#f59e0b;
+  --bg:#071321;--panel:#0d1a2d;--panel2:#091525;--border:#263a56;
+  --text:#edf3fb;--muted:#91a4c0;--green:#18a94b;--green2:#22c55e;
+  --red:#8f2020;--redText:#ff8b8b;--blue:#214f78;--yellow:#75510d;
 }
-
 *{box-sizing:border-box}
-
-body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:Arial,Helvetica,sans-serif;
-}
-
-button,input,select{
-  font:inherit;
-}
-
-button{
-  cursor:pointer;
-}
-
-.topbar{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:15px;
-  flex-wrap:wrap;
-  padding:18px;
-  background:#0b1729;
-  border-bottom:1px solid var(--border);
-}
-
-.brand{
-  font-size:24px;
-  font-weight:900;
-  letter-spacing:.5px;
-}
-
-.subtitle{
-  color:var(--muted);
-  font-size:12px;
-  margin-top:5px;
-}
-
-.account-area{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  flex-wrap:wrap;
-}
-
-.status-pill{
-  padding:8px 12px;
-  border-radius:7px;
-  background:#421c1c;
-  color:#ff9999;
-  font-size:12px;
-  font-weight:bold;
-}
-
-.account-mode{
-  color:#65ef9a;
-  font-size:12px;
-  font-weight:bold;
-}
-
-.layout{
-  display:flex;
-  min-height:calc(100vh - 90px);
-}
-
-.sidebar{
-  width:230px;
-  flex-shrink:0;
-  background:#0a1627;
-  border-right:1px solid var(--border);
-  padding:15px;
-}
-
-.nav-button{
-  display:block;
-  width:100%;
-  border:0;
-  text-align:left;
-  color:var(--text);
-  background:transparent;
-  padding:13px;
-  border-radius:7px;
-  margin-bottom:7px;
-  font-weight:bold;
-}
-
-.nav-button:hover,
-.nav-button.active{
-  background:#1b4265;
-}
-
-.content{
-  flex:1;
-  min-width:0;
-  padding:20px;
-  max-width:1500px;
-}
-
-.page{
-  display:none;
-}
-
-.page.active{
-  display:block;
-}
-
-.page-title{
-  font-size:25px;
-  font-weight:900;
-  margin:0 0 5px;
-}
-
-.page-description{
-  color:var(--muted);
-  font-size:13px;
-  margin-bottom:18px;
-}
-
-.card{
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:9px;
-  padding:16px;
-  margin-bottom:15px;
-}
-
-.card-title{
-  font-size:13px;
-  font-weight:900;
-  letter-spacing:.5px;
-  margin-bottom:14px;
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:15px;
-}
-
-.stats{
-  display:grid;
-  grid-template-columns:repeat(6,minmax(0,1fr));
-  gap:10px;
-}
-
-.stat{
-  background:var(--panel2);
-  border:1px solid var(--border);
-  border-radius:8px;
-  padding:13px;
-}
-
-.stat-label{
-  color:var(--muted);
-  font-size:10px;
-  font-weight:bold;
-}
-
-.stat-value{
-  font-size:21px;
-  font-weight:900;
-  margin-top:8px;
-  overflow-wrap:anywhere;
-}
-
-.controls{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  flex-wrap:wrap;
-}
-
-.btn{
-  border:1px solid var(--border);
-  border-radius:7px;
-  padding:11px 15px;
-  color:white;
-  background:#15263d;
-  font-weight:bold;
-}
-
-.btn-green{background:#167b3d}
-.btn-red{background:#8e2525}
-.btn-blue{background:#155b80}
-.btn-yellow{background:#80580f}
-.btn-purple{background:#5b3b91}
-
-.field{
-  width:100%;
-  background:#081322;
-  color:var(--text);
-  border:1px solid var(--border);
-  border-radius:7px;
-  padding:11px;
-}
-
-.form-grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:14px;
-}
-
-label{
-  display:block;
-  color:var(--muted);
-  font-size:12px;
-  font-weight:bold;
-  margin-bottom:6px;
-}
-
-.status-box{
-  margin-top:12px;
-  background:#081322;
-  border:1px solid var(--border);
-  border-radius:7px;
-  padding:12px;
-  color:var(--muted);
-  font-size:12px;
-  overflow-wrap:anywhere;
-}
-
-.digits{
-  display:grid;
-  grid-template-columns:repeat(10,minmax(0,1fr));
-  gap:8px;
-}
-
-.digit{
-  background:#15263d;
-  border:1px solid var(--border);
-  border-radius:7px;
-  text-align:center;
-  padding:13px 4px;
-}
-
-.digit strong{
-  display:block;
-  font-size:20px;
-}
-
-.digit small{
-  display:block;
-  color:var(--muted);
-  margin-top:5px;
-}
-
-.history{
-  display:flex;
-  flex-wrap:wrap;
-  gap:7px;
-}
-
-.history span{
-  width:32px;
-  height:32px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:6px;
-  color:white;
-  font-weight:bold;
-}
-
-.history .even{background:#176b99}
-.history .odd{background:#8d2929}
-
-.table-wrap{
-  width:100%;
-  overflow-x:auto;
-}
-
-table{
-  width:100%;
-  border-collapse:collapse;
-  font-size:12px;
-  min-width:650px;
-}
-
-th{
-  color:var(--muted);
-  background:#15263d;
-  text-align:left;
-}
-
-th,td{
-  padding:11px;
-  border-bottom:1px solid var(--border);
-}
-
-.green{color:var(--green)}
-.red{color:var(--red)}
-.muted{color:var(--muted)}
-
-.hidden{
-  display:none!important;
-}
-
-@media(max-width:1050px){
-  .stats{
-    grid-template-columns:repeat(3,minmax(0,1fr));
-  }
-}
-
-@media(max-width:750px){
-  .layout{
-    display:block;
-  }
-
-  .sidebar{
-    width:100%;
-    border-right:0;
-    border-bottom:1px solid var(--border);
-    display:flex;
-    gap:7px;
-    overflow-x:auto;
-  }
-
-  .nav-button{
-    width:auto;
-    white-space:nowrap;
-    margin:0;
-  }
-
-  .content{
-    padding:13px;
-  }
-
-  .grid,
-  .form-grid{
-    grid-template-columns:1fr;
-  }
-
-  .stats{
-    grid-template-columns:repeat(2,minmax(0,1fr));
-  }
-
-  .digits{
-    grid-template-columns:repeat(5,minmax(0,1fr));
-  }
-
-  .brand{
-    font-size:20px;
-  }
-}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
+body{min-height:100vh}
+a{text-decoration:none;color:inherit}
+.wrap{width:100%;max-width:1500px;margin:0 auto}
+.topbar{padding:28px 36px 24px;border-bottom:1px solid #26364e;background:#081527}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:18px}
+.brand{font-size:28px;font-weight:800;letter-spacing:.5px}
+.subtitle{margin-top:7px;color:var(--muted);font-size:15px}
+.top-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pill{padding:12px 20px;border-radius:12px;font-size:15px;font-weight:800;background:#4a2020;color:#ff9292}
+.pill.demo{background:transparent;color:#55f091}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 28px;border:1px solid var(--border);border-radius:10px;background:#172840;color:var(--text);font-weight:800;font-size:17px;cursor:pointer}
+.btn.green{background:#16883f;border-color:#1ca34c}.btn.green:hover{background:#1aa84e}
+.btn.red{background:#7e1d1d;border-color:#a72b2b}.btn.yellow{background:#75510d}.btn.blue{background:#214f78}
+.btn.small{min-height:44px;font-size:14px;padding:0 18px}
+.navbar{display:flex;gap:34px;align-items:center;overflow-x:auto;white-space:nowrap;padding:22px 30px;border-bottom:1px solid #26364e;background:#081527}
+.navitem{font-size:20px;font-weight:800;color:#e8eef8;padding:14px 18px;border-radius:10px;cursor:pointer}
+.navitem.active{background:#1d4d79}
+.main{padding:32px 34px 60px}
+.page-title{font-size:36px;font-weight:800;margin:0 0 10px}.page-sub{font-size:17px;color:var(--muted);line-height:1.4;margin-bottom:28px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px;margin-bottom:20px}
+.card-title{font-size:20px;font-weight:800;letter-spacing:.6px;margin-bottom:24px}
+.account-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.field-label{display:block;color:#91a4c0;font-size:17px;font-weight:800;margin:0 0 12px;text-transform:uppercase}
+.field-box,.field-select{width:100%;min-height:68px;border:1px solid var(--border);border-radius:10px;background:#071321;color:var(--text);padding:0 22px;font-size:20px;outline:none}
+.field-select{appearance:auto}
+.account-actions{margin-top:22px;display:flex;gap:14px;flex-wrap:wrap}
+.status-connected{color:#52ee8c;font-weight:800}.status-disconnected{color:#f1f4fa}
+.notice{border:1px solid #664949;background:#21171b;color:#ffb3b3;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:20px}.stat small{display:block;color:var(--muted);font-weight:800;font-size:12px}.stat strong{display:block;font-size:24px;margin-top:9px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.section{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:18px}.check{display:flex;align-items:center;gap:10px;margin:10px 0;color:#dce5f2;font-size:15px}.check input{width:18px;height:18px;accent-color:var(--green2)}
+.form-row{display:flex;flex-wrap:wrap;gap:14px}.form-group{flex:1 1 170px}.form-label{display:block;color:var(--muted);font-size:12px;font-weight:800;margin-bottom:7px}.input,.select{width:100%;min-height:44px;background:#071321;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0 12px;font-size:14px}
+.controls{display:flex;gap:12px;flex-wrap:wrap}.statusline{margin-top:14px;background:#071321;border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--muted);font-size:13px}
+.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:650px}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--border);font-size:13px}th{color:var(--muted);font-size:11px}.empty{text-align:center;color:var(--muted);padding:20px}.ok{color:#4ee889}.bad{color:#ff7474}
+.hidden{display:none!important}
+.scanner-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.scanner-market{background:#071321;border:1px solid var(--border);border-radius:10px;padding:16px}.scanner-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.scanner-name{font-weight:800}.scanner-quote{font-size:22px;font-weight:800}.digit-row{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;margin-top:12px}.digit-box{border:1px solid var(--border);border-radius:7px;text-align:center;padding:7px 2px;background:#0b1a2b;font-size:11px}.digit-box strong{display:block;font-size:14px}.digit-box span{color:var(--muted);font-size:10px}.signal-box{margin-top:12px;border-radius:8px;padding:10px;background:#0b1a2b;border:1px solid var(--border);font-size:12px}.signal-live{color:#4ee889}.magnet-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stage{background:#071321;border:1px solid var(--border);border-radius:8px;padding:10px}.stage small{display:block;color:var(--muted);font-size:10px}.stage input{margin-top:6px;width:100%;min-height:40px}
+@media(max-width:900px){.scanner-grid{grid-template-columns:1fr}.magnet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.topbar{padding:20px 22px}.topline{display:block}.top-actions{margin-top:18px}.navbar{padding:16px 18px;gap:8px}.navitem{font-size:17px;padding:12px 16px}.main{padding:24px 16px 50px}.page-title{font-size:32px}.account-grid,.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.btn{font-size:16px;min-height:48px}.field-box,.field-select{min-height:60px;font-size:18px}}
+@media(max-width:520px){.brand{font-size:24px}.subtitle{font-size:13px}.stats{grid-template-columns:1fr 1fr}.card{padding:20px}.account-grid{gap:16px}.field-label{font-size:14px}}
 </style>
 </head>
-
 <body>
-
+<div class="wrap">
 <header class="topbar">
-  <div>
-    <div class="brand">NR AUTO TRADING</div>
-    <div class="subtitle">Professional automated trading control center</div>
-  </div>
-
-  <div class="account-area">
-    <span id="botStatus" class="status-pill">BOT STOPPED</span>
-    <span id="accountMode" class="account-mode">DEMO ACCOUNT</span>
-    <button class="btn btn-green" onclick="connectAccount()">CONNECT ACCOUNT</button>
-    <button class="btn" onclick="logoutUser()">LOG OUT</button>
+  <div class="topline">
+    <div>
+      <div class="brand">NR AUTO TRADING</div>
+      <div class="subtitle">Professional automated trading control center</div>
+    </div>
+    <div class="top-actions">
+      <span id="botPill" class="pill">BOT STOPPED</span>
+      <span class="pill demo">DEMO ACCOUNT</span>
+      <a class="btn green" href="/deriv/connect?mode=demo">CONNECT ACCOUNT</a>
+      <a class="btn" href="/logout">LOG OUT</a>
+    </div>
   </div>
 </header>
 
-<div class="layout">
+<nav class="navbar">
+  <a class="navitem active" href="#dashboard">Dashboard</a>
+  <a class="navitem" href="#abc">ABC Trader</a>
+  <a class="navitem" href="#digit">Digit Trader</a>
+  <a class="navitem" href="#transactions">Transactions</a>
+  <a class="navitem" href="#settings">Settings</a>
+</nav>
 
-  <aside class="sidebar">
-    <button class="nav-button active" data-page="dashboard">Dashboard</button>
-    <button class="nav-button" data-page="abc">ABC Trader</button>
-    <button class="nav-button" data-page="digit">Digit Trader</button>
-    <button class="nav-button" data-page="transactions">Transactions</button>
-    <button class="nav-button" data-page="transfers">Transfers</button>
-    <button class="nav-button" data-page="settings">Settings</button>
-  </aside>
+<main class="main" id="dashboard">
+  {% set oauth_error = request.query_params.get('oauth_error') %}
+  {% if oauth_error == 'client' %}
+    <div class="notice">Deriv Client ID is not configured on the server.</div>
+  {% elif oauth_error == 'real_locked' %}
+    <div class="notice">Real-account connection is currently locked. Demo mode remains available.</div>
+  {% endif %}
 
-  <main class="content">
+  <h1 class="page-title">Dashboard</h1>
+  <div class="page-sub">Monitor your account, bot activity, live market data, and trading performance.</div>
 
-    <section id="dashboard" class="page active">
-      <h1 class="page-title">Dashboard</h1>
-
-      <div class="page-description">
-        Monitor your account, bot activity, live market data, and trading performance.
+  <section class="card">
+    <div class="card-title">ACCOUNT CONNECTION</div>
+    <div class="account-grid">
+      <div>
+        <label class="field-label" for="accountMode">Account Mode</label>
+        <select id="accountMode" class="field-select" onchange="updateConnectButton()">
+          <option value="demo" selected>Demo Account</option>
+          {% if allow_real %}<option value="real">Real Account</option>{% endif %}
+        </select>
       </div>
-
-      <div class="card">
-        <div class="card-title">ACCOUNT CONNECTION</div>
-
-        <div class="form-grid">
-          <div>
-            <label>ACCOUNT MODE</label>
-            <select id="accountType" class="field" onchange="accountModeChanged()">
-              <option value="demo">Demo Account</option>
-              <option value="real">Real Account</option>
-            </select>
-          </div>
-
-          <div>
-            <label>ACCOUNT STATUS</label>
-            <input id="connectionStatus" class="field" value="Not connected" readonly>
-          </div>
-
-          <div>
-            <label>ACCOUNT ID</label>
-            <input id="accountId" class="field" value="—" readonly>
-          </div>
-
-          <div>
-            <label>CURRENCY</label>
-            <input id="accountCurrency" class="field" value="—" readonly>
-          </div>
-        </div>
-
-        <div class="controls">
-          <button class="btn btn-green" onclick="connectAccount()">
-            CONNECT SELECTED ACCOUNT
-          </button>
-
-          <button class="btn btn-blue" onclick="refreshBalance()">
-            REFRESH BALANCE
-          </button>
-
-          <button class="btn btn-red" onclick="disconnectAccount()">
-            DISCONNECT
-          </button>
-        </div>
-
-        <div id="accountMessage" class="status-box">
-          Select Demo Account and connect before starting the bot.
+      <div>
+        <label class="field-label">Account Status</label>
+        <div class="field-box" style="display:flex;align-items:center">
+          {% if connection %}
+            <span class="status-connected">â Connected</span>
+          {% else %}
+            <span class="status-disconnected">Not connected</span>
+          {% endif %}
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-title">ACCOUNT OVERVIEW</div>
-
-        <div class="stats">
-          <div class="stat">
-            <div class="stat-label">BALANCE</div>
-            <div class="stat-value" id="balance">$0.00</div>
-          </div>
-
-          <div class="stat">
-            <div class="stat-label">TODAY P/L</div>
-            <div class="stat-value" id="todayPL">$0.00</div>
-          </div>
-
-          <div class="stat">
-            <div class="stat-label">TRADES</div>
-            <div class="stat-value" id="tradeCount">0</div>
-          </div>
-
-          <div class="stat">
-            <div class="stat-label">WINS</div>
-            <div class="stat-value green" id="wins">0</div>
-          </div>
-
-          <div class="stat">
-            <div class="stat-label">LOSSES</div>
-            <div class="stat-value red" id="losses">0</div>
-          </div>
-
-          <div class="stat">
-            <div class="stat-label">WIN RATE</div>
-            <div class="stat-value" id="winRate">0%</div>
-          </div>
-        </div>
+      <div>
+        <label class="field-label">Account ID</label>
+        <div class="field-box" style="display:flex;align-items:center">{{ connection.account_id if connection else 'â' }}</div>
       </div>
-
-      <div class="grid">
-
-        <div class="card">
-          <div class="card-title">BOT CONTROL</div>
-
-          <div class="controls">
-            <button class="btn btn-green" onclick="botRequest('/api/trading/start')">
-              START BOT
-            </button>
-
-            <button class="btn btn-yellow" onclick="botRequest('/api/trading/pause')">
-              PAUSE
-            </button>
-
-            <button class="btn btn-blue" onclick="botRequest('/api/trading/resume')">
-              RESUME
-            </button>
-
-            <button class="btn btn-red" onclick="botRequest('/api/trading/stop')">
-              STOP BOT
-            </button>
-          </div>
-
-          <div id="botMessage" class="status-box">
-            Bot is currently stopped.
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">MARKET CONFIGURATION</div>
-
-          <div class="form-grid">
-            <div>
-              <label>MARKET</label>
-              <select id="dashboardMarket" class="field">
-                <option value="R_25">Volatility 25 Index</option>
-                <option value="R_10">Volatility 10 Index</option>
-                <option value="R_75">Volatility 75 Index</option>
-                <option value="R_100">Volatility 100 Index</option>
-                <option value="1HZ25V">Volatility 25 (1s) Index</option>
-                <option value="1HZ100V">Volatility 100 (1s) Index</option>
-              </select>
-            </div>
-
-            <div>
-              <label>STRATEGY</label>
-              <select id="dashboardStrategy" class="field">
-                <option value="ABC Pattern">ABC Pattern</option>
-                <option value="ABCDE Sweep">ABCDE Sweep</option>
-                <option value="Digit Matches/Differs">Digit Matches/Differs</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">RISK SETTINGS</div>
-
-          <div class="form-grid">
-            <div>
-              <label>STAKE</label>
-              <input id="dashboardStake" class="field" type="number" value="1" min="0.35" step="0.01">
-            </div>
-
-            <div>
-              <label>RISK PERCENTAGE</label>
-              <input id="dashboardRisk" class="field" type="number" value="1" min="0.1" step="0.1">
-            </div>
-
-            <div>
-              <label>MAXIMUM TRADES</label>
-              <input id="dashboardMaxTrades" class="field" type="number" value="5" min="1">
-            </div>
-
-            <div>
-              <label>RISK/REWARD</label>
-              <input id="dashboardRR" class="field" type="number" value="2" min="1" step="0.5">
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">LIVE MARKET STATUS</div>
-
-          <div class="stats">
-            <div class="stat">
-              <div class="stat-label">CURRENT TICK</div>
-              <div class="stat-value" id="currentTick">—</div>
-            </div>
-
-            <div class="stat">
-              <div class="stat-label">SCAN STATUS</div>
-              <div class="stat-value" id="scanStatus">READY</div>
-            </div>
-          </div>
-
-          <div id="liveMessage" class="status-box">
-            Waiting for live market data.
-          </div>
-        </div>
-
+      <div>
+        <label class="field-label">Currency</label>
+        <div class="field-box" style="display:flex;align-items:center">{{ connection.account_currency if connection else 'â' }}</div>
       </div>
+    </div>
+    <div class="account-actions">
+      <button id="selectedConnect" class="btn green" type="button" onclick="connectSelected()">CONNECT SELECTED ACCOUNT</button>
+      {% if connection %}<a class="btn" href="/deriv/connect?mode=demo">RECONNECT DEMO</a>{% endif %}
+    </div>
+  </section>
 
-      <div class="card">
-        <div class="card-title">RECENT ACTIVITY</div>
+  <section class="card">
+    <div class="card-title">ACCOUNT / TODAY</div>
+    <div class="stats">
+      <div class="stat"><small>BALANCE</small><strong id="balance">$0.00</strong></div>
+      <div class="stat"><small>EQUITY</small><strong id="equity">$0.00</strong></div>
+      <div class="stat"><small>TODAY'S P/L</small><strong id="pl">$0.00</strong></div>
+      <div class="stat"><small>OPEN TRADES</small><strong id="open">0</strong></div>
+      <div class="stat"><small>WINS</small><strong id="wins">0</strong></div>
+      <div class="stat"><small>LOSSES</small><strong id="losses">0</strong></div>
+      <div class="stat"><small>WIN RATE</small><strong id="winRate">0.00%</strong></div>
+      <div class="stat"><small>BOT STATUS</small><strong id="botStatus">STOPPED</strong></div>
+    </div>
+  </section>
 
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>TIME</th>
-                <th>TYPE</th>
-                <th>SYMBOL</th>
-                <th>RESULT</th>
-                <th>P/L</th>
-              </tr>
-            </thead>
-
-            <tbody id="recentActivity">
-              <tr>
-                <td colspan="5" class="muted">No recent activity.</td>
-              </tr>
-            </tbody>
-          </table>
+  <form id="settingsForm" method="post" action="/settings">
+    <div class="grid" id="settings">
+      <section class="card">
+        <div class="card-title">MARKETS</div>
+        <div class="section">
+          {% set saved_markets = settings.markets|from_json if settings else ['Volatility 25 Index'] %}
+          {% for m in ["Step Index","Volatility 5 Index","Volatility 10 Index","Volatility 15 Index","Volatility 25 Index","Volatility 30 Index","Volatility 50 Index","Volatility 75 Index","Volatility 100 Index"] %}
+          <label class="check"><input type="checkbox" name="markets" value="{{ m }}" {% if m in saved_markets %}checked{% endif %}>{{ m }}</label>
+          {% endfor %}
         </div>
-      </div>
+      </section>
+
+      <section class="card" id="abc">
+        <div class="card-title">ABC TRADER / STRATEGIES</div>
+        <div class="section">
+          {% set saved_strategies = settings.strategies|from_json if settings else ['ABC Pattern'] %}
+          <label class="check"><input type="checkbox" name="strategies" value="ABC Pattern" {% if 'ABC Pattern' in saved_strategies %}checked{% endif %}>ABC Pattern</label>
+          <label class="check"><input type="checkbox" name="strategies" value="Digit Over/Under" {% if 'Digit Over/Under' in saved_strategies %}checked{% endif %}>Digit Over/Under â Live Scanner</label>
+          <label class="check"><input type="checkbox" name="strategies" value="Breakout" {% if 'Breakout' in saved_strategies %}checked{% endif %}>Breakout</label>
+          <label class="check"><input type="checkbox" name="strategies" value="Trend" {% if 'Trend' in saved_strategies %}checked{% endif %}>Trend</label>
+          <label class="check"><input type="checkbox" name="strategies" value="Martingale" {% if 'Martingale' in saved_strategies %}checked{% endif %}>Martingale</label>
+          <label class="check"><input type="checkbox" name="strategies" value="Flat Stake" {% if 'Flat Stake' in saved_strategies %}checked{% endif %}>Flat Stake</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">STAKE & TRADE CONTROL</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Stake Mode</label><select class="select" name="stake_mode"><option {% if settings and settings.stake_mode == 'Flat Stake' %}selected{% endif %}>Flat Stake</option><option {% if settings and settings.stake_mode == 'Martingale' %}selected{% endif %}>Martingale</option></select></div>
+          <div class="form-group"><label class="form-label">Base Risk / Stake ($)</label><input class="input" name="risk_trade" value="{{ settings.risk_trade if settings else 50 }}"></div>
+          <div class="form-group"><label class="form-label">Martingale Multiplier</label><input class="input" name="martingale_multiplier" value="{{ settings.martingale_multiplier if settings else 2 }}"></div>
+          <div class="form-group"><label class="form-label">Maximum Trades / Day</label><input class="input" name="max_trades" value="{{ settings.max_trades if settings else 15 }}"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">RISK & PROTECTION</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Reward / Risk</label><input class="input" name="reward_risk" value="{{ settings.reward_risk if settings else 2 }}"></div>
+          <div class="form-group"><label class="form-label">Daily Target ($)</label><input class="input" name="daily_target" value="{{ settings.daily_target if settings else 200 }}"></div>
+          <div class="form-group"><label class="form-label">Max Daily Profit ($)</label><input class="input" name="max_daily_profit" value="{{ settings.max_daily_profit if settings else 200 }}"></div>
+          <div class="form-group"><label class="form-label">Max Daily Loss ($)</label><input class="input" name="max_daily_loss" value="{{ settings.max_daily_loss if settings else 50 }}"></div>
+          <div class="form-group"><label class="form-label">Protect at TP (%)</label><input class="input" name="protect_tp" value="{{ settings.protect_tp if settings else 50 }}"></div>
+          <div class="form-group"><label class="form-label">Lock Profit (R)</label><input class="input" name="lock_profit_r" value="{{ settings.lock_profit_r if settings else 1 }}"></div>
+          <div class="form-group"><label class="form-label">TP Adjustment (%)</label><input class="input" name="tp_adjust_percent" value="{{ settings.tp_adjust_percent if settings else 90 }}"></div>
+        </div>
+      </section>
+
+      <section class="card" id="digitSettings">
+        <div class="card-title">DIGIT TRADER / REFERENCE SETTINGS</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Trade Type</label><select class="select" name="digit_trade_type"><option value="Over/Under" {% if not settings or settings.digit_trade_type == 'Over/Under' %}selected{% endif %}>Over/Under</option><option value="Auto" {% if settings and settings.digit_trade_type == 'Auto' %}selected{% endif %}>AI Auto Over/Under</option></select></div>
+          <div class="form-group"><label class="form-label">Prediction Barrier</label><input class="input" type="number" min="1" max="8" name="digit_barrier" value="{{ settings.digit_barrier if settings else 5 }}"></div>
+          <div class="form-group"><label class="form-label">Duration (Ticks)</label><input class="input" type="number" min="1" max="10" name="digit_duration" value="{{ settings.digit_duration if settings else 5 }}"></div>
+          <div class="form-group"><label class="form-label">Minimum Confidence (%)</label><input class="input" type="number" min="50" max="95" name="digit_min_confidence" value="{{ settings.digit_min_confidence if settings else 65 }}"></div>
+        </div>
+        <div class="note">The scanner continuously reads incoming ticks for every selected market and builds a rolling last-digit distribution.</div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">MAGNET PROFIT PROTECTION</div>
+        <div class="magnet-grid">
+          <div class="stage"><small>STAGE 1 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage1" value="{{ settings.magnet_stage1 if settings else 10 }}"><input class="input" name="magnet_lock1" value="{{ settings.magnet_lock1 if settings else 0 }}"></div>
+          <div class="stage"><small>STAGE 2 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage2" value="{{ settings.magnet_stage2 if settings else 20 }}"><input class="input" name="magnet_lock2" value="{{ settings.magnet_lock2 if settings else 0.5 }}"></div>
+          <div class="stage"><small>STAGE 3 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage3" value="{{ settings.magnet_stage3 if settings else 50 }}"><input class="input" name="magnet_lock3" value="{{ settings.magnet_lock3 if settings else 1 }}"></div>
+          <div class="stage"><small>STAGE 4 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage4" value="{{ settings.magnet_stage4 if settings else 70 }}"><input class="input" name="magnet_lock4" value="{{ settings.magnet_lock4 if settings else 1.5 }}"></div>
+        </div>
+        <div class="note">When an open trade reaches a stage, its profit floor can only move upward. If profit falls back to that protected floor, the online bot requests an early sell.</div>
+      </section>
+    </div>
+
+    <section class="card" id="digit">
+      <div class="card-title">LIVE MARKET SCANNER</div>
+      <div class="controls" style="margin-top:12px"><button type="button" class="btn blue" onclick="botAction('/api/trading/scan')">AI SCAN NOW</button></div>
+      <div id="scannerStatus" class="statusline">Scanner is waiting for the bot.</div>
+      <div id="scannerMarkets" class="scanner-grid" style="margin-top:14px"><div class="empty">Start the Digit Over/Under engine to stream selected markets.</div></div>
     </section>
 
-    <section id="abc" class="page">
-      <h1 class="page-title">ABC Pattern Trader</h1>
-
-      <div class="page-description">
-        Configure and control the ABC pattern trading strategy.
+    <section class="card">
+      <div class="card-title">BOT CONTROLS</div>
+      <div class="controls">
+        <button type="button" class="btn green" onclick="botAction('/api/trading/start')">RUN BOT</button>
+        <button type="button" class="btn yellow" onclick="botAction('/api/trading/pause')">PAUSE BOT</button>
+        <button type="button" class="btn blue" onclick="botAction('/api/trading/resume')">RESUME BOT</button>
+        <button type="button" class="btn red" onclick="botAction('/api/trading/stop')">STOP BOT</button>
+        <button type="submit" class="btn">SAVE SETTINGS</button>
       </div>
-
-      <div class="card">
-        <div class="card-title">ABC STRATEGY SETTINGS</div>
-
-        <div class="form-grid">
-          <div>
-            <label>MARKET</label>
-            <select id="abcSymbol" class="field">
-              <option value="R_25">Volatility 25 Index</option>
-              <option value="R_10">Volatility 10 Index</option>
-              <option value="R_75">Volatility 75 Index</option>
-              <option value="R_100">Volatility 100 Index</option>
-            </select>
-          </div>
-
-          <div>
-            <label>TIMEFRAME</label>
-            <select id="abcTimeframe" class="field">
-              <option value="M5">5 Minutes</option>
-              <option value="M15">15 Minutes</option>
-              <option value="H1">1 Hour</option>
-              <option value="H4">4 Hours</option>
-            </select>
-          </div>
-
-          <div>
-            <label>STAKE</label>
-            <input id="abcStake" class="field" type="number" value="1" min="0.35" step="0.01">
-          </div>
-
-          <div>
-            <label>RISK PERCENTAGE</label>
-            <input id="abcRisk" class="field" type="number" value="1" min="0.1" step="0.1">
-          </div>
-
-          <div>
-            <label>RISK/REWARD</label>
-            <input id="abcRR" class="field" type="number" value="2" min="1" step="0.5">
-          </div>
-
-          <div>
-            <label>MAXIMUM TRADES</label>
-            <input id="abcMaxTrades" class="field" type="number" value="5" min="1">
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="controls">
-          <button class="btn btn-green" onclick="startABC()">START ABC BOT</button>
-          <button class="btn btn-red" onclick="stopABC()">STOP ABC BOT</button>
-        </div>
-
-        <div id="abcMessage" class="status-box">
-          ABC bot is stopped.
-        </div>
-      </div>
+      <div id="message" class="statusline">Loading bot status...</div>
     </section>
+  </form>
 
-    <section id="digit" class="page">
-      <h1 class="page-title">Digit Matches / Differs</h1>
-
-      <div class="page-description">
-        Scan the latest digits and configure digit contracts.
-      </div>
-
-      <div class="card">
-        <div class="card-title">DIGIT CONTRACT SETTINGS</div>
-
-        <div class="form-grid">
-          <div>
-            <label>MARKET</label>
-            <select id="digitSymbol" class="field">
-              <option value="R_25">Volatility 25 Index</option>
-              <option value="R_10">Volatility 10 Index</option>
-              <option value="R_75">Volatility 75 Index</option>
-              <option value="R_100">Volatility 100 Index</option>
-            </select>
-          </div>
-
-          <div>
-            <label>TRADE TYPE</label>
-            <select id="digitContract" class="field">
-              <option value="DIGITMATCH">Matches</option>
-              <option value="DIGITDIFF">Differs</option>
-            </select>
-          </div>
-
-          <div>
-            <label>SELECTED DIGIT</label>
-            <input id="selectedDigit" class="field" type="number" value="2" min="0" max="9">
-          </div>
-
-          <div>
-            <label>NUMBER OF TICKS</label>
-            <input id="digitTicks" class="field" type="number" value="100" min="1">
-          </div>
-
-          <div>
-            <label>STAKE</label>
-            <input id="digitStake" class="field" type="number" value="1" min="0.35" step="0.01">
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="controls">
-          <button class="btn btn-blue" onclick="scanDigits()">AI SCAN</button>
-          <button class="btn btn-green" onclick="startDigitBot()">START DIGIT BOT</button>
-          <button class="btn btn-red" onclick="stopDigitBot()">STOP BOT</button>
-        </div>
-
-        <div id="digitMessage" class="status-box">
-          Scan ready.
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">DIGIT PERCENTAGES</div>
-
-        <div class="digits">
-          <div class="digit"><strong>0</strong><small id="digitPercent0">0%</small></div>
-          <div class="digit"><strong>1</strong><small id="digitPercent1">0%</small></div>
-          <div class="digit"><strong>2</strong><small id="digitPercent2">0%</small></div>
-          <div class="digit"><strong>3</strong><small id="digitPercent3">0%</small></div>
-          <div class="digit"><strong>4</strong><small id="digitPercent4">0%</small></div>
-          <div class="digit"><strong>5</strong><small id="digitPercent5">0%</small></div>
-          <div class="digit"><strong>6</strong><small id="digitPercent6">0%</small></div>
-          <div class="digit"><strong>7</strong><small id="digitPercent7">0%</small></div>
-          <div class="digit"><strong>8</strong><small id="digitPercent8">0%</small></div>
-          <div class="digit"><strong>9</strong><small id="digitPercent9">0%</small></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">RECENT DIGITS</div>
-        <div id="digitHistory" class="history"></div>
-      </div>
-    </section>
-
-    <section id="transactions" class="page">
-      <h1 class="page-title">Transactions</h1>
-
-      <div class="page-description">
-        Review recent entries, exits, stakes, payouts, and profit or loss.
-      </div>
-
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>TIME</th>
-                <th>SYMBOL</th>
-                <th>CONTRACT</th>
-                <th>ENTRY</th>
-                <th>EXIT</th>
-                <th>STAKE</th>
-                <th>PAYOUT</th>
-                <th>P/L</th>
-              </tr>
-            </thead>
-
-            <tbody id="transactionsTable">
-              <tr>
-                <td colspan="8" class="muted">No transactions available.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section id="transfers" class="page">
-      <h1 class="page-title">Transfers</h1>
-
-      <div class="page-description">
-        Prepare an account deposit or withdrawal request.
-      </div>
-
-      <div class="card">
-        <div class="form-grid">
-          <div>
-            <label>TRANSFER TYPE</label>
-            <select id="transferType" class="field">
-              <option value="deposit">Deposit</option>
-              <option value="withdrawal">Withdrawal</option>
-            </select>
-          </div>
-
-          <div>
-            <label>AMOUNT</label>
-            <input id="transferAmount" class="field" type="number" min="0.01" step="0.01">
-          </div>
-        </div>
-
-        <button class="btn btn-green" onclick="submitTransfer()">
-          SUBMIT REQUEST
-        </button>
-
-        <div id="transferMessage" class="status-box"></div>
-      </div>
-    </section>
-
-    <section id="settings" class="page">
-      <h1 class="page-title">Settings</h1>
-
-      <div class="page-description">
-        Save your default market and risk preferences.
-      </div>
-
-      <div class="card">
-        <div class="form-grid">
-          <div>
-            <label>DEFAULT MARKET</label>
-            <select id="defaultMarket" class="field">
-              <option value="R_25">Volatility 25 Index</option>
-              <option value="R_10">Volatility 10 Index</option>
-              <option value="R_75">Volatility 75 Index</option>
-              <option value="R_100">Volatility 100 Index</option>
-            </select>
-          </div>
-
-          <div>
-            <label>DEFAULT STAKE</label>
-            <input id="defaultStake" class="field" type="number" value="1" min="0.35" step="0.01">
-          </div>
-
-          <div>
-            <label>DAILY PROFIT TARGET</label>
-            <input id="profitTarget" class="field" type="number" value="10" min="0" step="0.01">
-          </div>
-
-          <div>
-            <label>MAXIMUM DAILY LOSS</label>
-            <input id="dailyLoss" class="field" type="number" value="10" min="0" step="0.01">
-          </div>
-        </div>
-
-        <button class="btn btn-green" onclick="saveSettings()">
-          SAVE SETTINGS
-        </button>
-
-        <div id="settingsMessage" class="status-box"></div>
-      </div>
-    </section>
-
-  </main>
+  <section class="grid" id="transactions">
+    <div class="card">
+      <div class="card-title">OPEN POSITIONS</div>
+      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="6" class="empty">No open trades</td></tr></tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="card-title">LAST TRADE</div>
+      <div id="lastTrade" class="empty">No trades yet.</div>
+      <div class="card-title" style="margin-top:24px">ACTIVITY</div>
+      <ul id="activity" style="margin:0;padding-left:20px;color:var(--muted);font-size:13px"></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">TRADE HISTORY</div>
+      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>TYPE</th><th>BARRIER</th><th>CONF.</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="tradeHistory"><tr><td colspan="6" class="empty">No completed trades</td></tr></tbody></table></div>
+    </div>
+  </section>
+</main>
 </div>
 
 <script>
-let connectedAccount = null;
-let selectedAccountMode = "demo";
-
-const navButtons = document.querySelectorAll(".nav-button");
-const pages = document.querySelectorAll(".page");
-
-navButtons.forEach(button => {
-  button.addEventListener("click", () => {
-    const pageName = button.dataset.page;
-
-    navButtons.forEach(item => item.classList.remove("active"));
-    pages.forEach(page => page.classList.remove("active"));
-
-    button.classList.add("active");
-    document.getElementById(pageName).classList.add("active");
-  });
-});
-
-function accountModeChanged(){
-  selectedAccountMode = document.getElementById("accountType").value;
-
-  connectedAccount = null;
-
-  document.getElementById("connectionStatus").value = "Not connected";
-  document.getElementById("accountId").value = "—";
-  document.getElementById("accountCurrency").value = "—";
-  document.getElementById("balance").textContent = "$0.00";
-
-  document.getElementById("accountMode").textContent =
-    selectedAccountMode === "real" ? "REAL ACCOUNT" : "DEMO ACCOUNT";
-
-  document.getElementById("accountMessage").textContent =
-    "Account changed. Connect the selected account before trading.";
-}
-
-async function connectDerivAccount(accountType = "demo") {
-    try {
-        window.location.href =
-            `/deriv/connect?mode=${encodeURIComponent(accountType)}`;
-    } catch (error) {
-        console.error("Deriv connection error:", error);
-        alert("Connection failed. Please try again.");
-    }
-}
-
-  message.textContent = "Connecting to " + mode + " account...";
-
-  try{
-    const response = await fetch("/api/account/connect",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        account_type:mode
-      })
-    });
-
-    const data = await response.json();
-
-    if(!response.ok){
-      throw new Error(data.detail || data.message || "Connection failed.");
-    }
-
-    connectedAccount = mode;
-
-    document.getElementById("connectionStatus").value =
-      data.connected ? "Connected" : "Connected";
-
-    document.getElementById("accountId").value =
-      data.account_id || data.loginid || "—";
-
-    document.getElementById("accountCurrency").value =
-      data.currency || "—";
-
-    if(data.balance !== undefined){
-      document.getElementById("balance").textContent =
-        Number(data.balance).toFixed(2) + " " + (data.currency || "");
-    }
-
-    document.getElementById("accountMode").textContent =
-      mode === "real" ? "REAL ACCOUNT" : "DEMO ACCOUNT";
-
-    message.textContent =
-      data.message || "Successfully connected to " + mode + " account.";
-
-    await loadTradingState();
-
-  }catch(error){
-    connectedAccount = null;
-    document.getElementById("connectionStatus").value = "Connection failed";
-    message.textContent = error.message;
-  }
-}
-
-async function refreshBalance(){
-  const message = document.getElementById("accountMessage");
-
-  if(!connectedAccount){
-    message.textContent = "Connect an account first.";
+function connectSelected(){
+  const mode=document.getElementById('accountMode').value;
+  if(mode==='real' && {{ 'false' if not allow_real else 'true' }}){
+    document.getElementById('message').textContent='Real-account connection is locked.';
     return;
   }
-
-  try{
-    const response = await fetch("/api/account/balance");
-
-    const data = await response.json();
-
-    if(!response.ok){
-      throw new Error(data.detail || data.message || "Unable to retrieve balance.");
-    }
-
-    if(data.balance !== undefined){
-      document.getElementById("balance").textContent =
-        Number(data.balance).toFixed(2) + " " + (data.currency || "");
-    }
-
-    if(data.account_id || data.loginid){
-      document.getElementById("accountId").value =
-        data.account_id || data.loginid;
-    }
-
-    if(data.currency){
-      document.getElementById("accountCurrency").value =
-        data.currency;
-    }
-
-    message.textContent = data.message || "Balance refreshed.";
-
-  }catch(error){
-    message.textContent = error.message;
-  }
+  window.location.href='/deriv/connect?mode='+encodeURIComponent(mode);
 }
-
-async function disconnectAccount(){
-  try{
-    await fetch("/api/account/disconnect",{
-      method:"POST"
-    });
-  }catch(error){
-    console.log(error);
-  }
-
-  connectedAccount = null;
-
-  document.getElementById("connectionStatus").value = "Disconnected";
-  document.getElementById("accountId").value = "—";
-  document.getElementById("accountCurrency").value = "—";
-  document.getElementById("balance").textContent = "$0.00";
-  document.getElementById("accountMessage").textContent =
-    "Account disconnected.";
+function updateConnectButton(){
+  const mode=document.getElementById('accountMode').value;
+  const btn=document.getElementById('selectedConnect');
+  btn.textContent=mode==='real'?'CONNECT REAL ACCOUNT':'CONNECT SELECTED ACCOUNT';
 }
-
-async function botRequest(url){
-  const message = document.getElementById("botMessage");
-
-  if(!connectedAccount){
-    message.textContent = "Connect Demo or Real account before starting the bot.";
-    return;
-  }
-
-  if(url === "/api/trading/start" && connectedAccount === "real"){
-    const confirmed = confirm(
-      "You are about to start LIVE TRADING. This can use real money. Continue?"
-    );
-
-    if(!confirmed){
-      message.textContent = "Live trading cancelled.";
-      return;
-    }
-  }
-
+async function botAction(url){
+  const message=document.getElementById('message');
+  message.textContent='Working...';
   try{
-    const response = await fetch(url,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        account_type:connectedAccount,
-        symbol:document.getElementById("dashboardMarket").value,
-        strategy:document.getElementById("dashboardStrategy").value,
-        stake:Number(document.getElementById("dashboardStake").value),
-        risk_percent:Number(document.getElementById("dashboardRisk").value),
-        max_trades:Number(document.getElementById("dashboardMaxTrades").value),
-        rr:Number(document.getElementById("dashboardRR").value)
-      })
-    });
-
-    const data = await response.json();
-
-    if(!response.ok){
-      throw new Error(data.detail || data.message || "Request failed.");
-    }
-
-    message.textContent =
-      data.message || "Request completed.";
-
-    await loadTradingState();
-
-  }catch(error){
-    message.textContent = error.message;
-  }
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'}});
+    const x=await r.json();
+    message.textContent=x.message||x.error||'Request completed.';
+    await refresh();
+  }catch(e){message.textContent='Unable to contact the trading service.';}
 }
-
-async function startABC(){
-  const message = document.getElementById("abcMessage");
-
-  if(!connectedAccount){
-    message.textContent = "Connect an account first.";
-    return;
-  }
-
+function money(v){return '$'+Number(v||0).toFixed(2)}
+async function refresh(){
   try{
-    const response = await fetch("/api/trading/start",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        account_type:connectedAccount,
-        symbol:document.getElementById("abcSymbol").value,
-        strategy:"ABC Pattern",
-        timeframe:document.getElementById("abcTimeframe").value,
-        stake:Number(document.getElementById("abcStake").value),
-        risk_percent:Number(document.getElementById("abcRisk").value),
-        rr:Number(document.getElementById("abcRR").value),
-        max_trades:Number(document.getElementById("abcMaxTrades").value)
-      })
-    });
+    const r=await fetch('/api/trading/state',{cache:'no-store'});
+    const x=await r.json();
+    if(!x.ok)return;
+    document.getElementById('balance').textContent=money(x.balance);
+    document.getElementById('equity').textContent=money(x.equity);
+    const pl=document.getElementById('pl');
+    pl.textContent=money(x.today_pl); pl.className=x.today_pl>=0?'ok':'bad';
+    document.getElementById('open').textContent=x.open_trades||0;
+    document.getElementById('wins').textContent=x.wins||0;
+    document.getElementById('losses').textContent=x.losses||0;
+    const total=(Number(x.wins)||0)+(Number(x.losses)||0);
+    document.getElementById('winRate').textContent=total?((Number(x.wins)||0)/total*100).toFixed(2)+'%':'0.00%';
+    const running=!!x.running;
+    document.getElementById('botPill').textContent=running?'BOT RUNNING':'BOT STOPPED';
+    document.getElementById('botStatus').textContent=running?(x.paused?'PAUSED':'RUNNING'):'STOPPED';
+    document.getElementById('message').textContent=x.message||'Ready.';
+    const p=document.getElementById('positions');
+    if(!x.positions||!x.positions.length){p.innerHTML='<tr><td colspan="6" class="empty">No open trades</td></tr>';}
+    else{p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||''}</td><td>${a.direction||''}</td><td>${a.entry??''}</td><td>${a.current??''}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||'OPEN'}</td></tr>`).join('');}
+    const l=document.getElementById('lastTrade');
+    if(x.last_trade){l.innerHTML=`<b>${x.last_trade.symbol||''}</b><br>${x.last_trade.direction||''} â¢ ${x.last_trade.status||''}<br><span class="${Number(x.last_trade.profit||0)>=0?'ok':'bad'}">${money(x.last_trade.profit)}</span>`;}
+    else{l.textContent='No trades yet.';}
+    document.getElementById('activity').innerHTML=(x.activity||[]).map(a=>`<li>${a}</li>`).join('');
+    const history=document.getElementById('tradeHistory');
+    const trades=x.trade_history||[];
+    history.innerHTML=trades.length ? trades.map(a=>`<tr><td>${a.symbol||''}</td><td>${a.direction||a.contract_type||''}</td><td>${a.barrier??'â'}</td><td>${a.confidence!=null?Number(a.confidence).toFixed(1)+'%':'â'}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||''}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">No completed trades</td></tr>';
 
-    const data = await response.json();
-
-    if(!response.ok){
-      throw new Error(data.detail || data.message || "Unable to start ABC bot.");
-    }
-
-    message.textContent = data.message || "ABC bot started.";
-
-  }catch(error){
-    message.textContent = error.message;
-  }
-}
-
-async function stopABC(){
-  const message = document.getElementById("abcMessage");
-
-  try{
-    const response = await fetch("/api/trading/stop",{
-      method:"POST"
-    });
-
-    const data = await response.json();
-    message.textContent = data.message || "ABC bot stopped.";
-
-  }catch(error){
-    message.textContent = error.message;
-  }
-}
-
-async function scanDigits(){
-  const message = document.getElementById("digitMessage");
-  message.textContent = "Scanning digits...";
-
-  try{
-    const response = await fetch("/api/digits/state");
-
-    if(!response.ok){
-      message.textContent = "Digit data is not available.";
-      return;
-    }
-
-    const data = await response.json();
-
-    if(data.percentages){
-      Object.keys(data.percentages).forEach(digit => {
-        const element = document.getElementById("digitPercent" + digit);
-
-        if(element){
-          element.textContent =
-            Number(data.percentages[digit]).toFixed(1) + "%";
-        }
-      });
-    }
-
-    if(data.history){
-      const history = document.getElementById("digitHistory");
-      history.innerHTML = "";
-
-      data.history.forEach(digit => {
-        const item = document.createElement("span");
-        item.textContent = digit;
-        item.className = Number(digit) % 2 === 0 ? "even" : "odd";
-        history.appendChild(item);
-      });
-    }
-
-    message.textContent = "Scan completed.";
-
-  }catch(error){
-    message.textContent = error.message;
-  }
-}
-
-async function startDigitBot(){
-  const message = document.getElementById("digitMessage");
-
-  if(!connectedAccount){
-    message.textContent = "Connect an account first.";
-    return;
-  }
-
-  try{
-    const response = await fetch("/api/digits/start",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        account_type:connectedAccount,
-        symbol:document.getElementById("digitSymbol").value,
-        contract_type:document.getElementById("digitContract").value,
-        digit:Number(document.getElementById("selectedDigit").value),
-        ticks:Number(document.getElementById("digitTicks").value),
-        stake:Number(document.getElementById("digitStake").value)
-      })
-    });
-
-    const data = await response.json();
-
-    if(!response.ok){
-      throw new Error(data.detail || data.message || "Unable to start digit bot.");
-    }
-
-    message.textContent = data.message || "Digit bot started.";
-
-  }catch(error){
-    message.textContent = error.message;
-  }
-}
-
-async function stopDigitBot(){
-  const message = document.getElementById("digitMessage");
-
-  try{
-    const response = await fetch("/api/digits/stop",{
-      method:"POST"
-    });
-
-    const data = await response.json();
-    message.textContent = data.message || "Digit bot stopped.";
-
-  }catch(error){
-    message.textContent = error.message;
-  }
-}
-
-async function loadTradingState(){
-  try{
-    const response = await fetch("/api/trading/state");
-
-    if(!response.ok)return;
-
-    const data = await response.json();
-
-    const running = Boolean(data.running);
-    const paused = Boolean(data.paused);
-    const status = document.getElementById("botStatus");
-
-    if(paused){
-      status.textContent = "BOT PAUSED";
-      status.style.background = "#80580f";
-      status.style.color = "#ffd36b";
-    }else if(running){
-      status.textContent = "BOT RUNNING";
-      status.style.background = "#12351f";
-      status.style.color = "#65ef9a";
+    const scanner=document.getElementById('scannerMarkets');
+    const scannerStatus=document.getElementById('scannerStatus');
+    const md=x.market_data||{};
+    const entries=Object.entries(md);
+    scannerStatus.textContent=x.engine==='DIGIT_OVER_UNDER' ? (x.message||'Live scanner running.') : 'Select Digit Over/Under and run the bot to activate the reference-style scanner.';
+    if(!entries.length){
+      scanner.innerHTML='<div class="empty">No live market data yet.</div>';
     }else{
-      status.textContent = "BOT STOPPED";
-      status.style.background = "#421c1c";
-      status.style.color = "#ff9999";
+      scanner.innerHTML=entries.map(([name,a])=>{
+        const p=a.percentages||[];
+        const sig=a.signal;
+        return `<div class="scanner-market">
+          <div class="scanner-head"><div><div class="scanner-name">${name}</div><div class="muted">${a.symbol||''} â¢ Ticks ${a.ticks||0}</div></div><div class="scanner-quote">${a.quote??'â'}</div></div>
+          <div class="digit-row">${Array.from({length:10},(_,i)=>`<div class="digit-box"><strong>${i}</strong><span>${Number(p[i]||0).toFixed(1)}%</span></div>`).join('')}</div>
+          <div class="signal-box">Last digit: <b>${a.last_digit??'â'}</b> ${sig?`â¢ <span class="signal-live">${sig.direction} ${sig.barrier} â ${Number(sig.confidence||0).toFixed(1)}%</span>`:'â¢ waiting for confidence threshold'}</div>
+        </div>`;
+      }).join('');
     }
-
-    if(data.balance !== undefined){
-      document.getElementById("balance").textContent =
-        Number(data.balance).toFixed(2) + " " + (data.currency || "");
-    }
-
-    if(data.today_pl !== undefined){
-      document.getElementById("todayPL").textContent =
-        Number(data.today_pl).toFixed(2);
-    }
-
-    if(data.trades !== undefined){
-      document.getElementById("tradeCount").textContent = data.trades;
-    }
-
-    if(data.wins !== undefined){
-      document.getElementById("wins").textContent = data.wins;
-    }
-
-    if(data.losses !== undefined){
-      document.getElementById("losses").textContent = data.losses;
-    }
-
-    if(data.win_rate !== undefined){
-      document.getElementById("winRate").textContent =
-        data.win_rate + "%";
-    }
-
-    if(data.current_tick !== undefined){
-      document.getElementById("currentTick").textContent =
-        data.current_tick;
-    }
-
-    if(data.scan_status !== undefined){
-      document.getElementById("scanStatus").textContent =
-        data.scan_status;
-    }
-
-    if(data.message !== undefined){
-      document.getElementById("liveMessage").textContent =
-        data.message;
-    }
-
-    if(Array.isArray(data.activity)){
-      const table = document.getElementById("recentActivity");
-      table.innerHTML = "";
-
-      data.activity.forEach(item => {
-        const row = document.createElement("tr");
-
-        row.innerHTML = `
-          <td>${item.time || "—"}</td>
-          <td>${item.type || "—"}</td>
-          <td>${item.symbol || "—"}</td>
-          <td>${item.result || "—"}</td>
-          <td>${item.pl || "—"}</td>
-        `;
-
-        table.appendChild(row);
-      });
-    }
-
-  }catch(error){
-    console.log(error);
-  }
+  }catch(e){document.getElementById('message').textContent='Unable to refresh bot status.';}
 }
-
-function submitTransfer(){
-  const type = document.getElementById("transferType").value;
-  const amount = document.getElementById("transferAmount").value;
-
-  document.getElementById("transferMessage").textContent =
-    "Your " + type + " request for $" + amount +
-    " has been prepared. Complete the transfer through your connected account.";
-}
-
-function saveSettings(){
-  document.getElementById("settingsMessage").textContent =
-    "Settings saved for this dashboard session.";
-}
-
-function logoutUser(){
-  window.location.href = "/logout";
-}
-
-loadTradingState();
-setInterval(loadTradingState,5000);
+updateConnectButton(); refresh(); setInterval(refresh,3000);
 </script>
-
 </body>
 </html>
