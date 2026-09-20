@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -233,6 +234,8 @@ def init_db():
             "ALTER TABLE settings ADD COLUMN max_trades REAL NOT NULL DEFAULT 200"
         )
     conn.execute("UPDATE settings SET max_trades=200 WHERE max_trades=15")
+    # Digit rule: only take DIGITOVER barrier 1 when confidence is at least 94%.
+    conn.execute("UPDATE settings SET digit_trade_type='Over 1 Only', digit_barrier=1, digit_min_confidence=94")
 
     if "stake_mode" not in settings_columns:
         conn.execute(
@@ -252,11 +255,11 @@ def init_db():
     # Reference-bot / live digit scanner settings. These are additive so
     # existing online-bot accounts and settings are preserved.
     digit_columns = {
-        "digit_trade_type": "TEXT NOT NULL DEFAULT 'Over/Under'",
-        "digit_barrier": "INTEGER NOT NULL DEFAULT 5",
+        "digit_trade_type": "TEXT NOT NULL DEFAULT 'Over 1 Only'",
+        "digit_barrier": "INTEGER NOT NULL DEFAULT 1",
         "digit_duration": "INTEGER NOT NULL DEFAULT 5",
         "digit_duration_unit": "TEXT NOT NULL DEFAULT 't'",
-        "digit_min_confidence": "REAL NOT NULL DEFAULT 65",
+        "digit_min_confidence": "REAL NOT NULL DEFAULT 94",
         "magnet_stage1": "REAL NOT NULL DEFAULT 10",
         "magnet_lock1": "REAL NOT NULL DEFAULT 0",
         "magnet_stage2": "REAL NOT NULL DEFAULT 20",
@@ -532,11 +535,11 @@ def save_settings(user_id, form):
             stake_mode,
             min(5.0, max(1.0, float(form.get("martingale_multiplier", 2)))),
             min(99.0, max(50.0, float(form.get("tp_adjust_percent", 90)))),
-            str(form.get("digit_trade_type", "Over/Under")),
-            min(8, max(1, int(float(form.get("digit_barrier", 5))))),
+            "Over 1 Only",
+            1,
             min(10, max(1, int(float(form.get("digit_duration", 5))))),
             str(form.get("digit_duration_unit", "t")),
-            min(95.0, max(50.0, float(form.get("digit_min_confidence", 65)))),
+            94.0,
             float(form.get("magnet_stage1", 10)),
             float(form.get("magnet_lock1", 0)),
             float(form.get("magnet_stage2", 20)),
@@ -2554,37 +2557,54 @@ def digit_percentages(digits):
     return counts, [round((n / total) * 100, 2) for n in counts]
 
 
-def digit_signal(digits, trade_type="Over/Under", fixed_barrier=5, min_confidence=65):
-    """Return the strongest recent Over/Under read from the live tick window."""
+def is_choppy_market(prices, min_points=25):
+    """Conservative quote-action filter. Returns True when recent price action is
+    repeatedly reversing or has very low directional efficiency. This is a
+    market-quality filter only; it never creates a trade signal by itself."""
+    try:
+        vals = [float(x) for x in list(prices or [])[-40:]]
+    except Exception:
+        return True
+    if len(vals) < min_points:
+        return True
+
+    diffs = [vals[i] - vals[i - 1] for i in range(1, len(vals))]
+    signs = [1 if d > 0 else -1 if d < 0 else 0 for d in diffs]
+    signs = [x for x in signs if x]
+    if len(signs) < 12:
+        return True
+
+    reversals = sum(1 for i in range(1, len(signs)) if signs[i] != signs[i - 1])
+    reversal_ratio = reversals / max(1, len(signs) - 1)
+    total_move = sum(abs(d) for d in diffs)
+    net_move = abs(vals[-1] - vals[0])
+    efficiency = (net_move / total_move) if total_move > 0 else 0.0
+
+    # High reversal frequency or very low directional efficiency = choppy.
+    return reversal_ratio >= 0.58 or efficiency <= 0.18
+
+
+def digit_signal(digits, trade_type="Over 1 Only", fixed_barrier=1, min_confidence=94, prices=None):
+    """Strict digit rule: only DIGITOVER 1 at >=94%, and never during choppy price action."""
     if len(digits) < 20:
         return None
 
-    recent = list(digits[-50:])
-    candidates = []
-
-    if trade_type in {"Over/Under", "Auto"}:
-        barriers = [fixed_barrier] if trade_type == "Over/Under" else list(range(1, 9))
-        for barrier in barriers:
-            over = sum(d > barrier for d in recent) / len(recent) * 100
-            under = sum(d < barrier for d in recent) / len(recent) * 100
-            if over >= under:
-                candidates.append((over, "DIGITOVER", barrier, over))
-            else:
-                candidates.append((under, "DIGITUNDER", barrier, under))
-
-    if not candidates:
+    if is_choppy_market(prices):
         return None
 
-    confidence, contract_type, barrier, probability = max(candidates, key=lambda x: x[0])
-    if confidence < float(min_confidence):
+    recent = list(digits[-50:])
+    over1 = sum(d > 1 for d in recent) / len(recent) * 100
+
+    # Never generate UNDER signals or other barriers.
+    if over1 < 94.0:
         return None
 
     return {
-        "contract_type": contract_type,
-        "direction": "OVER" if contract_type == "DIGITOVER" else "UNDER",
-        "barrier": int(barrier),
-        "confidence": round(float(confidence), 2),
-        "probability": round(float(probability), 2),
+        "contract_type": "DIGITOVER",
+        "direction": "OVER",
+        "barrier": 1,
+        "confidence": round(float(over1), 2),
+        "probability": round(float(over1), 2),
         "sample": len(recent),
     }
 
@@ -2612,11 +2632,11 @@ async def digit_bot_worker(
     max_trades=200,
     stake_mode="Flat Stake",
     martingale_multiplier=2.0,
-    trade_type="Over/Under",
-    barrier=5,
+    trade_type="Over 1 Only",
+    barrier=1,
     duration=5,
     duration_unit="t",
-    min_confidence=65,
+    min_confidence=94,
     magnet_stages=(10, 20, 50, 70),
     magnet_locks=(0, 0.5, 1, 1.5),
     max_daily_profit=1200.0,
@@ -2690,6 +2710,8 @@ async def digit_bot_worker(
                     "quote": prices[-1] if prices else None,
                     "last_digit": seeded[-1] if seeded else None,
                     "digits": seeded[-50:],
+                    "prices": prices[-40:],
+                    "market_condition": "WAITING FOR CLEAN PRICE ACTION",
                     "counts": counts,
                     "percentages": pcts,
                     "signal": None,
@@ -2893,7 +2915,7 @@ async def digit_bot_worker(
                                 "percentages": pcts,
                                 "ticks": int(data.get("ticks", 0) or 0) + 1,
                             })
-                            signal = digit_signal(data["digits"], trade_type, barrier, min_confidence)
+                            signal = digit_signal(data["digits"], "Over 1 Only", 1, 94)
                             data["signal"] = signal
                             if signal:
                                 state["signals"] = [{"market": market, **signal, "quote": quote, "last_digit": digit}]
