@@ -47,6 +47,7 @@ a{text-decoration:none;color:inherit}
 .tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:650px}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--border);font-size:13px}th{color:var(--muted);font-size:11px}.empty{text-align:center;color:var(--muted);padding:20px}.ok{color:#4ee889}.bad{color:#ff7474}
 .hidden{display:none!important}
 .scanner-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.scanner-market{background:#071321;border:1px solid var(--border);border-radius:10px;padding:16px}.scanner-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.scanner-name{font-weight:800}.scanner-quote{font-size:22px;font-weight:800}.digit-row{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;margin-top:12px}.digit-box{border:1px solid var(--border);border-radius:7px;text-align:center;padding:7px 2px;background:#0b1a2b;font-size:11px}.digit-box strong{display:block;font-size:14px}.digit-box span{color:var(--muted);font-size:10px}.signal-box{margin-top:12px;border-radius:8px;padding:10px;background:#0b1a2b;border:1px solid var(--border);font-size:12px}.signal-live{color:#4ee889}.magnet-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stage{background:#071321;border:1px solid var(--border);border-radius:8px;padding:10px}.stage small{display:block;color:var(--muted);font-size:10px}.stage input{margin-top:6px;width:100%;min-height:40px}
+.page-section{display:none}.page-section.page-visible{display:block}.page-header{margin:0 0 24px}.page-header h1{margin:0 0 8px;font-size:34px}.page-header p{margin:0;color:var(--muted);font-size:16px}.magnet-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.magnet-stat{background:#071321;border:1px solid var(--border);border-radius:10px;padding:16px}.magnet-stat small{display:block;color:var(--muted);font-size:11px;font-weight:800}.magnet-stat strong{display:block;font-size:22px;margin-top:7px}.stage-track{display:flex;gap:7px;margin-top:14px}.stage-dot{flex:1;height:8px;border-radius:99px;background:#1a2a40;border:1px solid #2b4261}.stage-dot.active{background:#21c66b;border-color:#21c66b}.subnav-note{font-size:13px;color:var(--muted);margin-top:10px}.mobile-scroll{overflow-x:auto}
 @media(max-width:900px){.scanner-grid{grid-template-columns:1fr}.magnet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:900px){.topbar{padding:20px 22px}.topline{display:block}.top-actions{margin-top:18px}.navbar{padding:16px 18px;gap:8px}.navitem{font-size:17px;padding:12px 16px}.main{padding:24px 16px 50px}.page-title{font-size:32px}.account-grid,.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.btn{font-size:16px;min-height:48px}.field-box,.field-select{min-height:60px;font-size:18px}}
 @media(max-width:520px){.brand{font-size:24px}.subtitle{font-size:13px}.stats{grid-template-columns:1fr 1fr}.card{padding:20px}.account-grid{gap:16px}.field-label{font-size:14px}}
@@ -69,12 +70,12 @@ a{text-decoration:none;color:inherit}
   </div>
 </header>
 
-<nav class="navbar">
-  <a class="navitem active" href="#dashboard">Dashboard</a>
-  <a class="navitem" href="#abc">ABC Trader</a>
-  <a class="navitem" href="#digit">Digit Trader</a>
-  <a class="navitem" href="#transactions">Transactions</a>
-  <a class="navitem" href="#settings">Settings</a>
+<nav class="navbar" id="mainNav">
+  <a class="navitem active" data-page-link="dashboard" href="#dashboard">Dashboard</a>
+  <a class="navitem" data-page-link="abc" href="#abc">ABC Trader</a>
+  <a class="navitem" data-page-link="digit" href="#digit">Digit Trader</a>
+  <a class="navitem" data-page-link="transactions" href="#transactions">Transactions</a>
+  <a class="navitem" data-page-link="settings" href="#settings">Settings</a>
 </nav>
 
 <main class="main" id="dashboard">
@@ -85,10 +86,8 @@ a{text-decoration:none;color:inherit}
     <div class="notice">Real-account connection is currently locked. Demo mode remains available.</div>
   {% endif %}
 
-  <h1 class="page-title">Dashboard</h1>
-  <div class="page-sub">Monitor your account, bot activity, live market data, and trading performance.</div>
 
-  <section class="card">
+  <section class="card page-section page-visible" data-page="dashboard">
     <div class="card-title">ACCOUNT CONNECTION</div>
     <div class="account-grid">
       <div>
@@ -123,7 +122,7 @@ a{text-decoration:none;color:inherit}
     </div>
   </section>
 
-  <section class="card">
+  <section class="card page-section page-visible" data-page="dashboard">
     <div class="card-title">ACCOUNT / TODAY</div>
     <div class="stats">
       <div class="stat"><small>BALANCE</small><strong id="balance">$0.00</strong></div>
@@ -137,9 +136,21 @@ a{text-decoration:none;color:inherit}
     </div>
   </section>
 
+  <section class="card page-section page-visible" data-page="dashboard">
+    <div class="card-title">MAGNET PROFIT PROTECTION â LIVE</div>
+    <div class="magnet-summary">
+      <div class="magnet-stat"><small>ACTIVE STAGE</small><strong id="magnetStage">STAGE 0</strong></div>
+      <div class="magnet-stat"><small>PEAK PROFIT</small><strong id="magnetPeak">$0.00</strong></div>
+      <div class="magnet-stat"><small>LOCKED PROFIT</small><strong id="magnetLocked">$0.00</strong></div>
+      <div class="magnet-stat"><small>OPEN MAGNETS</small><strong id="magnetOpen">0</strong></div>
+    </div>
+    <div class="stage-track"><span id="stageDot1" class="stage-dot"></span><span id="stageDot2" class="stage-dot"></span><span id="stageDot3" class="stage-dot"></span><span id="stageDot4" class="stage-dot"></span></div>
+    <div id="magnetMessage" class="subnav-note">The bot will move the protection floor upward as an open trade reaches each stage.</div>
+  </section>
+
   <form id="settingsForm" method="post" action="/settings">
     <div class="grid" id="settings">
-      <section class="card">
+      <section class="card page-section" data-page="settings">
         <div class="card-title">MARKETS</div>
         <div class="section">
           {% set saved_markets = settings.markets|from_json if settings else ['Volatility 25 Index'] %}
@@ -149,7 +160,7 @@ a{text-decoration:none;color:inherit}
         </div>
       </section>
 
-      <section class="card" id="abc">
+      <section class="card page-section" data-page="abc">
         <div class="card-title">ABC TRADER / STRATEGIES</div>
         <div class="section">
           {% set saved_strategies = settings.strategies|from_json if settings else ['ABC Pattern'] %}
@@ -162,7 +173,7 @@ a{text-decoration:none;color:inherit}
         </div>
       </section>
 
-      <section class="card">
+      <section class="card page-section" data-page="settings">
         <div class="card-title">STAKE & TRADE CONTROL</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Stake Mode</label><select class="select" name="stake_mode"><option {% if settings and settings.stake_mode == 'Flat Stake' %}selected{% endif %}>Flat Stake</option><option {% if settings and settings.stake_mode == 'Martingale' %}selected{% endif %}>Martingale</option></select></div>
@@ -172,7 +183,7 @@ a{text-decoration:none;color:inherit}
         </div>
       </section>
 
-      <section class="card">
+      <section class="card page-section" data-page="settings">
         <div class="card-title">RISK & PROTECTION</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Reward / Risk</label><input class="input" name="reward_risk" value="{{ settings.reward_risk if settings else 2 }}"></div>
@@ -185,7 +196,7 @@ a{text-decoration:none;color:inherit}
         </div>
       </section>
 
-      <section class="card" id="digitSettings">
+      <section class="card page-section" data-page="digit">
         <div class="card-title">DIGIT TRADER / REFERENCE SETTINGS</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Trade Type</label><select class="select" name="digit_trade_type"><option value="Over/Under" {% if not settings or settings.digit_trade_type == 'Over/Under' %}selected{% endif %}>Over/Under</option><option value="Auto" {% if settings and settings.digit_trade_type == 'Auto' %}selected{% endif %}>AI Auto Over/Under</option></select></div>
@@ -196,7 +207,7 @@ a{text-decoration:none;color:inherit}
         <div class="note">The scanner continuously reads incoming ticks for every selected market and builds a rolling last-digit distribution.</div>
       </section>
 
-      <section class="card">
+      <section class="card page-section" data-page="settings">
         <div class="card-title">MAGNET PROFIT PROTECTION</div>
         <div class="magnet-grid">
           <div class="stage"><small>STAGE 1 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage1" value="{{ settings.magnet_stage1 if settings else 10 }}"><input class="input" name="magnet_lock1" value="{{ settings.magnet_lock1 if settings else 0 }}"></div>
@@ -208,30 +219,49 @@ a{text-decoration:none;color:inherit}
       </section>
     </div>
 
-    <section class="card" id="digit">
+    <section class="card page-section" data-page="digit">
       <div class="card-title">LIVE MARKET SCANNER</div>
       <div class="controls" style="margin-top:12px"><button type="button" class="btn blue" onclick="botAction('/api/trading/scan')">AI SCAN NOW</button></div>
       <div id="scannerStatus" class="statusline">Scanner is waiting for the bot.</div>
       <div id="scannerMarkets" class="scanner-grid" style="margin-top:14px"><div class="empty">Start the Digit Over/Under engine to stream selected markets.</div></div>
     </section>
 
-    <section class="card">
+    <section class="card page-section" data-page="digit">
+      <div class="card-title">DIGIT BOT CONTROLS</div>
+      <div class="controls">
+        <button type="button" class="btn green" onclick="botAction('/api/trading/start')">RUN BOT</button>
+        <button type="button" class="btn yellow" onclick="botAction('/api/trading/pause')">PAUSE BOT</button>
+        <button type="button" class="btn blue" onclick="botAction('/api/trading/resume')">RESUME BOT</button>
+        <button type="button" class="btn red" onclick="botAction('/api/trading/stop')">STOP BOT</button>
+      </div>
+      <div class="statusline">The scanner and trade-management worker continue in the background when you switch to another tab.</div>
+    </section>
+
+    <section class="card page-section page-visible" data-page="dashboard">
       <div class="card-title">BOT CONTROLS</div>
       <div class="controls">
         <button type="button" class="btn green" onclick="botAction('/api/trading/start')">RUN BOT</button>
         <button type="button" class="btn yellow" onclick="botAction('/api/trading/pause')">PAUSE BOT</button>
         <button type="button" class="btn blue" onclick="botAction('/api/trading/resume')">RESUME BOT</button>
         <button type="button" class="btn red" onclick="botAction('/api/trading/stop')">STOP BOT</button>
-        <button type="submit" class="btn">SAVE SETTINGS</button>
+        <button type="button" class="btn" onclick="showPage('settings')">OPEN SETTINGS</button>
       </div>
       <div id="message" class="statusline">Loading bot status...</div>
     </section>
+
+    <section class="card page-section" data-page="settings">
+      <div class="card-title">SAVE SETTINGS</div>
+      <div class="subnav-note">Changes made in Settings are applied the next time the online bot starts. The current running worker is not silently restarted.</div>
+      <div class="controls" style="margin-top:14px">
+        <button type="submit" class="btn green">SAVE ALL SETTINGS</button>
+      </div>
+    </section>
   </form>
 
-  <section class="grid" id="transactions">
+  <section class="grid page-section" data-page="transactions" id="transactions">
     <div class="card">
       <div class="card-title">OPEN POSITIONS</div>
-      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="6" class="empty">No open trades</td></tr></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>MAGNET</th><th>LOCKED</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="8" class="empty">No open trades</td></tr></tbody></table></div>
     </div>
     <div class="card">
       <div class="card-title">LAST TRADE</div>
@@ -248,9 +278,30 @@ a{text-decoration:none;color:inherit}
 </div>
 
 <script>
+const pageDescriptions={
+  dashboard:['Dashboard','Account overview, live bot status, and active profit protection.'],
+  abc:['ABC Trader','ABC strategies, market selection, and automated setup controls.'],
+  digit:['Digit Trader','Live digit scanning, Over/Under signals, and reference-bot behavior.'],
+  transactions:['Transactions','Open positions, completed trades, P/L, and bot activity.'],
+  settings:['Settings','Risk, stake, market, and Magnet protection configuration.']
+};
+function showPage(page, updateHash=true){
+  if(!pageDescriptions[page]) page='dashboard';
+  document.querySelectorAll('.page-section').forEach(el=>el.classList.toggle('page-visible',el.dataset.page===page));
+  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active',el.dataset.pageLink===page));
+  let header=document.getElementById('pageHeader');
+  if(!header){
+    header=document.createElement('div'); header.id='pageHeader'; header.className='page-header';
+    const main=document.querySelector('main.main'); main.insertBefore(header,main.firstElementChild);
+  }
+  header.innerHTML='<h1>'+pageDescriptions[page][0]+'</h1><p>'+pageDescriptions[page][1]+'</p>';
+  if(updateHash) history.replaceState(null,'','#'+page);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.querySelectorAll('[data-page-link]').forEach(el=>el.addEventListener('click',e=>{e.preventDefault();showPage(el.dataset.pageLink);}));
 function connectSelected(){
   const mode=document.getElementById('accountMode').value;
-  if(mode==='real' && {{ 'false' if not allow_real else 'true' }}){
+  if(mode==='real' && {{ 'false' if allow_real else 'true' }}){
     document.getElementById('message').textContent='Real-account connection is locked.';
     return;
   }
@@ -292,7 +343,7 @@ async function refresh(){
     document.getElementById('message').textContent=x.message||'Ready.';
     const p=document.getElementById('positions');
     if(!x.positions||!x.positions.length){p.innerHTML='<tr><td colspan="6" class="empty">No open trades</td></tr>';}
-    else{p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||''}</td><td>${a.direction||''}</td><td>${a.entry??''}</td><td>${a.current??''}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||'OPEN'}</td></tr>`).join('');}
+    else{p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||''}</td><td>${a.direction||''}</td><td>${a.entry??''}</td><td>${a.current??''}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>Stage ${a.magnet_stage||0}</td><td class="ok">${money(a.locked_profit)}</td><td>${a.status||'OPEN'}</td></tr>`).join('');}
     const l=document.getElementById('lastTrade');
     if(x.last_trade){l.innerHTML=`<b>${x.last_trade.symbol||''}</b><br>${x.last_trade.direction||''} â¢ ${x.last_trade.status||''}<br><span class="${Number(x.last_trade.profit||0)>=0?'ok':'bad'}">${money(x.last_trade.profit)}</span>`;}
     else{l.textContent='No trades yet.';}
@@ -319,9 +370,20 @@ async function refresh(){
         </div>`;
       }).join('');
     }
+    const magnet=x.magnet||{};
+    document.getElementById('magnetStage').textContent='STAGE '+(magnet.stage||0);
+    document.getElementById('magnetPeak').textContent=money(magnet.open_peak_profit);
+    document.getElementById('magnetLocked').textContent=money(magnet.open_locked_profit);
+    document.getElementById('magnetOpen').textContent=(magnet.positions||[]).length;
+    [1,2,3,4].forEach(i=>document.getElementById('stageDot'+i).classList.toggle('active',(magnet.stage||0)>=i));
+    const activeMag=(magnet.positions||[])[0];
+    document.getElementById('magnetMessage').textContent=activeMag ? `${activeMag.market}: Stage ${activeMag.stage} â¢ peak ${money(activeMag.peak_profit)} â¢ locked ${money(activeMag.locked_profit)}` : 'The bot will move the protection floor upward as an open trade reaches each stage.';
   }catch(e){document.getElementById('message').textContent='Unable to refresh bot status.';}
 }
-updateConnectButton(); refresh(); setInterval(refresh,3000);
+updateConnectButton();
+const initialPage=(location.hash||'#dashboard').slice(1);
+showPage(initialPage,false);
+refresh(); setInterval(refresh,3000);
 </script>
 </body>
 </html>
