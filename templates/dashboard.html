@@ -261,7 +261,7 @@ a{text-decoration:none;color:inherit}
   <section class="grid page-section" data-page="transactions" id="transactions">
     <div class="card">
       <div class="card-title">OPEN POSITIONS</div>
-      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>MAGNET</th><th>LOCKED</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="8" class="empty">No open trades</td></tr></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>CONTRACT</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>MAGNET</th><th>LOCKED</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="9" class="empty">No open trades</td></tr></tbody></table></div>
     </div>
     <div class="card">
       <div class="card-title">LAST TRADE</div>
@@ -271,7 +271,7 @@ a{text-decoration:none;color:inherit}
     </div>
     <div class="card">
       <div class="card-title">TRADE HISTORY</div>
-      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>TYPE</th><th>BARRIER</th><th>CONF.</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="tradeHistory"><tr><td colspan="6" class="empty">No completed trades</td></tr></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>CONTRACT</th><th>TYPE</th><th>BARRIER</th><th>CONF.</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="tradeHistory"><tr><td colspan="6" class="empty">No completed trades</td></tr></tbody></table></div>
     </div>
   </section>
 </main>
@@ -342,15 +342,15 @@ async function refresh(){
     document.getElementById('botStatus').textContent=running?(x.paused?'PAUSED':'RUNNING'):'STOPPED';
     document.getElementById('message').textContent=x.message||'Ready.';
     const p=document.getElementById('positions');
-    if(!x.positions||!x.positions.length){p.innerHTML='<tr><td colspan="6" class="empty">No open trades</td></tr>';}
-    else{p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||''}</td><td>${a.direction||''}</td><td>${a.entry??''}</td><td>${a.current??''}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>Stage ${a.magnet_stage||0}</td><td class="ok">${money(a.locked_profit)}</td><td>${a.status||'OPEN'}</td></tr>`).join('');}
+    if(!x.positions||!x.positions.length){p.innerHTML='<tr><td colspan="9" class="empty">No open trades</td></tr>';}
+    else{p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.entry??''}</td><td>${a.current??a.current_spot??''}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>Stage ${a.magnet_stage||0}</td><td class="ok">${money(a.locked_profit)}</td><td>${a.status||'OPEN'}</td></tr>`).join('');}
     const l=document.getElementById('lastTrade');
     if(x.last_trade){l.innerHTML=`<b>${x.last_trade.symbol||''}</b><br>${x.last_trade.direction||''} â¢ ${x.last_trade.status||''}<br><span class="${Number(x.last_trade.profit||0)>=0?'ok':'bad'}">${money(x.last_trade.profit)}</span>`;}
     else{l.textContent='No trades yet.';}
     document.getElementById('activity').innerHTML=(x.activity||[]).map(a=>`<li>${a}</li>`).join('');
     const history=document.getElementById('tradeHistory');
     const trades=x.trade_history||[];
-    history.innerHTML=trades.length ? trades.map(a=>`<tr><td>${a.symbol||''}</td><td>${a.direction||a.contract_type||''}</td><td>${a.barrier??'â'}</td><td>${a.confidence!=null?Number(a.confidence).toFixed(1)+'%':'â'}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||''}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">No completed trades</td></tr>';
+    history.innerHTML=trades.length ? trades.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.barrier??'â'}</td><td>${a.confidence!=null?Number(a.confidence).toFixed(1)+'%':'â'}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||''}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No completed trades</td></tr>';
 
     const scanner=document.getElementById('scannerMarkets');
     const scannerStatus=document.getElementById('scannerStatus');
