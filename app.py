@@ -2644,9 +2644,23 @@ async def digit_bot_worker(
     last_trade_tick = {}
 
     try:
-        ws_url = await deriv_ws_url(account_id, token)
-        async with websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as market_ws, \
-                   websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as trade_ws:
+        # Deriv Options OTP WebSocket URLs are single-use. The public market
+        # feed must use the unauthenticated public endpoint, while account
+        # actions use the authenticated OTP URL exactly once.
+        public_ws_url = "wss://api.derivws.com/trading/v1/options/ws/public"
+        trade_ws_url = await deriv_ws_url(account_id, token)
+
+        async with websockets.connect(
+            public_ws_url,
+            open_timeout=15,
+            close_timeout=5,
+            ping_interval=20,
+        ) as market_ws, websockets.connect(
+            trade_ws_url,
+            open_timeout=15,
+            close_timeout=5,
+            ping_interval=20,
+        ) as trade_ws:
 
             active = await get_active_symbols(market_ws)
             symbols = {m: resolve_online_symbol(active, m) for m in markets}
