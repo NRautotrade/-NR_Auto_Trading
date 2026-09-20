@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -169,7 +168,7 @@ def init_db():
             max_daily_loss REAL NOT NULL DEFAULT 50,
             protect_tp REAL NOT NULL DEFAULT 50,
             lock_profit_r REAL NOT NULL DEFAULT 1,
-            max_trades REAL NOT NULL DEFAULT 15,
+            max_trades REAL NOT NULL DEFAULT 200,
             stake_mode TEXT NOT NULL DEFAULT 'Flat Stake',
             martingale_multiplier REAL NOT NULL DEFAULT 2,
             tp_adjust_percent REAL NOT NULL DEFAULT 90,
@@ -231,8 +230,9 @@ def init_db():
 
     if "max_trades" not in settings_columns:
         conn.execute(
-            "ALTER TABLE settings ADD COLUMN max_trades REAL NOT NULL DEFAULT 15"
+            "ALTER TABLE settings ADD COLUMN max_trades REAL NOT NULL DEFAULT 200"
         )
+    conn.execute("UPDATE settings SET max_trades=200 WHERE max_trades=15")
 
     if "stake_mode" not in settings_columns:
         conn.execute(
@@ -528,7 +528,7 @@ def save_settings(user_id, form):
             float(form.get("max_daily_loss", 50)),
             float(form.get("protect_tp", 50)),
             float(form.get("lock_profit_r", 1)),
-            min(15.0, max(1.0, float(form.get("max_trades", 15)))),
+            min(200.0, max(1.0, float(form.get("max_trades", 200)))),
             stake_mode,
             min(5.0, max(1.0, float(form.get("martingale_multiplier", 2)))),
             min(99.0, max(50.0, float(form.get("tp_adjust_percent", 90)))),
@@ -1847,7 +1847,7 @@ async def demo_bot_worker(
     risk,
     rr,
     max_daily_profit=1200.0,
-    max_trades=15,
+    max_trades=200,
     stake_mode="Flat Stake",
     martingale_multiplier=2.0,
     tp_adjust_percent=90.0,
@@ -2181,7 +2181,7 @@ async def demo_bot_worker(
                 # DAILY PROFIT CAP / MAX TRADES
                 # --------------------------------------------------------
                 daily_cap = max(0.0, float(max_daily_profit or 1200))
-                trade_cap = min(15, max(1, int(max_trades or 15)))
+                trade_cap = min(200, max(1, int(max_trades or 200)))
                 if int(state.get("trades", 0) or 0) >= trade_cap:
                     state["message"] = (
                         f"Maximum {trade_cap} trades reached for today. "
@@ -2609,7 +2609,7 @@ async def digit_bot_worker(
     token,
     markets,
     risk,
-    max_trades=15,
+    max_trades=200,
     stake_mode="Flat Stake",
     martingale_multiplier=2.0,
     trade_type="Over/Under",
@@ -2721,7 +2721,7 @@ async def digit_bot_worker(
                 nonlocal req
                 if market in open_contracts or state.get("paused"):
                     return
-                if int(state.get("trades", 0) or 0) >= min(15, max(1, int(max_trades))):
+                if int(state.get("trades", 0) or 0) >= min(200, max(1, int(max_trades))):
                     return
                 if float(state.get("today_pl", 0) or 0) >= max(0.0, float(max_daily_profit)):
                     return
@@ -2974,7 +2974,7 @@ async def digit_bot_worker(
                         state["last_trade"] = closed
                         history = state.setdefault("trade_history", [])
                         history.insert(0, closed)
-                        state["trade_history"] = history[:50]
+                        state["trade_history"] = history
                         activity = state.setdefault("activity", [])
                         activity.insert(0, f"CLOSE {market} {status.upper()} â¢ Contract {contract_id} â¢ P/L ${profit:+.2f}")
                         state["activity"] = activity[:30]
@@ -2999,7 +2999,7 @@ async def digit_bot_worker(
                     state["message"] = "Daily profit limit reached â scanner remains live, new entries are paused."
                 elif float(state.get("today_pl", 0) or 0) <= -abs(float(max_daily_loss or 0)):
                     state["message"] = "Daily loss limit reached â scanner remains live, new entries are paused."
-                elif int(state.get("trades", 0) or 0) >= min(15, max(1, int(max_trades))):
+                elif int(state.get("trades", 0) or 0) >= min(200, max(1, int(max_trades))):
                     state["message"] = "Maximum daily trades reached â scanner remains live, new entries are paused."
 
                 # Drain balance messages without blocking.
