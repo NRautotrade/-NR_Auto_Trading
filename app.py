@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -2737,32 +2738,74 @@ async def digit_bot_worker(
                 if balance <= 0 or stake > balance:
                     return
 
-                req += 1
-                proposal_req = req
-                proposal_payload = {
-                    "proposal": 1,
-                    "amount": stake,
-                    "basis": "stake",
-                    "contract_type": signal["contract_type"],
-                    "currency": state.get("currency", "USD"),
-                    "duration": int(duration),
-                    "duration_unit": duration_unit,
-                    "underlying_symbol": symbol,
-                    "barrier": str(signal["barrier"]),
-                }
-                await trade_ws.send(json.dumps({**proposal_payload, "req_id": proposal_req}))
+                # Digit contract durations can vary by market/account. A proposal
+                # rejected specifically for its duration must NOT stop the entire
+                # scanner. Try the configured duration first, then probe the common
+                # tick durations until Deriv returns a valid proposal.
+                requested_duration = max(1, int(duration))
+                duration_candidates = [requested_duration] + [
+                    d for d in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+                    if d != requested_duration
+                ]
                 proposal = None
-                deadline = time.time() + 10
-                while time.time() < deadline:
-                    raw = await asyncio.wait_for(trade_ws.recv(), timeout=3)
-                    msg = json.loads(raw)
-                    if msg.get("req_id") == proposal_req:
+                used_duration = requested_duration
+                last_duration_error = None
+
+                for candidate_duration in duration_candidates:
+                    req += 1
+                    proposal_req = req
+                    proposal_payload = {
+                        "proposal": 1,
+                        "amount": stake,
+                        "basis": "stake",
+                        "contract_type": signal["contract_type"],
+                        "currency": state.get("currency", "USD"),
+                        "duration": candidate_duration,
+                        "duration_unit": duration_unit,
+                        "underlying_symbol": symbol,
+                        "barrier": str(signal["barrier"]),
+                    }
+                    await trade_ws.send(json.dumps({**proposal_payload, "req_id": proposal_req}))
+                    deadline = time.time() + 6
+                    candidate_error = None
+                    while time.time() < deadline:
+                        raw = await asyncio.wait_for(trade_ws.recv(), timeout=3)
+                        msg = json.loads(raw)
+                        if msg.get("req_id") != proposal_req:
+                            continue
                         if msg.get("error"):
-                            raise RuntimeError(msg["error"].get("message", "Proposal rejected."))
-                        proposal = msg.get("proposal", {})
+                            candidate_error = msg["error"].get("message", "Proposal rejected.")
+                            last_duration_error = candidate_error
+                            break
+                        candidate_proposal = msg.get("proposal", {})
+                        if candidate_proposal.get("id"):
+                            proposal = candidate_proposal
+                            used_duration = candidate_duration
+                            break
+                        candidate_error = "Proposal was not returned."
                         break
+
+                    if proposal and proposal.get("id"):
+                        break
+
+                    # Only fall back when Deriv explicitly rejects the duration.
+                    # Other proposal errors should be surfaced rather than hidden.
+                    if candidate_error and "duration" not in candidate_error.lower():
+                        state["message"] = f"{market}: {candidate_error}"
+                        return
+
                 if not proposal or not proposal.get("id"):
+                    state["message"] = (
+                        f"{market}: no supported digit duration was available "
+                        f"(requested {requested_duration} {duration_unit})."
+                    )
                     return
+
+                if used_duration != requested_duration:
+                    state["message"] = (
+                        f"{market}: {requested_duration} ticks unavailable; "
+                        f"using {used_duration} ticks for this trade."
+                    )
 
                 ask = float(proposal.get("ask_price", stake) or stake)
                 payout = float(proposal.get("payout", 0) or 0)
@@ -2791,6 +2834,8 @@ async def digit_bot_worker(
                     "contract_type": signal["contract_type"],
                     "barrier": signal["barrier"],
                     "confidence": signal["confidence"],
+                    "duration": used_duration,
+                    "duration_unit": duration_unit,
                     "entry": ask,
                     "current": ask,
                     "profit": 0.0,
@@ -2813,7 +2858,7 @@ async def digit_bot_worker(
                 last_trade_tick[market] = now
                 state["message"] = f"AUTO ENTRY: {market} {signal['direction']} {signal['barrier']} @ {signal['confidence']:.1f}%"
                 activity = state.setdefault("activity", [])
-                activity.insert(0, f"OPEN {market} {signal['direction']} {signal['barrier']} â¢ {signal['confidence']:.1f}%")
+                activity.insert(0, f"OPEN {market} {signal['direction']} {signal['barrier']} â¢ Contract {contract_id} â¢ {signal['confidence']:.1f}%")
                 state["activity"] = activity[:30]
                 await request_contract_updates(contract_id)
 
@@ -2926,7 +2971,7 @@ async def digit_bot_worker(
                         history.insert(0, closed)
                         state["trade_history"] = history[:50]
                         activity = state.setdefault("activity", [])
-                        activity.insert(0, f"CLOSE {market} {status.upper()} â¢ P/L ${profit:+.2f}")
+                        activity.insert(0, f"CLOSE {market} {status.upper()} â¢ Contract {contract_id} â¢ P/L ${profit:+.2f}")
                         state["activity"] = activity[:30]
                         if profit < 0 and stake_mode == "Martingale":
                             state["_stake_level"] = min(6, int(state.get("_stake_level", 0)) + 1)
