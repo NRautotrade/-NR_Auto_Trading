@@ -148,6 +148,17 @@ a{text-decoration:none;color:inherit}
     <div id="magnetMessage" class="subnav-note">The bot will move the protection floor upward as an open trade reaches each stage.</div>
   </section>
 
+  <section class="card page-section" data-page="dashboard">
+    <div class="card-title">LOSS RECOVERY â LIVE</div>
+    <div class="magnet-summary">
+      <div class="magnet-stat"><small>RECOVERY DUE</small><strong id="recoveryDue">$0.00</strong></div>
+      <div class="magnet-stat"><small>RECOVERY MODE</small><strong id="recoveryMode">OFF</strong></div>
+      <div class="magnet-stat"><small>STAKE</small><strong>MINIMUM</strong></div>
+      <div class="magnet-stat"><small>NEXT RULE</small><strong>CLEAN SETUP</strong></div>
+    </div>
+    <div class="subnav-note">After a loss, the bot records the amount still to recover. It never increases the stake to chase the loss; it waits for another exceptionally clean setup.</div>
+  </section>
+
   <form id="settingsForm" method="post" action="/settings">
     <div class="grid" id="settings">
       <section class="card page-section" data-page="settings">
@@ -168,8 +179,7 @@ a{text-decoration:none;color:inherit}
           <label class="check"><input type="checkbox" name="strategies" value="Digit Over/Under" {% if 'Digit Over/Under' in saved_strategies %}checked{% endif %}>Digit Over/Under â Live Scanner</label>
           <label class="check"><input type="checkbox" name="strategies" value="Breakout" {% if 'Breakout' in saved_strategies %}checked{% endif %}>Breakout</label>
           <label class="check"><input type="checkbox" name="strategies" value="Trend" {% if 'Trend' in saved_strategies %}checked{% endif %}>Trend</label>
-          <label class="check"><input type="checkbox" name="strategies" value="Martingale" {% if 'Martingale' in saved_strategies %}checked{% endif %}>Martingale</label>
-          <label class="check"><input type="checkbox" name="strategies" value="Flat Stake" {% if 'Flat Stake' in saved_strategies %}checked{% endif %}>Flat Stake</label>
+          <label class="check"><input type="checkbox" checked disabled>Minimum Lot Only</label>
         </div>
       </section>
 
@@ -235,6 +245,15 @@ a{text-decoration:none;color:inherit}
         <button type="button" class="btn red" onclick="botAction('/api/trading/stop')">STOP BOT</button>
       </div>
       <div class="statusline">The scanner and trade-management worker continue in the background when you switch to another tab.</div>
+    </section>
+
+    <section class="card page-section" data-page="abc">
+      <div class="card-title">ABC TRADE HISTORY</div>
+      <div class="subnav-note" style="margin-bottom:12px">All completed ABC trades are kept here. Scroll inside the history box to view older trades.</div>
+      <div class="tablewrap trade-history-scroll" style="max-height:520px">
+        <table><thead><tr><th>MARKET</th><th>CONTRACT</th><th>DIRECTION</th><th>ENTRY</th><th>EXIT</th><th>P/L</th><th>STATUS</th></tr></thead>
+        <tbody id="abcTradeHistory"><tr><td colspan="7" class="empty">No completed ABC trades</td></tr></tbody></table>
+      </div>
     </section>
 
     <section class="card page-section page-visible" data-page="dashboard">
@@ -348,6 +367,11 @@ async function refresh(){
     if(x.last_trade){l.innerHTML=`<b>${x.last_trade.symbol||''}</b><br>${x.last_trade.direction||''} â¢ ${x.last_trade.status||''}<br><span class="${Number(x.last_trade.profit||0)>=0?'ok':'bad'}">${money(x.last_trade.profit)}</span>`;}
     else{l.textContent='No trades yet.';}
     document.getElementById('activity').innerHTML=(x.activity||[]).map(a=>`<li>${a}</li>`).join('');
+    const abcHistory=document.getElementById('abcTradeHistory');
+    const abcTrades=x.abc_trade_history||[];
+    if(abcHistory){
+      abcHistory.innerHTML=abcTrades.length ? abcTrades.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.entry!=null?Number(a.entry).toFixed(2):'â'}</td><td>${a.exit_spot!=null?a.exit_spot:(a.current_spot!=null?a.current_spot:'â')}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||''}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No completed ABC trades</td></tr>';
+    }
     const history=document.getElementById('tradeHistory');
     const trades=x.trade_history||[];
     history.innerHTML=trades.length ? trades.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.barrier??'â'}</td><td>${a.confidence!=null?Number(a.confidence).toFixed(1)+'%':'â'}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||''}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No completed trades</td></tr>';
@@ -367,10 +391,15 @@ async function refresh(){
           <div class="scanner-head"><div><div class="scanner-name">${name}</div><div class="muted">${a.symbol||''} â¢ Ticks ${a.ticks||0}</div></div><div class="scanner-quote">${a.quote??'â'}</div></div>
           <div class="digit-row">${Array.from({length:10},(_,i)=>`<div class="digit-box"><strong>${i}</strong><span>${Number(p[i]||0).toFixed(1)}%</span></div>`).join('')}</div>
           <div class="signal-box">Last digit: <b>${a.last_digit??'â'}</b> ${sig?`â¢ <span class="signal-live">${sig.direction} ${sig.barrier} â ${Number(sig.confidence||0).toFixed(1)}%</span>`:'â¢ waiting for confidence threshold'}</div>
-          <div class="signal-box" style="margin-top:8px;">Market condition: <b>${a.market_condition||'WAITING FOR DATA'}</b></div>
         </div>`;
       }).join('');
     }
+    const recovery=x.recovery||{};
+    const recoveryDue=Number(recovery.amount_due||0);
+    const recoveryDueEl=document.getElementById('recoveryDue');
+    const recoveryModeEl=document.getElementById('recoveryMode');
+    if(recoveryDueEl) recoveryDueEl.textContent=money(recoveryDue);
+    if(recoveryModeEl) recoveryModeEl.textContent=recovery.active?'ON':'OFF';
     const magnet=x.magnet||{};
     document.getElementById('magnetStage').textContent='STAGE '+(magnet.stage||0);
     document.getElementById('magnetPeak').textContent=money(magnet.open_peak_profit);
