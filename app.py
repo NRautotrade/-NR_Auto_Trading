@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -278,13 +277,6 @@ def init_db():
             "ALTER TABLE settings ADD COLUMN lock_profit_r REAL NOT NULL DEFAULT 1"
         )
 
-    if "abc_profit_filter_enabled" not in settings_columns:
-        conn.execute("ALTER TABLE settings ADD COLUMN abc_profit_filter_enabled INTEGER NOT NULL DEFAULT 1")
-    if "abc_min_expected_profit" not in settings_columns:
-        conn.execute("ALTER TABLE settings ADD COLUMN abc_min_expected_profit REAL NOT NULL DEFAULT 5")
-    if "abc_min_risk_percent" not in settings_columns:
-        conn.execute("ALTER TABLE settings ADD COLUMN abc_min_risk_percent REAL NOT NULL DEFAULT 2")
-
     # Optional feature switches. Defaults preserve the current bot behavior,
     # except Loss Recovery which is opt-in.
     feature_columns = {
@@ -298,6 +290,8 @@ def init_db():
         "live_scanner": "INTEGER NOT NULL DEFAULT 1",
         "auto_trading": "INTEGER NOT NULL DEFAULT 1",
         "abc_profit_filter_enabled": "INTEGER NOT NULL DEFAULT 1",
+        "abc_min_expected_profit": "REAL NOT NULL DEFAULT 5",
+        "abc_min_risk_percent": "REAL NOT NULL DEFAULT 2",
     }
     for column, definition in feature_columns.items():
         if column not in settings_columns:
