@@ -266,42 +266,15 @@ def init_db():
         "magnet_stage4": "REAL NOT NULL DEFAULT 70",
         "magnet_lock4": "REAL NOT NULL DEFAULT 1.5",
     }
-
-    # Robust migration for existing Render/SQLite databases. Re-read the
-    # schema after each ALTER so an older database cannot miss a new column.
     for column, definition in digit_columns.items():
-        current_columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(settings)").fetchall()
-        }
-        if column not in current_columns:
+        if column not in settings_columns:
             conn.execute(
                 f"ALTER TABLE settings ADD COLUMN {column} {definition}"
             )
-            conn.commit()
 
-    current_columns = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(settings)").fetchall()
-    }
-    if "lock_profit_r" not in current_columns:
+    if "lock_profit_r" not in settings_columns:
         conn.execute(
             "ALTER TABLE settings ADD COLUMN lock_profit_r REAL NOT NULL DEFAULT 1"
-        )
-        conn.commit()
-
-    final_settings_columns = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(settings)").fetchall()
-    }
-    required_settings_columns = set(digit_columns) | {
-        "lock_profit_r", "max_trades", "daily_target", "max_daily_profit"
-    }
-    missing_settings_columns = required_settings_columns - final_settings_columns
-    if missing_settings_columns:
-        raise RuntimeError(
-            "Settings database migration incomplete; missing columns: "
-            + ", ".join(sorted(missing_settings_columns))
         )
 
     conn.execute("""
@@ -1733,109 +1706,99 @@ def resolve_online_symbol(
 
 def abc_signal(
     candles,
-    swing_len=2,
+    swing_len=3,
 ):
-    if len(candles) < 20:
+    """Strict ABC confirmation filter.
+
+    A pattern is only returned when the swing structure is clean, the move has
+    directional efficiency, and the ABC legs have reasonable separation.
+    This intentionally produces fewer signals. It cannot guarantee a win.
+    """
+    if len(candles) < 50:
         return None
 
     def candle_high(c):
-        if isinstance(c, dict):
-            return float(c["high"])
-        return float(c[2])
+        return float(c["high"] if isinstance(c, dict) else c[2])
 
     def candle_low(c):
-        if isinstance(c, dict):
-            return float(c["low"])
-        return float(c[3])
+        return float(c["low"] if isinstance(c, dict) else c[3])
 
-    hi = [
-        candle_high(c)
-        for c in candles
-    ]
+    def candle_close(c):
+        return float(c["close"] if isinstance(c, dict) else c[4])
 
-    lo = [
-        candle_low(c)
-        for c in candles
-    ]
+    hi = [candle_high(c) for c in candles]
+    lo = [candle_low(c) for c in candles]
+    cl = [candle_close(c) for c in candles]
+
+    # EMA20/EMA50 trend confirmation.
+    def ema(values, period):
+        k = 2.0 / (period + 1.0)
+        out = values[0]
+        for value in values[1:]:
+            out = value * k + out * (1.0 - k)
+        return out
+
+    ema20 = ema(cl[-50:], 20)
+    ema50 = ema(cl[-50:], 50)
+
+    # Directional-efficiency filter: reject sideways/choppy price action.
+    # Net movement must be a meaningful fraction of total movement.
+    recent = cl[-14:]
+    net_move = abs(recent[-1] - recent[0])
+    path = sum(abs(recent[i] - recent[i - 1]) for i in range(1, len(recent)))
+    efficiency = net_move / path if path else 0.0
+    if efficiency < 0.35:
+        return None
+
+    # Avoid extremely compressed candles where a nominal ABC is mostly noise.
+    ranges = [max(hi[i] - lo[i], 0.0) for i in range(max(0, len(candles)-14), len(candles))]
+    avg_range = sum(ranges) / len(ranges) if ranges else 0.0
+    if avg_range <= 0:
+        return None
 
     highs = []
     lows = []
+    for i in range(swing_len, len(candles) - swing_len):
+        if all(hi[i] > hi[i-j] and hi[i] > hi[i+j] for j in range(1, swing_len + 1)):
+            highs.append((i, hi[i]))
+        if all(lo[i] < lo[i-j] and lo[i] < lo[i+j] for j in range(1, swing_len + 1)):
+            lows.append((i, lo[i]))
 
-    for i in range(
-        swing_len,
-        len(candles) - swing_len,
-    ):
-        if all(
-            hi[i] > hi[i - j]
-            and hi[i] > hi[i + j]
-            for j in range(
-                1,
-                swing_len + 1,
-            )
-        ):
-            highs.append(
-                (i, hi[i])
-            )
-
-        if all(
-            lo[i] < lo[i - j]
-            and lo[i] < lo[i + j]
-            for j in range(
-                1,
-                swing_len + 1,
-            )
-        ):
-            lows.append(
-                (i, lo[i])
-            )
-
-    # Bearish ABC
-    if len(highs) >= 2 and len(lows) >= 1:
+    # Bearish ABC: A high -> B low -> C lower high, with downtrend confirmation.
+    if len(highs) >= 2 and len(lows) >= 1 and ema20 < ema50:
         ai, A = highs[-2]
         ci, C = highs[-1]
-
-        mids = [
-            x
-            for x in lows
-            if ai < x[0] < ci
-        ]
-
-        if mids and C < A:
+        mids = [x for x in lows if ai < x[0] < ci]
+        if mids:
             bi, B = mids[-1]
+            leg_ab = A - B
+            leg_bc = C - B
+            if (
+                C < A
+                and leg_ab >= avg_range * 1.5
+                and leg_bc >= avg_range * 0.75
+                and (A - C) >= avg_range * 0.25
+                and cl[-1] < C
+            ):
+                return ("PUT", ai, bi, ci, A, B, C)
 
-            return (
-                "PUT",
-                ai,
-                bi,
-                ci,
-                A,
-                B,
-                C,
-            )
-
-    # Bullish ABC
-    if len(lows) >= 2 and len(highs) >= 1:
+    # Bullish ABC: A low -> B high -> C higher low, with uptrend confirmation.
+    if len(lows) >= 2 and len(highs) >= 1 and ema20 > ema50:
         ai, A = lows[-2]
         ci, C = lows[-1]
-
-        mids = [
-            x
-            for x in highs
-            if ai < x[0] < ci
-        ]
-
-        if mids and C > A:
+        mids = [x for x in highs if ai < x[0] < ci]
+        if mids:
             bi, B = mids[-1]
-
-            return (
-                "CALL",
-                ai,
-                bi,
-                ci,
-                A,
-                B,
-                C,
-            )
+            leg_ab = B - A
+            leg_bc = B - C
+            if (
+                C > A
+                and leg_ab >= avg_range * 1.5
+                and leg_bc >= avg_range * 0.75
+                and (C - A) >= avg_range * 0.25
+                and cl[-1] > C
+            ):
+                return ("CALL", ai, bi, ci, A, B, C)
 
     return None
 
@@ -1894,6 +1857,7 @@ async def demo_bot_worker(
             "positions": [],
             "last_trade": None,
             "activity": [],
+            "abc_trade_history": state.get("abc_trade_history", []),
             "_position_map": {},
             "_market_restart_at": {},
             "_stake_level": 0,
@@ -2139,6 +2103,11 @@ async def demo_bot_worker(
                         }
 
                         state["last_trade"] = closed_trade
+
+                        # Keep every completed ABC trade separately so the ABC Trader page can display its full history.
+                        abc_history = state.setdefault("abc_trade_history", [])
+                        abc_history.insert(0, closed_trade)
+                        state["abc_trade_history"] = abc_history
 
                         activity = state.setdefault(
                             "activity",
@@ -3172,6 +3141,7 @@ async def start_trading(request: Request):
         "positions": [],
         "last_trade": None,
         "activity": [],
+        "abc_trade_history": [],
         "_position_map": {},
         "_market_restart_at": {},
         "_stake_level": 0,
@@ -3419,6 +3389,7 @@ async def trading_state(request: Request):
         "positions": state.get("positions", []),
         "last_trade": state.get("last_trade"),
         "trade_history": state.get("trade_history", []),
+        "abc_trade_history": state.get("abc_trade_history", []),
         "trades": int(state.get("trades", 0) or 0),
         "activity": state.get("activity", []),
         "engine": state.get("engine", "ABC"),
