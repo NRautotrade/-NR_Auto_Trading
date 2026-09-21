@@ -277,6 +277,23 @@ def init_db():
             "ALTER TABLE settings ADD COLUMN lock_profit_r REAL NOT NULL DEFAULT 1"
         )
 
+    # Optional feature switches. Defaults preserve the current bot behavior,
+    # except Loss Recovery which is opt-in.
+    feature_columns = {
+        "abc_enabled": "INTEGER NOT NULL DEFAULT 1",
+        "digit_enabled": "INTEGER NOT NULL DEFAULT 1",
+        "over_under_filter": "INTEGER NOT NULL DEFAULT 1",
+        "choppy_filter": "INTEGER NOT NULL DEFAULT 1",
+        "recovery_enabled": "INTEGER NOT NULL DEFAULT 0",
+        "magnet_enabled": "INTEGER NOT NULL DEFAULT 1",
+        "minimum_lot_only": "INTEGER NOT NULL DEFAULT 1",
+        "live_scanner": "INTEGER NOT NULL DEFAULT 1",
+        "auto_trading": "INTEGER NOT NULL DEFAULT 1",
+    }
+    for column, definition in feature_columns.items():
+        if column not in settings_columns:
+            conn.execute(f"ALTER TABLE settings ADD COLUMN {column} {definition}")
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -496,9 +513,11 @@ def save_settings(user_id, form):
             tp_adjust_percent, digit_trade_type, digit_barrier,
             digit_duration, digit_duration_unit, digit_min_confidence,
             magnet_stage1, magnet_lock1, magnet_stage2, magnet_lock2,
-            magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4
+            magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4,
+            abc_enabled, digit_enabled, over_under_filter, choppy_filter,
+            recovery_enabled, magnet_enabled, minimum_lot_only, live_scanner, auto_trading
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(user_id) DO UPDATE SET
             markets=excluded.markets, strategies=excluded.strategies,
@@ -513,7 +532,12 @@ def save_settings(user_id, form):
             magnet_stage1=excluded.magnet_stage1, magnet_lock1=excluded.magnet_lock1,
             magnet_stage2=excluded.magnet_stage2, magnet_lock2=excluded.magnet_lock2,
             magnet_stage3=excluded.magnet_stage3, magnet_lock3=excluded.magnet_lock3,
-            magnet_stage4=excluded.magnet_stage4, magnet_lock4=excluded.magnet_lock4
+            magnet_stage4=excluded.magnet_stage4, magnet_lock4=excluded.magnet_lock4,
+            abc_enabled=excluded.abc_enabled, digit_enabled=excluded.digit_enabled,
+            over_under_filter=excluded.over_under_filter, choppy_filter=excluded.choppy_filter,
+            recovery_enabled=excluded.recovery_enabled, magnet_enabled=excluded.magnet_enabled,
+            minimum_lot_only=excluded.minimum_lot_only, live_scanner=excluded.live_scanner,
+            auto_trading=excluded.auto_trading
         """,
         (
             user_id,
@@ -543,6 +567,16 @@ def save_settings(user_id, form):
             float(form.get("magnet_lock3", 1)),
             float(form.get("magnet_stage4", 70)),
             float(form.get("magnet_lock4", 1.5)),
+            1 if form.get("abc_enabled") in {"1", "true", "on", "yes"} else 0,
+            1 if form.get("digit_enabled") in {"1", "true", "on", "yes"} else 0,
+            1 if form.get("over_under_filter") in {"1", "true", "on", "yes"} else 0,
+            1 if form.get("choppy_filter") in {"1", "true", "on", "yes"} else 0,
+            1 if form.get("recovery_enabled") in {"1", "true", "on", "yes"} else 0,
+            1 if form.get("magnet_enabled") in {"1", "true", "on", "yes"} else 0,
+            # Minimum-lot-only is a permanent safety rule for this bot.
+            1,
+            1 if form.get("live_scanner") in {"1", "true", "on", "yes"} else 0,
+            1 if form.get("auto_trading") in {"1", "true", "on", "yes"} else 0,
         ),
     )
 
@@ -1705,6 +1739,7 @@ def resolve_online_symbol(
 def abc_signal(
     candles,
     swing_len=3,
+    choppy_filter=True,
 ):
     """Strict ABC confirmation filter.
 
@@ -1745,7 +1780,7 @@ def abc_signal(
     net_move = abs(recent[-1] - recent[0])
     path = sum(abs(recent[i] - recent[i - 1]) for i in range(1, len(recent)))
     efficiency = net_move / path if path else 0.0
-    if efficiency < 0.35:
+    if choppy_filter and efficiency < 0.35:
         return None
 
     # Avoid extremely compressed candles where a nominal ABC is mostly noise.
@@ -1839,6 +1874,12 @@ async def demo_bot_worker(
     stake_mode="Flat Stake",
     martingale_multiplier=2.0,
     tp_adjust_percent=90.0,
+    abc_enabled=True,
+    choppy_filter=True,
+    recovery_enabled=False,
+    minimum_lot_only=True,
+    auto_trading=True,
+    magnet_enabled=True,
 ):
     state = BOT_STATE[user_id]
 
@@ -1861,6 +1902,8 @@ async def demo_bot_worker(
             "_stake_level": 0,
             "recovery_due": 0.0,
             "recovery_mode": False,
+            "recovery_due": 0.0,
+            "feature_switches": {"abc_enabled": bool(abc_enabled), "choppy_filter": bool(choppy_filter), "recovery_enabled": bool(recovery_enabled), "minimum_lot_only": bool(minimum_lot_only), "auto_trading": bool(auto_trading), "magnet_enabled": bool(magnet_enabled)},
             "paused": False,
         })
 
@@ -2137,13 +2180,14 @@ async def demo_bot_worker(
 
                         # Recovery mode: losses add to the amount to recover;
                         # wins reduce it. Stake never increases.
-                        recovery_due = float(state.get("recovery_due", 0) or 0)
-                        if profit < 0:
-                            recovery_due += abs(profit)
-                        elif profit > 0:
-                            recovery_due = max(0.0, recovery_due - profit)
+                        recovery_due = float(state.get("recovery_due", 0) or 0) if recovery_enabled else 0.0
+                        if recovery_enabled:
+                            if profit < 0:
+                                recovery_due += abs(profit)
+                            elif profit > 0:
+                                recovery_due = max(0.0, recovery_due - profit)
                         state["recovery_due"] = round(recovery_due, 2)
-                        state["recovery_mode"] = recovery_due > 0.005
+                        state["recovery_mode"] = bool(recovery_enabled and recovery_due > 0.005)
                         state["_stake_level"] = 0
 
                         open_contracts.pop(
@@ -2229,14 +2273,20 @@ async def demo_bot_worker(
                         continue
 
                     try:
+                        if not abc_enabled:
+                            state["message"] = f"{market}: ABC strategy is OFF â scanning only."
+                            continue
                         candles = await fetch_m5_candles(
                             ws,
                             symbol,
                         )
 
-                        signal = abc_signal(candles)
+                        signal = abc_signal(candles, choppy_filter=choppy_filter)
 
                         if not signal:
+                            continue
+                        if not auto_trading:
+                            state["message"] = f"{market}: clean ABC setup found â AUTO TRADING OFF."
                             continue
 
                         (
@@ -2249,7 +2299,7 @@ async def demo_bot_worker(
                             C,
                         ) = signal
 
-                        if float(state.get("recovery_due", 0) or 0) > 0:
+                        if recovery_enabled and float(state.get("recovery_due", 0) or 0) > 0:
                             state["message"] = (
                                 f"{market}: recovery mode â only the next exceptionally clean ABC setup is allowed."
                             )
@@ -2295,7 +2345,7 @@ async def demo_bot_worker(
                         # Minimum-stake-only rule: never increase the stake after
                         # a loss. The recovery tracker below records what remains
                         # to recover, but it never changes the stake size.
-                        stake = 0.35
+                        stake = 0.35 if minimum_lot_only else max(0.35, float(risk or 0))
 
                         if balance <= 0 or stake > balance:
                             continue
@@ -2309,13 +2359,22 @@ async def demo_bot_worker(
                             "duration_unit": "m",
                             "underlying_symbol": symbol,
                         }
-                        prop, accepted_stake, request_counter, proposal_error = await minimum_stake_proposal(
-                            ws, proposal_payload, request_counter, preferred=0.35
-                        )
-                        if not prop or not prop.get("id"):
-                            state["message"] = f"{market}: minimum-stake proposal unavailable â no trade."
-                            continue
-                        stake = float(accepted_stake or 0.35)
+                        if minimum_lot_only:
+                            prop, accepted_stake, request_counter, proposal_error = await minimum_stake_proposal(
+                                ws, proposal_payload, request_counter, preferred=0.35
+                            )
+                            if not prop or not prop.get("id"):
+                                state["message"] = f"{market}: minimum-stake proposal unavailable â no trade."
+                                continue
+                            stake = float(accepted_stake or 0.35)
+                        else:
+                            request_counter += 1
+                            proposal_payload["amount"] = stake
+                            prop_msg = await ws_request(ws, proposal_payload, request_counter)
+                            prop = prop_msg.get("proposal", {})
+                            if not prop.get("id"):
+                                state["message"] = f"{market}: configured stake proposal unavailable â no trade."
+                                continue
 
                         proposal_id = prop.get("id")
 
@@ -2466,6 +2525,12 @@ async def demo_bot_worker(
                 stake_mode,
                 martingale_multiplier,
                 tp_adjust_percent,
+                abc_enabled,
+                choppy_filter,
+                recovery_enabled,
+                minimum_lot_only,
+                auto_trading,
+                magnet_enabled,
             )
         )
         BOT_TASKS[user_id] = task
@@ -2496,6 +2561,12 @@ async def demo_bot_worker(
                 stake_mode,
                 martingale_multiplier,
                 tp_adjust_percent,
+                abc_enabled,
+                choppy_filter,
+                recovery_enabled,
+                minimum_lot_only,
+                auto_trading,
+                magnet_enabled,
             )
         )
         BOT_TASKS[user_id] = task
@@ -2542,24 +2613,62 @@ def digit_percentages(digits):
     return counts, [round((n / total) * 100, 2) for n in counts]
 
 
-def digit_signal(digits, trade_type="Over/Under", fixed_barrier=1, min_confidence=94):
-    """Strict Digit entry: OVER 1 only, 94%+ confidence.
+def is_choppy_quotes(quotes):
+    """Return True when recent price movement is excessively back-and-forth."""
+    if len(quotes) < 20:
+        return False
+    recent = [float(x) for x in quotes[-20:]]
+    net = abs(recent[-1] - recent[0])
+    path = sum(abs(recent[i] - recent[i-1]) for i in range(1, len(recent)))
+    if path <= 0:
+        return False
+    efficiency = net / path
+    direction_changes = 0
+    last_sign = 0
+    for i in range(1, len(recent)):
+        delta = recent[i] - recent[i-1]
+        sign = 1 if delta > 0 else -1 if delta < 0 else 0
+        if sign and last_sign and sign != last_sign:
+            direction_changes += 1
+        if sign:
+            last_sign = sign
+    return efficiency < 0.28 or direction_changes >= 12
 
-    The confidence threshold is a filter, not a guarantee. Additional market
-    quality/chop checks are applied by the worker before execution.
-    """
+
+def digit_signal(digits, trade_type="Over/Under", fixed_barrier=1, min_confidence=94, strict_over1=True):
+    """Build a digit signal. Strict mode enforces OVER 1 at 94%+; when the
+    optional strict filter is OFF, the configured Over/Under rule is used."""
     if len(digits) < 30:
         return None
     recent = list(digits[-50:])
-    over = sum(d > 1 for d in recent) / len(recent) * 100
-    if over < 94.0:
+    if strict_over1:
+        over = sum(d > 1 for d in recent) / len(recent) * 100
+        if over < 94.0:
+            return None
+        return {
+            "contract_type": "DIGITOVER",
+            "direction": "OVER",
+            "barrier": 1,
+            "confidence": round(float(over), 2),
+            "probability": round(float(over), 2),
+            "sample": len(recent),
+        }
+
+    barrier = min(8, max(1, int(fixed_barrier or 1)))
+    over = sum(d > barrier for d in recent) / len(recent) * 100
+    under = sum(d < barrier for d in recent) / len(recent) * 100
+    if over >= under:
+        confidence, contract_type, direction = over, "DIGITOVER", "OVER"
+    else:
+        confidence, contract_type, direction = under, "DIGITUNDER", "UNDER"
+    if confidence < float(min_confidence):
         return None
     return {
-        "contract_type": "DIGITOVER",
-        "direction": "OVER",
-        "barrier": 1,
-        "confidence": round(float(over), 2),
-        "probability": round(float(over), 2),
+        "contract_type": contract_type,
+        "direction": direction,
+        "barrier": barrier,
+        "confidence": round(float(confidence), 2),
+        "probability": round(float(confidence), 2),
         "sample": len(recent),
     }
 
@@ -2653,6 +2762,14 @@ async def digit_bot_worker(
     magnet_locks=(0, 0.5, 1, 1.5),
     max_daily_profit=1200.0,
     max_daily_loss=50.0,
+    digit_enabled=True,
+    over_under_filter=True,
+    choppy_filter=True,
+    recovery_enabled=False,
+    minimum_lot_only=True,
+    live_scanner=True,
+    auto_trading=True,
+    magnet_enabled=True,
 ):
     state = BOT_STATE[user_id]
     state.update({
@@ -2677,6 +2794,7 @@ async def digit_bot_worker(
         "trade_history": [],
         "activity": [],
         "paused": False,
+        "feature_switches": {"digit_enabled": bool(digit_enabled), "over_under_filter": bool(over_under_filter), "choppy_filter": bool(choppy_filter), "recovery_enabled": bool(recovery_enabled), "minimum_lot_only": bool(minimum_lot_only), "live_scanner": bool(live_scanner), "auto_trading": bool(auto_trading), "magnet_enabled": bool(magnet_enabled)},
     })
 
     req = 12000
@@ -2729,8 +2847,9 @@ async def digit_bot_worker(
                     "signal": None,
                     "ticks": len(seeded),
                 }
-                req += 1
-                await market_ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": req}))
+                if live_scanner:
+                    req += 1
+                    await market_ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": req}))
 
             req += 1
             balance_msg = await ws_request(trade_ws, {"balance": 1}, req)
@@ -2739,7 +2858,7 @@ async def digit_bot_worker(
             state["equity"] = state["balance"]
             state["currency"] = balance_data.get("currency", "USD")
             state["symbols"] = symbols
-            state["message"] = "LIVE SCANNER RUNNING â waiting for a valid signal."
+            state["message"] = "LIVE SCANNER RUNNING â waiting for a valid signal." if live_scanner else "LIVE SCANNER OFF â no new market scans."
 
             async def request_contract_updates(contract_id):
                 nonlocal req
@@ -2755,8 +2874,11 @@ async def digit_bot_worker(
                 nonlocal req
                 if market in open_contracts or state.get("paused"):
                     return
+                if not digit_enabled or not auto_trading:
+                    state["message"] = f"{market}: signal found â auto trading is OFF."
+                    return
                 # Recovery mode tightens selection; it never increases stake.
-                if float(state.get("recovery_due", 0) or 0) > 0 and float(signal.get("confidence", 0) or 0) < 98.0:
+                if recovery_enabled and float(state.get("recovery_due", 0) or 0) > 0 and float(signal.get("confidence", 0) or 0) < 98.0:
                     state["message"] = f"{market}: recovery mode â setup below 98% confidence; waiting."
                     return
                 if int(state.get("trades", 0) or 0) >= min(200, max(1, int(max_trades))):
@@ -2774,7 +2896,7 @@ async def digit_bot_worker(
                 # Minimum-stake-only rule: never increase stake after a loss.
                 # Start at Deriv's common minimum and let the proposal response
                 # validate the amount for the selected market/account.
-                stake = 0.35
+                stake = 0.35 if minimum_lot_only else max(0.35, float(risk or 0))
                 if balance <= 0 or stake > balance:
                     return
 
@@ -2802,11 +2924,18 @@ async def digit_bot_worker(
                         "underlying_symbol": symbol,
                         "barrier": str(signal["barrier"]),
                     }
-                    proposal, accepted_stake, req, candidate_error = await minimum_stake_proposal(
-                        trade_ws, proposal_payload, req, preferred=0.35
-                    )
+                    if minimum_lot_only:
+                        proposal, accepted_stake, req, candidate_error = await minimum_stake_proposal(
+                            trade_ws, proposal_payload, req, preferred=0.35
+                        )
+                    else:
+                        req += 1
+                        proposal_msg = await ws_request(trade_ws, {**proposal_payload, "amount": stake}, req)
+                        proposal = proposal_msg.get("proposal", {})
+                        accepted_stake = stake
+                        candidate_error = (proposal_msg.get("error") or {}).get("message")
                     if proposal and proposal.get("id"):
-                        stake = float(accepted_stake or 0.35)
+                        stake = float(accepted_stake or stake)
                         used_duration = candidate_duration
                         break
                     last_duration_error = candidate_error
@@ -2891,7 +3020,7 @@ async def digit_bot_worker(
                 except asyncio.TimeoutError:
                     msg = None
 
-                if msg and msg.get("msg_type") == "tick":
+                if msg and msg.get("msg_type") == "tick" and live_scanner:
                     tick = msg.get("tick", {})
                     symbol = tick.get("symbol")
                     market = next((m for m, s in symbols.items() if s == symbol), None)
@@ -2902,6 +3031,8 @@ async def digit_bot_worker(
                         if digit is not None:
                             data.setdefault("digits", []).append(digit)
                             data["digits"] = data["digits"][-50:]
+                            data.setdefault("quotes", []).append(float(quote))
+                            data["quotes"] = data["quotes"][-50:]
                             counts, pcts = digit_percentages(data["digits"])
                             data.update({
                                 "quote": quote,
@@ -2910,11 +3041,18 @@ async def digit_bot_worker(
                                 "percentages": pcts,
                                 "ticks": int(data.get("ticks", 0) or 0) + 1,
                             })
-                            signal = digit_signal(data["digits"], trade_type, barrier, min_confidence)
-                            data["signal"] = signal
-                            if signal:
-                                state["signals"] = [{"market": market, **signal, "quote": quote, "last_digit": digit}]
-                                await execute_signal(market, symbol, signal)
+                            signal = digit_signal(data["digits"], trade_type, barrier, min_confidence, strict_over1=over_under_filter)
+                            choppy = is_choppy_quotes(data.get("quotes", [])) if choppy_filter else False
+                            data["choppy"] = bool(choppy)
+                            if choppy and signal:
+                                data["signal"] = None
+                                state["signals"] = []
+                                state["message"] = f"{market}: choppy market â no trade."
+                            else:
+                                data["signal"] = signal
+                                if signal:
+                                    state["signals"] = [{"market": market, **signal, "quote": quote, "last_digit": digit}]
+                                    await execute_signal(market, symbol, signal)
 
                 for _ in range(8):
                     try:
@@ -2946,7 +3084,7 @@ async def digit_bot_worker(
                         max_profit = max(0.0, float(c.get("payout", 0) or 0) - float(position.get("entry", 0) or 0))
                         position["max_profit"] = max_profit
                     progress = (position["peak_profit"] / max_profit * 100) if max_profit else 0
-                    reached = sum(progress >= float(t) for t in magnet_stages)
+                    reached = sum(progress >= float(t) for t in magnet_stages) if magnet_enabled else 0
                     stage, floor = magnet_lock_floor(
                         position.get("stake", 0), max_profit, position["peak_profit"],
                         magnet_locks, magnet_stages, reached,
@@ -2954,6 +3092,8 @@ async def digit_bot_worker(
                     # Magnet protection is monotonic: once a stage is reached,
                     # its floor can never move backwards.  This is deliberately
                     # based on the contract's live profit/payout, not a fixed TP.
+                    if not magnet_enabled:
+                        stage, floor = 0, 0.0
                     if stage > int(position.get("magnet_stage", 0) or 0):
                         position["magnet_stage"] = stage
                         position["magnet_active"] = True
@@ -2997,13 +3137,14 @@ async def digit_bot_worker(
                         state["activity"] = activity[:30]
                         # Recovery mode: record the outstanding loss, but never
                         # increase the next stake. Only clean setups may recover it.
-                        recovery_due = float(state.get("recovery_due", 0) or 0)
-                        if profit < 0:
-                            recovery_due += abs(profit)
-                        elif profit > 0:
-                            recovery_due = max(0.0, recovery_due - profit)
+                        recovery_due = float(state.get("recovery_due", 0) or 0) if recovery_enabled else 0.0
+                        if recovery_enabled:
+                            if profit < 0:
+                                recovery_due += abs(profit)
+                            elif profit > 0:
+                                recovery_due = max(0.0, recovery_due - profit)
                         state["recovery_due"] = round(recovery_due, 2)
-                        state["recovery_mode"] = recovery_due > 0.005
+                        state["recovery_mode"] = bool(recovery_enabled and recovery_due > 0.005)
                         state["_stake_level"] = 0
                         state["_position_map"].pop(market, None)
                         open_contracts.pop(market, None)
@@ -3154,6 +3295,23 @@ async def start_trading(request: Request):
             status_code=400,
         )
 
+    abc_enabled = bool(settings["abc_enabled"] if "abc_enabled" in settings.keys() else 1)
+    digit_enabled = bool(settings["digit_enabled"] if "digit_enabled" in settings.keys() else 1)
+    over_under_filter = bool(settings["over_under_filter"] if "over_under_filter" in settings.keys() else 1)
+    choppy_filter = bool(settings["choppy_filter"] if "choppy_filter" in settings.keys() else 1)
+    recovery_enabled = bool(settings["recovery_enabled"] if "recovery_enabled" in settings.keys() else 0)
+    magnet_enabled = bool(settings["magnet_enabled"] if "magnet_enabled" in settings.keys() else 1)
+    minimum_lot_only = True  # permanent rule: always use the minimum accepted stake
+    live_scanner = bool(settings["live_scanner"] if "live_scanner" in settings.keys() else 1)
+    auto_trading = bool(settings["auto_trading"] if "auto_trading" in settings.keys() else 1)
+
+    if "Digit Over/Under" in strategies and digit_enabled:
+        selected_engine = "digit"
+    elif "ABC Pattern" in strategies and abc_enabled:
+        selected_engine = "abc"
+    else:
+        return JSONResponse({"ok": False, "error": "The selected strategy is switched OFF. Turn it ON in Feature Switches."}, status_code=400)
+
     BOT_STATE[uid] = {
         "running": False,
         "stop_requested": False,
@@ -3195,7 +3353,7 @@ async def start_trading(request: Request):
             status_code=400,
         )
 
-    if "Digit Over/Under" in strategies:
+    if selected_engine == "digit":
         task = asyncio.create_task(
             digit_bot_worker(
                 uid,
@@ -3225,6 +3383,14 @@ async def start_trading(request: Request):
                 ),
                 max(0.0, float(settings["max_daily_profit"])),
                 float(settings["max_daily_loss"]),
+                digit_enabled,
+                over_under_filter,
+                choppy_filter,
+                recovery_enabled,
+                minimum_lot_only,
+                live_scanner,
+                auto_trading,
+                magnet_enabled,
             )
         )
     else:
@@ -3427,6 +3593,7 @@ async def trading_state(request: Request):
             "active": bool(state.get("recovery_mode", False)),
             "stake_mode": "MINIMUM ONLY",
         },
+        "feature_switches": state.get("feature_switches", {}),
         "magnet": {
             "stage": max([int(p.get("magnet_stage", 0) or 0) for p in state.get("positions", [])] or [0]),
             "open_locked_profit": round(sum(float(p.get("locked_profit", 0) or 0) for p in state.get("positions", [])), 2),
