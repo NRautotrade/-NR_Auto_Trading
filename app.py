@@ -483,10 +483,8 @@ def save_settings(user_id, form):
     conn = db()
 
     strategies = form.getlist("strategies")
-    if "Flat Stake" in strategies or "Martingale" in strategies:
-        stake_mode = "Martingale" if "Martingale" in strategies else "Flat Stake"
-    else:
-        stake_mode = "Flat Stake"
+    # Minimum-lot-only rule: recovery never changes stake size.
+    stake_mode = "Flat Stake"
 
     conn.execute(
         """
@@ -1861,6 +1859,8 @@ async def demo_bot_worker(
             "_position_map": {},
             "_market_restart_at": {},
             "_stake_level": 0,
+            "recovery_due": 0.0,
+            "recovery_mode": False,
             "paused": False,
         })
 
@@ -2135,10 +2135,16 @@ async def demo_bot_worker(
                         next_mark = (int(now_ts) // 600 + 1) * 600
                         state.setdefault("_market_restart_at", {})[market] = next_mark
 
-                        if profit < 0 and stake_mode == "Martingale":
-                            state["_stake_level"] = min(6, int(state.get("_stake_level", 0)) + 1)
-                        elif profit >= 0:
-                            state["_stake_level"] = 0
+                        # Recovery mode: losses add to the amount to recover;
+                        # wins reduce it. Stake never increases.
+                        recovery_due = float(state.get("recovery_due", 0) or 0)
+                        if profit < 0:
+                            recovery_due += abs(profit)
+                        elif profit > 0:
+                            recovery_due = max(0.0, recovery_due - profit)
+                        state["recovery_due"] = round(recovery_due, 2)
+                        state["recovery_mode"] = recovery_due > 0.005
+                        state["_stake_level"] = 0
 
                         open_contracts.pop(
                             market,
@@ -2243,6 +2249,11 @@ async def demo_bot_worker(
                             C,
                         ) = signal
 
+                        if float(state.get("recovery_due", 0) or 0) > 0:
+                            state["message"] = (
+                                f"{market}: recovery mode â only the next exceptionally clean ABC setup is allowed."
+                            )
+
                         key = (
                             direction,
                             ai,
@@ -2281,49 +2292,30 @@ async def demo_bot_worker(
 
                         # Base stake is the configured risk, capped at 2% of
                         # the member's live demo balance for safety.
-                        base_stake = min(
-                            float(risk),
-                            max(0.35, balance * 0.02),
-                        )
-                        if stake_mode == "Martingale":
-                            level = int(state.get("_stake_level", 0) or 0)
-                            stake = base_stake * (float(martingale_multiplier) ** level)
-                            stake = min(stake, balance * 0.10)
-                        else:
-                            stake = base_stake
-
-                        stake = round(max(0.35, stake), 2)
+                        # Minimum-stake-only rule: never increase the stake after
+                        # a loss. The recovery tracker below records what remains
+                        # to recover, but it never changes the stake size.
+                        stake = 0.35
 
                         if balance <= 0 or stake > balance:
                             continue
 
-                        request_counter += 1
-
-                        proposal = await ws_request(
-                            ws,
-                            {
-                                "proposal": 1,
-                                "amount": round(
-                                    stake,
-                                    2,
-                                ),
-                                "basis": "stake",
-                                "contract_type": direction,
-                                "currency": balance_data.get(
-                                    "currency",
-                                    "USD",
-                                ),
-                                "duration": 5,
-                                "duration_unit": "m",
-                                "underlying_symbol": symbol,
-                            },
-                            request_counter,
+                        proposal_payload = {
+                            "proposal": 1,
+                            "basis": "stake",
+                            "contract_type": direction,
+                            "currency": balance_data.get("currency", "USD"),
+                            "duration": 5,
+                            "duration_unit": "m",
+                            "underlying_symbol": symbol,
+                        }
+                        prop, accepted_stake, request_counter, proposal_error = await minimum_stake_proposal(
+                            ws, proposal_payload, request_counter, preferred=0.35
                         )
-
-                        prop = proposal.get(
-                            "proposal",
-                            {},
-                        )
+                        if not prop or not prop.get("id"):
+                            state["message"] = f"{market}: minimum-stake proposal unavailable â no trade."
+                            continue
+                        stake = float(accepted_stake or 0.35)
 
                         proposal_id = prop.get("id")
 
@@ -2550,53 +2542,97 @@ def digit_percentages(digits):
     return counts, [round((n / total) * 100, 2) for n in counts]
 
 
-def digit_signal(digits, trade_type="Over/Under", fixed_barrier=5, min_confidence=65):
-    """Return the strongest recent Over/Under read from the live tick window."""
-    if len(digits) < 20:
-        return None
+def digit_signal(digits, trade_type="Over/Under", fixed_barrier=1, min_confidence=94):
+    """Strict Digit entry: OVER 1 only, 94%+ confidence.
 
+    The confidence threshold is a filter, not a guarantee. Additional market
+    quality/chop checks are applied by the worker before execution.
+    """
+    if len(digits) < 30:
+        return None
     recent = list(digits[-50:])
-    candidates = []
-
-    if trade_type in {"Over/Under", "Auto"}:
-        barriers = [fixed_barrier] if trade_type == "Over/Under" else list(range(1, 9))
-        for barrier in barriers:
-            over = sum(d > barrier for d in recent) / len(recent) * 100
-            under = sum(d < barrier for d in recent) / len(recent) * 100
-            if over >= under:
-                candidates.append((over, "DIGITOVER", barrier, over))
-            else:
-                candidates.append((under, "DIGITUNDER", barrier, under))
-
-    if not candidates:
+    over = sum(d > 1 for d in recent) / len(recent) * 100
+    if over < 94.0:
         return None
-
-    confidence, contract_type, barrier, probability = max(candidates, key=lambda x: x[0])
-    if confidence < float(min_confidence):
-        return None
-
     return {
-        "contract_type": contract_type,
-        "direction": "OVER" if contract_type == "DIGITOVER" else "UNDER",
-        "barrier": int(barrier),
-        "confidence": round(float(confidence), 2),
-        "probability": round(float(probability), 2),
+        "contract_type": "DIGITOVER",
+        "direction": "OVER",
+        "barrier": 1,
+        "confidence": round(float(over), 2),
+        "probability": round(float(over), 2),
         "sample": len(recent),
     }
 
 
 def magnet_lock_floor(stake, max_profit, peak_profit, stage_locks, stage_triggers, reached_stage):
-    """Calculate a progressive profit floor for a fixed-payout contract."""
-    floor = 0.0
-    stage = 0
-    for i, _trigger in enumerate(stage_triggers, start=1):
-        if reached_stage >= i:
-            stage = i
-            lock_r = float(stage_locks[i - 1])
-            desired = max(0.0, float(stake) * lock_r)
-            cap = max(0.0, float(peak_profit) * 0.90)
-            floor = max(floor, min(desired, cap))
-    return stage, round(floor, 6)
+    """Progressive early-sell floor based on meaningful live profit.
+
+    The floor follows realized peak profit rather than pretending a tiny $1-$2
+    fluctuation is a meaningful locked gain. Stages are monotonic.
+    """
+    peak = max(0.0, float(peak_profit or 0))
+    if peak < 5.0:
+        return 0, 0.0
+
+    # Protection levels are based on the peak profit itself, not the stake.
+    # This avoids locking $1 on a trade that has not yet produced meaningful
+    # profit. Once active, the floor only moves upward.
+    locks = (0.50, 0.70, 0.85, 0.95)
+    stage = min(4, max(0, int(reached_stage or 0)))
+    if stage <= 0:
+        return 0, 0.0
+    idx = stage - 1
+    floor = peak * locks[idx]
+    return stage, round(max(0.0, floor), 6)
+
+
+async def minimum_stake_proposal(ws, payload, req_counter_start, preferred=0.35):
+    """Find the lowest accepted stake for this exact contract proposal.
+
+    The bot never increases stake because of a loss. It only probes proposal
+    amounts to discover Deriv's minimum for the selected market/contract.
+    Returns (proposal, accepted_amount, next_req_counter, error).
+    """
+    req_counter = req_counter_start
+    candidates = [float(preferred), 0.40, 0.50, 0.75, 1.00, 2.00, 5.00]
+    seen = set()
+    last_error = None
+    for amount in candidates:
+        amount = round(float(amount), 2)
+        if amount in seen:
+            continue
+        seen.add(amount)
+        req_counter += 1
+        req_id = req_counter
+        req_payload = dict(payload)
+        req_payload.update({"amount": amount, "req_id": req_id})
+        await ws.send(json.dumps(req_payload))
+        deadline = time.time() + 6
+        while time.time() < deadline:
+            raw = await asyncio.wait_for(ws.recv(), timeout=3)
+            msg = json.loads(raw)
+            if msg.get("req_id") != req_id:
+                continue
+            if msg.get("error"):
+                last_error = msg["error"].get("message", "Proposal rejected.")
+                text = str(last_error).lower()
+                if "minimum" in text and "stake" in text:
+                    import re
+                    nums = re.findall(r"(?<![A-Za-z])\$?([0-9]+(?:\.[0-9]+)?)", str(last_error))
+                    if nums:
+                        try:
+                            parsed = round(float(nums[-1]), 2)
+                            if parsed not in seen and parsed > 0:
+                                candidates.insert(0, parsed)
+                        except Exception:
+                            pass
+                break
+            proposal = msg.get("proposal", {})
+            if proposal.get("id"):
+                return proposal, amount, req_counter, None
+            last_error = "Proposal was not returned."
+            break
+    return None, None, req_counter, last_error
 
 
 async def digit_bot_worker(
@@ -2629,6 +2665,8 @@ async def digit_bot_worker(
         "positions": [],
         "_position_map": {},
         "_stake_level": 0,
+        "recovery_due": 0.0,
+        "recovery_mode": False,
         "trades": 0,
         "wins": 0,
         "losses": 0,
@@ -2717,6 +2755,10 @@ async def digit_bot_worker(
                 nonlocal req
                 if market in open_contracts or state.get("paused"):
                     return
+                # Recovery mode tightens selection; it never increases stake.
+                if float(state.get("recovery_due", 0) or 0) > 0 and float(signal.get("confidence", 0) or 0) < 98.0:
+                    state["message"] = f"{market}: recovery mode â setup below 98% confidence; waiting."
+                    return
                 if int(state.get("trades", 0) or 0) >= min(200, max(1, int(max_trades))):
                     return
                 if float(state.get("today_pl", 0) or 0) >= max(0.0, float(max_daily_profit)):
@@ -2729,20 +2771,16 @@ async def digit_bot_worker(
                     return
 
                 balance = float(state.get("balance", 0) or 0)
-                base_stake = min(float(risk), max(0.35, balance * 0.02))
-                if stake_mode == "Martingale":
-                    level = int(state.get("_stake_level", 0) or 0)
-                    stake = min(base_stake * (float(martingale_multiplier) ** level), balance * 0.10)
-                else:
-                    stake = base_stake
-                stake = round(max(0.35, stake), 2)
+                # Minimum-stake-only rule: never increase stake after a loss.
+                # Start at Deriv's common minimum and let the proposal response
+                # validate the amount for the selected market/account.
+                stake = 0.35
                 if balance <= 0 or stake > balance:
                     return
 
-                # Digit contract durations can vary by market/account. A proposal
-                # rejected specifically for its duration must NOT stop the entire
-                # scanner. Try the configured duration first, then probe the common
-                # tick durations until Deriv returns a valid proposal.
+                # Digit contract durations can vary by market/account. The
+                # bot also discovers the minimum accepted stake for this exact
+                # contract. Losses never increase the stake.
                 requested_duration = max(1, int(duration))
                 duration_candidates = [requested_duration] + [
                     d for d in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
@@ -2750,14 +2788,12 @@ async def digit_bot_worker(
                 ]
                 proposal = None
                 used_duration = requested_duration
+                stake = 0.35
                 last_duration_error = None
 
                 for candidate_duration in duration_candidates:
-                    req += 1
-                    proposal_req = req
                     proposal_payload = {
                         "proposal": 1,
-                        "amount": stake,
                         "basis": "stake",
                         "contract_type": signal["contract_type"],
                         "currency": state.get("currency", "USD"),
@@ -2766,33 +2802,18 @@ async def digit_bot_worker(
                         "underlying_symbol": symbol,
                         "barrier": str(signal["barrier"]),
                     }
-                    await trade_ws.send(json.dumps({**proposal_payload, "req_id": proposal_req}))
-                    deadline = time.time() + 6
-                    candidate_error = None
-                    while time.time() < deadline:
-                        raw = await asyncio.wait_for(trade_ws.recv(), timeout=3)
-                        msg = json.loads(raw)
-                        if msg.get("req_id") != proposal_req:
-                            continue
-                        if msg.get("error"):
-                            candidate_error = msg["error"].get("message", "Proposal rejected.")
-                            last_duration_error = candidate_error
-                            break
-                        candidate_proposal = msg.get("proposal", {})
-                        if candidate_proposal.get("id"):
-                            proposal = candidate_proposal
-                            used_duration = candidate_duration
-                            break
-                        candidate_error = "Proposal was not returned."
-                        break
-
+                    proposal, accepted_stake, req, candidate_error = await minimum_stake_proposal(
+                        trade_ws, proposal_payload, req, preferred=0.35
+                    )
                     if proposal and proposal.get("id"):
+                        stake = float(accepted_stake or 0.35)
+                        used_duration = candidate_duration
                         break
-
-                    # Only fall back when Deriv explicitly rejects the duration.
-                    # Other proposal errors should be surfaced rather than hidden.
-                    if candidate_error and "duration" not in candidate_error.lower():
-                        state["message"] = f"{market}: {candidate_error}"
+                    last_duration_error = candidate_error
+                    if candidate_error and "duration" not in str(candidate_error).lower():
+                        # A stake/contract rejection should skip this setup, not
+                        # shut down the whole scanner.
+                        state["message"] = f"{market}: {candidate_error} â no trade."
                         return
 
                 if not proposal or not proposal.get("id"):
@@ -2974,10 +2995,16 @@ async def digit_bot_worker(
                         activity = state.setdefault("activity", [])
                         activity.insert(0, f"CLOSE {market} {status.upper()} â¢ Contract {contract_id} â¢ P/L ${profit:+.2f}")
                         state["activity"] = activity[:30]
-                        if profit < 0 and stake_mode == "Martingale":
-                            state["_stake_level"] = min(6, int(state.get("_stake_level", 0)) + 1)
-                        elif profit >= 0:
-                            state["_stake_level"] = 0
+                        # Recovery mode: record the outstanding loss, but never
+                        # increase the next stake. Only clean setups may recover it.
+                        recovery_due = float(state.get("recovery_due", 0) or 0)
+                        if profit < 0:
+                            recovery_due += abs(profit)
+                        elif profit > 0:
+                            recovery_due = max(0.0, recovery_due - profit)
+                        state["recovery_due"] = round(recovery_due, 2)
+                        state["recovery_mode"] = recovery_due > 0.005
+                        state["_stake_level"] = 0
                         state["_position_map"].pop(market, None)
                         open_contracts.pop(market, None)
 
@@ -3395,6 +3422,11 @@ async def trading_state(request: Request):
         "engine": state.get("engine", "ABC"),
         "market_data": state.get("market_data", {}),
         "signals": state.get("signals", []),
+        "recovery": {
+            "amount_due": round(float(state.get("recovery_due", 0) or 0), 2),
+            "active": bool(state.get("recovery_mode", False)),
+            "stake_mode": "MINIMUM ONLY",
+        },
         "magnet": {
             "stage": max([int(p.get("magnet_stage", 0) or 0) for p in state.get("positions", [])] or [0]),
             "open_locked_profit": round(sum(float(p.get("locked_profit", 0) or 0) for p in state.get("positions", [])), 2),
