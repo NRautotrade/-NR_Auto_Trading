@@ -51,6 +51,9 @@ a{text-decoration:none;color:inherit}
 @media(max-width:900px){.scanner-grid{grid-template-columns:1fr}.magnet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:900px){.topbar{padding:20px 22px}.topline{display:block}.top-actions{margin-top:18px}.navbar{padding:16px 18px;gap:8px}.navitem{font-size:17px;padding:12px 16px}.main{padding:24px 16px 50px}.page-title{font-size:32px}.account-grid,.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.btn{font-size:16px;min-height:48px}.field-box,.field-select{min-height:60px;font-size:18px}}
 @media(max-width:520px){.brand{font-size:24px}.subtitle{font-size:13px}.stats{grid-template-columns:1fr 1fr}.card{padding:20px}.account-grid{gap:16px}.field-label{font-size:14px}}
+
+.feature-switches{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.feature-switch{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#071321;border:1px solid var(--border);border-radius:10px;padding:14px}.feature-switch strong{display:block}.feature-switch small{display:block;color:var(--muted);margin-top:4px;font-size:11px;line-height:1.35}.switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;cursor:pointer;inset:0;background:#27384e;border:1px solid var(--border);border-radius:30px;transition:.2s}.slider:before{content:"";position:absolute;height:22px;width:22px;left:3px;top:3px;background:#c5d2e5;border-radius:50%;transition:.2s}.switch input:checked+.slider{background:#1cab55;border-color:#2bd56e}.switch input:checked+.slider:before{transform:translateX(22px);background:#fff}
+
 </style>
 </head>
 <body>
@@ -203,6 +206,22 @@ a{text-decoration:none;color:inherit}
           <div class="form-group"><label class="form-label">Protect at TP (%)</label><input class="input" name="protect_tp" value="{{ settings.protect_tp if settings else 50 }}"></div>
           <div class="form-group"><label class="form-label">Lock Profit (R)</label><input class="input" name="lock_profit_r" value="{{ settings.lock_profit_r if settings else 1 }}"></div>
           <div class="form-group"><label class="form-label">TP Adjustment (%)</label><input class="input" name="tp_adjust_percent" value="{{ settings.tp_adjust_percent if settings else 90 }}"></div>
+        </div>
+      </section>
+
+      <section class="card page-section" data-page="settings">
+        <div class="card-title">FEATURE SWITCHES</div>
+        <div class="subnav-note" style="margin-bottom:12px">Turn optional bot features on or off. These switches control the actual trading engine; they are not display-only.</div>
+        <div class="feature-switches">
+          <div class="feature-switch"><div><strong>ABC TRADER</strong><small>Allow ABC setups to generate trades.</small></div><label class="switch"><input type="checkbox" name="abc_enabled" value="1" {% if not settings or settings.abc_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>DIGIT TRADER</strong><small>Allow the Digit engine to generate trades.</small></div><label class="switch"><input type="checkbox" name="digit_enabled" value="1" {% if not settings or settings.digit_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>STRICT OVER 1 FILTER</strong><small>Use the current OVER 1 / 94%+ entry rule.</small></div><label class="switch"><input type="checkbox" name="over_under_filter" value="1" {% if not settings or settings.over_under_filter %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>CHOPPY MARKET FILTER</strong><small>Block entries when price action is choppy.</small></div><label class="switch"><input type="checkbox" name="choppy_filter" value="1" {% if not settings or settings.choppy_filter %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>LOSS RECOVERY</strong><small>Track losses and require stricter recovery setups. Never increases the stake.</small></div><label class="switch"><input type="checkbox" name="recovery_enabled" value="1" {% if settings and settings.recovery_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>MAGNET PROFIT PROTECTION</strong><small>Use progressive early-sell protection on open Digit contracts.</small></div><label class="switch"><input type="checkbox" name="magnet_enabled" value="1" {% if not settings or settings.magnet_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>MINIMUM LOT ONLY</strong><small>Permanent rule â the bot always uses Deriv's minimum accepted stake for each contract.</small></div><span class="status-pill on">ALWAYS ON</span></div>
+          <div class="feature-switch"><div><strong>LIVE SCANNER</strong><small>Continuously receive and analyze live market ticks.</small></div><label class="switch"><input type="checkbox" name="live_scanner" value="1" {% if not settings or settings.live_scanner %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>AUTO TRADING</strong><small>When OFF, the bot can scan but will not open new trades.</small></div><label class="switch"><input type="checkbox" name="auto_trading" value="1" {% if not settings or settings.auto_trading %}checked{% endif %}><span class="slider"></span></label></div>
         </div>
       </section>
 
