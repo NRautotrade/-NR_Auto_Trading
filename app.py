@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -161,7 +162,7 @@ def init_db():
             user_id INTEGER PRIMARY KEY,
             markets TEXT NOT NULL DEFAULT '["Volatility 25 Index"]',
             strategies TEXT NOT NULL DEFAULT '["ABC Pattern"]',
-            risk_trade REAL NOT NULL DEFAULT 50,
+            risk_trade REAL NOT NULL DEFAULT 2,
             reward_risk REAL NOT NULL DEFAULT 2,
             daily_target REAL NOT NULL DEFAULT 500,
             max_daily_profit REAL NOT NULL DEFAULT 1200,
@@ -195,7 +196,7 @@ def init_db():
 
     if "risk_trade" not in settings_columns:
         conn.execute(
-            "ALTER TABLE settings ADD COLUMN risk_trade REAL NOT NULL DEFAULT 50"
+            "ALTER TABLE settings ADD COLUMN risk_trade REAL NOT NULL DEFAULT 2"
         )
 
     if "reward_risk" not in settings_columns:
@@ -277,6 +278,13 @@ def init_db():
             "ALTER TABLE settings ADD COLUMN lock_profit_r REAL NOT NULL DEFAULT 1"
         )
 
+    if "abc_profit_filter_enabled" not in settings_columns:
+        conn.execute("ALTER TABLE settings ADD COLUMN abc_profit_filter_enabled INTEGER NOT NULL DEFAULT 1")
+    if "abc_min_expected_profit" not in settings_columns:
+        conn.execute("ALTER TABLE settings ADD COLUMN abc_min_expected_profit REAL NOT NULL DEFAULT 5")
+    if "abc_min_risk_percent" not in settings_columns:
+        conn.execute("ALTER TABLE settings ADD COLUMN abc_min_risk_percent REAL NOT NULL DEFAULT 2")
+
     # Optional feature switches. Defaults preserve the current bot behavior,
     # except Loss Recovery which is opt-in.
     feature_columns = {
@@ -289,6 +297,7 @@ def init_db():
         "minimum_lot_only": "INTEGER NOT NULL DEFAULT 1",
         "live_scanner": "INTEGER NOT NULL DEFAULT 1",
         "auto_trading": "INTEGER NOT NULL DEFAULT 1",
+        "abc_profit_filter_enabled": "INTEGER NOT NULL DEFAULT 1",
     }
     for column, definition in feature_columns.items():
         if column not in settings_columns:
@@ -515,9 +524,10 @@ def save_settings(user_id, form):
             magnet_stage1, magnet_lock1, magnet_stage2, magnet_lock2,
             magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4,
             abc_enabled, digit_enabled, over_under_filter, choppy_filter,
-            recovery_enabled, magnet_enabled, minimum_lot_only, live_scanner, auto_trading
+            recovery_enabled, magnet_enabled, minimum_lot_only, live_scanner, auto_trading,
+            abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(user_id) DO UPDATE SET
             markets=excluded.markets, strategies=excluded.strategies,
@@ -537,13 +547,16 @@ def save_settings(user_id, form):
             over_under_filter=excluded.over_under_filter, choppy_filter=excluded.choppy_filter,
             recovery_enabled=excluded.recovery_enabled, magnet_enabled=excluded.magnet_enabled,
             minimum_lot_only=excluded.minimum_lot_only, live_scanner=excluded.live_scanner,
-            auto_trading=excluded.auto_trading
+            auto_trading=excluded.auto_trading,
+            abc_profit_filter_enabled=excluded.abc_profit_filter_enabled,
+            abc_min_expected_profit=excluded.abc_min_expected_profit,
+            abc_min_risk_percent=excluded.abc_min_risk_percent
         """,
         (
             user_id,
             json.dumps(form.getlist("markets")),
             json.dumps(strategies),
-            float(form.get("risk_trade", 50)),
+            min(2.0, max(0.1, float(form.get("risk_trade", 2)))),
             float(form.get("reward_risk", 2)),
             float(form.get("daily_target", 500)),
             max(0.0, float(form.get("max_daily_profit", 1200))),
@@ -577,6 +590,9 @@ def save_settings(user_id, form):
             1,
             1 if form.get("live_scanner") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("auto_trading") in {"1", "true", "on", "yes"} else 0,
+            1 if form.get("abc_profit_filter_enabled") in {"1", "true", "on", "yes"} else 0,
+            max(0.0, float(form.get("abc_min_expected_profit", 5))),
+            min(2.0, max(0.1, float(form.get("abc_min_risk_percent", 2)))),
         ),
     )
 
@@ -1740,6 +1756,7 @@ def abc_signal(
     candles,
     swing_len=3,
     choppy_filter=True,
+    htf_bias=None,
 ):
     """Strict ABC confirmation filter.
 
@@ -1797,8 +1814,13 @@ def abc_signal(
         if all(lo[i] < lo[i-j] and lo[i] < lo[i+j] for j in range(1, swing_len + 1)):
             lows.append((i, lo[i]))
 
+    # Multi-timeframe direction gate: 1D + 4H + 1H must agree with the ABC direction.
+    htf_bias = htf_bias or {}
+    higher_bearish = all(htf_bias.get(tf) == "SELL" for tf in ("1D", "4H", "1H"))
+    higher_bullish = all(htf_bias.get(tf) == "BUY" for tf in ("1D", "4H", "1H"))
+
     # Bearish ABC: A high -> B low -> C lower high, with downtrend confirmation.
-    if len(highs) >= 2 and len(lows) >= 1 and ema20 < ema50:
+    if len(highs) >= 2 and len(lows) >= 1 and ema20 < ema50 and (not htf_bias or higher_bearish):
         ai, A = highs[-2]
         ci, C = highs[-1]
         mids = [x for x in lows if ai < x[0] < ci]
@@ -1816,7 +1838,7 @@ def abc_signal(
                 return ("PUT", ai, bi, ci, A, B, C)
 
     # Bullish ABC: A low -> B high -> C higher low, with uptrend confirmation.
-    if len(lows) >= 2 and len(highs) >= 1 and ema20 > ema50:
+    if len(lows) >= 2 and len(highs) >= 1 and ema20 > ema50 and (not htf_bias or higher_bullish):
         ai, A = lows[-2]
         ci, C = lows[-1]
         mids = [x for x in highs if ai < x[0] < ci]
@@ -1835,6 +1857,29 @@ def abc_signal(
 
     return None
 
+
+async def fetch_abc_timeframes(ws, symbol):
+    data = {}
+    for label, granularity, count in (("15M",900,120),("1H",3600,80),("4H",14400,60),("1D",86400,40)):
+        try:
+            msg = await ws_request(ws, {"ticks_history":symbol,"end":"latest","count":count,"style":"candles","granularity":granularity}, 7000 + abs(hash((symbol,label))) % 1000)
+            data[label] = msg.get("candles", [])
+        except Exception:
+            data[label] = []
+    return data
+
+def timeframe_bias(candles):
+    if len(candles) < 30:
+        return None
+    closes=[float(c["close"] if isinstance(c,dict) else c[4]) for c in candles]
+    def ema(vals, period):
+        k=2.0/(period+1.0); out=vals[0]
+        for v in vals[1:]: out=v*k+out*(1-k)
+        return out
+    fast=ema(closes[-50:],20); slow=ema(closes[-50:],50)
+    if fast>slow and closes[-1]>fast: return "BUY"
+    if fast<slow and closes[-1]<fast: return "SELL"
+    return "CONFLICT"
 
 async def fetch_m5_candles(
     ws,
@@ -1880,6 +1925,9 @@ async def demo_bot_worker(
     minimum_lot_only=True,
     auto_trading=True,
     magnet_enabled=True,
+    abc_profit_filter_enabled=True,
+    abc_min_expected_profit=5.0,
+    abc_min_risk_percent=2.0,
 ):
     state = BOT_STATE[user_id]
 
@@ -2276,14 +2324,15 @@ async def demo_bot_worker(
                         if not abc_enabled:
                             state["message"] = f"{market}: ABC strategy is OFF â scanning only."
                             continue
-                        candles = await fetch_m5_candles(
-                            ws,
-                            symbol,
-                        )
-
-                        signal = abc_signal(candles, choppy_filter=choppy_filter)
-
+                        tf_data = await fetch_abc_timeframes(ws, symbol)
+                        candles = tf_data.get("15M", [])
+                        htf_bias = {"1H": timeframe_bias(tf_data.get("1H", [])), "4H": timeframe_bias(tf_data.get("4H", [])), "1D": timeframe_bias(tf_data.get("1D", []))}
+                        if any(htf_bias.get(tf) not in {"BUY","SELL"} for tf in ("1D","4H","1H")):
+                            state["message"] = f"{market}: ABC rejected â higher-timeframe direction is not clean."
+                            continue
+                        signal = abc_signal(candles, choppy_filter=choppy_filter, htf_bias=htf_bias)
                         if not signal:
+                            state["message"] = f"{market}: ABC rejected â setup is not 100% clean."
                             continue
                         if not auto_trading:
                             state["message"] = f"{market}: clean ABC setup found â AUTO TRADING OFF."
@@ -2345,9 +2394,10 @@ async def demo_bot_worker(
                         # Minimum-stake-only rule: never increase the stake after
                         # a loss. The recovery tracker below records what remains
                         # to recover, but it never changes the stake size.
-                        stake = 0.35 if minimum_lot_only else max(0.35, float(risk or 0))
-
-                        if balance <= 0 or stake > balance:
+                        risk_cap = balance * (min(2.0, max(0.1, float(abc_min_risk_percent or 2.0))) / 100.0)
+                        stake = 0.35 if minimum_lot_only else min(max(0.35, float(risk or 0)), risk_cap)
+                        if balance <= 0 or stake > risk_cap:
+                            state["message"] = f"{market}: ABC rejected â minimum stake exceeds the 2% risk cap."
                             continue
 
                         proposal_payload = {
@@ -2407,6 +2457,10 @@ async def demo_bot_worker(
                             state["message"] = (
                                 f"{market}: {direction} proposal was not returned."
                             )
+                            continue
+
+                        if abc_profit_filter_enabled and expected_profit < float(abc_min_expected_profit or 5.0):
+                            state["message"] = f"{market}: ABC rejected â expected profit ${expected_profit:.2f} is below ${float(abc_min_expected_profit or 5.0):.2f}."
                             continue
 
                         state["message"] = (
@@ -2531,6 +2585,9 @@ async def demo_bot_worker(
                 minimum_lot_only,
                 auto_trading,
                 magnet_enabled,
+                abc_profit_filter_enabled,
+                abc_min_expected_profit,
+                abc_min_risk_percent,
             )
         )
         BOT_TASKS[user_id] = task
@@ -2567,6 +2624,9 @@ async def demo_bot_worker(
                 minimum_lot_only,
                 auto_trading,
                 magnet_enabled,
+                abc_profit_filter_enabled,
+                abc_min_expected_profit,
+                abc_min_risk_percent,
             )
         )
         BOT_TASKS[user_id] = task
@@ -3407,6 +3467,15 @@ async def start_trading(request: Request):
                 str(settings["stake_mode"] or "Flat Stake"),
                 float(settings["martingale_multiplier"]),
                 float(settings["tp_adjust_percent"]),
+                abc_enabled,
+                choppy_filter,
+                recovery_enabled,
+                minimum_lot_only,
+                auto_trading,
+                magnet_enabled,
+                bool(settings["abc_profit_filter_enabled"] if "abc_profit_filter_enabled" in settings.keys() else 1),
+                float(settings["abc_min_expected_profit"] if "abc_min_expected_profit" in settings.keys() else 5),
+                float(settings["abc_min_risk_percent"] if "abc_min_risk_percent" in settings.keys() else 2),
             )
         )
 
