@@ -272,6 +272,13 @@ a{text-decoration:none;color:inherit}
     </section>
 
     <section class="card page-section" data-page="abc">
+      <div class="card-title">LIVE ABC MARKET SCANNER</div>
+      <div class="subnav-note" style="margin-bottom:12px">The bot continuously checks each selected market. A market is shown as <b>NO TRADE</b> whenever any required gate fails.</div>
+      <div id="abcScannerStatus" class="statusline">ABC scanner is waiting for the bot.</div>
+      <div id="abcScannerMarkets" class="scanner-grid" style="margin-top:14px"><div class="empty">Start the ABC engine to scan the selected markets.</div></div>
+    </section>
+
+    <section class="card page-section" data-page="abc">
       <div class="card-title">ABC TRADE HISTORY</div>
       <div class="subnav-note" style="margin-bottom:12px">All completed ABC trades are kept here. Scroll inside the history box to view older trades.</div>
       <div class="tablewrap trade-history-scroll" style="max-height:520px">
@@ -399,6 +406,28 @@ async function refresh(){
     const history=document.getElementById('tradeHistory');
     const trades=x.trade_history||[];
     history.innerHTML=trades.length ? trades.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.barrier??'â'}</td><td>${a.confidence!=null?Number(a.confidence).toFixed(1)+'%':'â'}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||''}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No completed trades</td></tr>';
+
+    const abcScanner=document.getElementById('abcScannerMarkets');
+    const abcScannerStatus=document.getElementById('abcScannerStatus');
+    const scanMap=x.market_scan||{};
+    const scanEntries=Object.entries(scanMap);
+    if(abcScannerStatus) abcScannerStatus.textContent = x.engine==='ABC' ? (x.message||'ABC live scanner running.') : 'Select ABC Pattern and run the bot to activate the ABC scanner.';
+    if(abcScanner){
+      if(!scanEntries.length){
+        abcScanner.innerHTML='<div class="empty">No ABC market data yet.</div>';
+      }else{
+        abcScanner.innerHTML=scanEntries.map(([name,a])=>{
+          const status=String(a.status||'SCANNING');
+          const cls=status==='TRADE OPEN'||status==='READY'?'signal-live':(status==='NO TRADE'?'bad':'');
+          return `<div class="scanner-market">
+            <div class="scanner-head"><div><div class="scanner-name">${name}</div><div class="muted">${a.symbol||''}</div></div><div class="scanner-quote ${cls}">${status}</div></div>
+            <div class="signal-box">1D: <b>${a.htf_1d||'â'}</b> &nbsp; 4H: <b>${a.htf_4h||'â'}</b> &nbsp; 1H: <b>${a.htf_1h||'â'}</b></div>
+            <div class="signal-box">${a.direction?`Direction: <b>${a.direction}</b> â¢ `:''}${a.expected_profit!=null?`Quoted profit: <b>$${Number(a.expected_profit).toFixed(2)}</b> â¢ `:''}${a.risk_cap!=null?`Risk cap: <b>$${Number(a.risk_cap).toFixed(2)}</b>`:'Risk cap: â'}</div>
+            <div class="signal-box">${a.reason||'Analyzingâ¦'}</div>
+          </div>`;
+        }).join('');
+      }
+    }
 
     const scanner=document.getElementById('scannerMarkets');
     const scannerStatus=document.getElementById('scannerStatus');
