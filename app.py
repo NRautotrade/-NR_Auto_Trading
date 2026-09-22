@@ -257,6 +257,9 @@ def init_db():
         "digit_duration": "INTEGER NOT NULL DEFAULT 5",
         "digit_duration_unit": "TEXT NOT NULL DEFAULT 't'",
         "digit_min_confidence": "REAL NOT NULL DEFAULT 65",
+        "digit_market_stakes": "TEXT NOT NULL DEFAULT '{}'",
+        "digit_risk_cap_percent": "REAL NOT NULL DEFAULT 1.0",
+        "digit_max_loss_usd": "REAL NOT NULL DEFAULT 2.0",
         "magnet_stage1": "REAL NOT NULL DEFAULT 10",
         "magnet_lock1": "REAL NOT NULL DEFAULT 0",
         "magnet_stage2": "REAL NOT NULL DEFAULT 20",
@@ -515,16 +518,19 @@ def save_settings(user_id, form):
             lock_profit_r, max_trades, stake_mode, martingale_multiplier,
             tp_adjust_percent, digit_trade_type, digit_barrier,
             digit_duration, digit_duration_unit, digit_min_confidence,
+            digit_market_stakes, digit_risk_cap_percent, digit_max_loss_usd,
             magnet_stage1, magnet_lock1, magnet_stage2, magnet_lock2,
             magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4,
             abc_enabled, digit_enabled, over_under_filter, choppy_filter,
             recovery_enabled, magnet_enabled, minimum_lot_only, live_scanner, auto_trading,
             abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(user_id) DO UPDATE SET
             markets=excluded.markets, strategies=excluded.strategies,
+            digit_market_stakes=excluded.digit_market_stakes, digit_risk_cap_percent=excluded.digit_risk_cap_percent,
+            digit_max_loss_usd=excluded.digit_max_loss_usd,
             risk_trade=excluded.risk_trade, reward_risk=excluded.reward_risk,
             daily_target=excluded.daily_target, max_daily_profit=excluded.max_daily_profit,
             max_daily_loss=excluded.max_daily_loss, protect_tp=excluded.protect_tp,
@@ -566,6 +572,9 @@ def save_settings(user_id, form):
             min(10, max(1, int(float(form.get("digit_duration", 5))))),
             str(form.get("digit_duration_unit", "t")),
             min(95.0, max(50.0, float(form.get("digit_min_confidence", 65)))),
+            json.dumps({m: max(0.35, float(form.get("digit_stake_" + m.replace(" ", "_"), 0.35) or 0.35)) for m in ["Step Index","Volatility 5 Index","Volatility 10 Index","Volatility 15 Index","Volatility 25 Index","Volatility 30 Index","Volatility 50 Index","Volatility 75 Index","Volatility 100 Index"]}),
+            min(1.5, max(0.1, float(form.get("digit_risk_cap_percent", 1.0)))),
+            max(0.0, float(form.get("digit_max_loss_usd", 2.0))),
             float(form.get("magnet_stage1", 10)),
             float(form.get("magnet_lock1", 0)),
             float(form.get("magnet_stage2", 20)),
@@ -716,6 +725,7 @@ async def register_page(request: Request):
 @app.post("/register")
 async def register(
     request: Request,
+    username: str = Form(""),
     first_name: str = Form(...),
     last_name: str = Form(...),
     date_of_birth: str = Form(...),
@@ -723,10 +733,46 @@ async def register(
     password: str = Form(...),
     confirm: str = Form(...),
 ):
+    username = username.strip().lower()
     first_name = first_name.strip()
     last_name = last_name.strip()
     date_of_birth = date_of_birth.strip()
     email = email.strip().lower()
+
+    if not username:
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "title": APP_NAME,
+                "error": "Choose a username.",
+            },
+            status_code=400,
+        )
+
+    if len(username) < 3 or len(username) > 30:
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "title": APP_NAME,
+                "error": "Username must be 3â30 characters.",
+            },
+            status_code=400,
+        )
+
+    if any(ch.isspace() for ch in username) or not all(
+        ch.isalnum() or ch in "._-" for ch in username
+    ):
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "title": APP_NAME,
+                "error": "Username can use letters, numbers, dots, underscores and hyphens only.",
+            },
+            status_code=400,
+        )
 
     if not first_name or not last_name:
         return templates.TemplateResponse(
@@ -783,10 +829,41 @@ async def register(
             status_code=400,
         )
 
-    # New accounts use email as the internal username.
-    username = email
-
     conn = db()
+
+    existing_username = conn.execute(
+        "SELECT id FROM users WHERE LOWER(username)=? LIMIT 1",
+        (username,),
+    ).fetchone()
+
+    if existing_username:
+        conn.close()
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "title": APP_NAME,
+                "error": "That username is already taken. Please choose another.",
+            },
+            status_code=400,
+        )
+
+    existing_email = conn.execute(
+        "SELECT id FROM users WHERE LOWER(email)=? LIMIT 1",
+        (email,),
+    ).fetchone()
+
+    if existing_email:
+        conn.close()
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "title": APP_NAME,
+                "error": "An account with that email already exists.",
+            },
+            status_code=400,
+        )
 
     try:
         cur = conn.execute(
@@ -2843,6 +2920,9 @@ async def digit_bot_worker(
     recovery_enabled=False,
     minimum_lot_only=True,
     live_scanner=True,
+    digit_market_stakes=None,
+    digit_risk_cap_percent=1.0,
+    digit_max_loss_usd=2.0,
     auto_trading=True,
     magnet_enabled=True,
 ):
@@ -2871,6 +2951,16 @@ async def digit_bot_worker(
         "paused": False,
         "feature_switches": {"digit_enabled": bool(digit_enabled), "over_under_filter": bool(over_under_filter), "choppy_filter": bool(choppy_filter), "recovery_enabled": bool(recovery_enabled), "minimum_lot_only": bool(minimum_lot_only), "live_scanner": bool(live_scanner), "auto_trading": bool(auto_trading), "magnet_enabled": bool(magnet_enabled)},
     })
+
+    digit_market_stakes = digit_market_stakes or {}
+    try:
+        digit_risk_cap_percent = min(1.5, max(0.1, float(digit_risk_cap_percent)))
+    except Exception:
+        digit_risk_cap_percent = 1.0
+    try:
+        digit_max_loss_usd = max(0.0, float(digit_max_loss_usd))
+    except Exception:
+        digit_max_loss_usd = 2.0
 
     req = 12000
     open_contracts = {}
@@ -2968,16 +3058,25 @@ async def digit_bot_worker(
                     return
 
                 balance = float(state.get("balance", 0) or 0)
-                # Minimum-stake-only rule: never increase stake after a loss.
-                # Start at Deriv's common minimum and let the proposal response
-                # validate the amount for the selected market/account.
-                stake = 0.35 if minimum_lot_only else max(0.35, float(risk or 0))
-                if balance <= 0 or stake > balance:
+                if balance <= 0:
                     return
 
-                # Digit contract durations can vary by market/account. The
-                # bot also discovers the minimum accepted stake for this exact
-                # contract. Losses never increase the stake.
+                # AI Scan / Digit Trader uses a configured stake per market,
+                # then applies two independent loss ceilings. The effective
+                # stake can never exceed the account-percentage cap or the
+                # configured dollar loss cap. Loss recovery never increases it.
+                market_stake = float(digit_market_stakes.get(market, 0.35) or 0.35)
+                market_stake = max(0.35, market_stake)
+                percent_cap = balance * (digit_risk_cap_percent / 100.0)
+                dollar_cap = digit_max_loss_usd if digit_max_loss_usd > 0 else float("inf")
+                risk_cap = min(percent_cap, dollar_cap)
+                stake = min(market_stake, risk_cap)
+                if stake < 0.35:
+                    update_market_scan(market, status="NO TRADE", reason="Risk cap is below Deriv minimum stake.", risk_cap=round(risk_cap, 2))
+                    return
+                if stake > balance:
+                    return
+
                 requested_duration = max(1, int(duration))
                 duration_candidates = [requested_duration] + [
                     d for d in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
@@ -2985,7 +3084,6 @@ async def digit_bot_worker(
                 ]
                 proposal = None
                 used_duration = requested_duration
-                stake = 0.35
                 last_duration_error = None
 
                 for candidate_duration in duration_candidates:
@@ -2999,18 +3097,21 @@ async def digit_bot_worker(
                         "underlying_symbol": symbol,
                         "barrier": str(signal["barrier"]),
                     }
-                    if minimum_lot_only:
-                        proposal, accepted_stake, req, candidate_error = await minimum_stake_proposal(
-                            trade_ws, proposal_payload, req, preferred=0.35
-                        )
-                    else:
-                        req += 1
-                        proposal_msg = await ws_request(trade_ws, {**proposal_payload, "amount": stake}, req)
-                        proposal = proposal_msg.get("proposal", {})
-                        accepted_stake = stake
-                        candidate_error = (proposal_msg.get("error") or {}).get("message")
+                    req += 1
+                    proposal_msg = await ws_request(trade_ws, {**proposal_payload, "amount": stake}, req)
+                    proposal = proposal_msg.get("proposal", {})
+                    accepted_stake = stake
+                    candidate_error = (proposal_msg.get("error") or {}).get("message")
                     if proposal and proposal.get("id"):
                         stake = float(accepted_stake or stake)
+                        # The quoted ask is the actual contract purchase amount.
+                        # Reject a quote that would exceed either loss ceiling.
+                        quoted_ask = float(proposal.get("ask_price", stake) or stake)
+                        if quoted_ask > risk_cap + 1e-9:
+                            proposal = None
+                            candidate_error = "Quoted stake exceeds the Digit risk cap."
+                            last_duration_error = candidate_error
+                            continue
                         used_duration = candidate_duration
                         break
                     last_duration_error = candidate_error
@@ -3376,9 +3477,15 @@ async def start_trading(request: Request):
     choppy_filter = bool(settings["choppy_filter"] if "choppy_filter" in settings.keys() else 1)
     recovery_enabled = bool(settings["recovery_enabled"] if "recovery_enabled" in settings.keys() else 0)
     magnet_enabled = bool(settings["magnet_enabled"] if "magnet_enabled" in settings.keys() else 1)
-    minimum_lot_only = True  # permanent rule: always use the minimum accepted stake
+    minimum_lot_only = True  # ABC keeps its existing minimum-lot safety rule. Digit uses per-market stake caps.
     live_scanner = bool(settings["live_scanner"] if "live_scanner" in settings.keys() else 1)
     auto_trading = bool(settings["auto_trading"] if "auto_trading" in settings.keys() else 1)
+    try:
+        digit_market_stakes = json.loads(settings["digit_market_stakes"] or "{}") if "digit_market_stakes" in settings.keys() else {}
+    except Exception:
+        digit_market_stakes = {}
+    digit_risk_cap_percent = float(settings["digit_risk_cap_percent"] if "digit_risk_cap_percent" in settings.keys() else 1.0)
+    digit_max_loss_usd = float(settings["digit_max_loss_usd"] if "digit_max_loss_usd" in settings.keys() else 2.0)
 
     if "Digit Over/Under" in strategies and digit_enabled:
         selected_engine = "digit"
@@ -3466,6 +3573,9 @@ async def start_trading(request: Request):
                 live_scanner,
                 auto_trading,
                 magnet_enabled,
+                digit_market_stakes,
+                digit_risk_cap_percent,
+                digit_max_loss_usd,
             )
         )
     else:
