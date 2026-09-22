@@ -182,7 +182,7 @@ a{text-decoration:none;color:inherit}
           <label class="check"><input type="checkbox" name="strategies" value="Digit Over/Under" {% if 'Digit Over/Under' in saved_strategies %}checked{% endif %}>Digit Over/Under â Live Scanner</label>
           <label class="check"><input type="checkbox" name="strategies" value="Breakout" {% if 'Breakout' in saved_strategies %}checked{% endif %}>Breakout</label>
           <label class="check"><input type="checkbox" name="strategies" value="Trend" {% if 'Trend' in saved_strategies %}checked{% endif %}>Trend</label>
-          <label class="check"><input type="checkbox" checked disabled>Minimum Lot Only</label>
+          <label class="check" style="justify-content:space-between"><span>Minimum Lot Only</span><label class="switch"><input type="checkbox" name="abc_minimum_lot_only" value="1" {% if not settings or settings.abc_minimum_lot_only %}checked{% endif %}><span class="slider"></span></label></label>
         </div>
       </section>
 
