@@ -2024,6 +2024,13 @@ async def demo_bot_worker(
             last_setup = {}
             open_contracts = {}
             request_counter = 6000
+            state["market_scan"] = {}
+
+            def update_market_scan(market, **values):
+                item = state.setdefault("market_scan", {}).setdefault(market, {})
+                item.update(values)
+                item["market"] = market
+                item["updated_at"] = time.time()
 
             while not state.get("stop_requested"):
 
@@ -2315,20 +2322,26 @@ async def demo_bot_worker(
                         continue
 
                     try:
+                        update_market_scan(market, status="SCANNING", reason="Analyzing 1D / 4H / 1H direction and 15M ABC structure.", symbol=symbol)
                         if not abc_enabled:
+                            update_market_scan(market, status="NO TRADE", reason="ABC Trader is OFF.")
                             state["message"] = f"{market}: ABC strategy is OFF â scanning only."
                             continue
                         tf_data = await fetch_abc_timeframes(ws, symbol)
                         candles = tf_data.get("15M", [])
                         htf_bias = {"1H": timeframe_bias(tf_data.get("1H", [])), "4H": timeframe_bias(tf_data.get("4H", [])), "1D": timeframe_bias(tf_data.get("1D", []))}
+                        update_market_scan(market, htf_1d=htf_bias.get("1D"), htf_4h=htf_bias.get("4H"), htf_1h=htf_bias.get("1H"))
                         if any(htf_bias.get(tf) not in {"BUY","SELL"} for tf in ("1D","4H","1H")):
+                            update_market_scan(market, status="NO TRADE", reason="Higher-timeframe direction is not clean.")
                             state["message"] = f"{market}: ABC rejected â higher-timeframe direction is not clean."
                             continue
                         signal = abc_signal(candles, choppy_filter=choppy_filter, htf_bias=htf_bias)
                         if not signal:
+                            update_market_scan(market, status="NO TRADE", reason="15M ABC structure / trend / choppy-market checks did not all pass.")
                             state["message"] = f"{market}: ABC rejected â setup is not 100% clean."
                             continue
                         if not auto_trading:
+                            update_market_scan(market, status="READY", reason="Clean ABC setup found, but Auto Trading is OFF.")
                             state["message"] = f"{market}: clean ABC setup found â AUTO TRADING OFF."
                             continue
 
@@ -2391,6 +2404,7 @@ async def demo_bot_worker(
                         risk_cap = balance * (min(2.0, max(0.1, float(abc_min_risk_percent or 2.0))) / 100.0)
                         stake = 0.35 if minimum_lot_only else min(max(0.35, float(risk or 0)), risk_cap)
                         if balance <= 0 or stake > risk_cap:
+                            update_market_scan(market, status="NO TRADE", reason="Risk cap would be exceeded by the minimum stake.", risk_cap=round(risk_cap, 2))
                             state["message"] = f"{market}: ABC rejected â minimum stake exceeds the 2% risk cap."
                             continue
 
@@ -2408,6 +2422,7 @@ async def demo_bot_worker(
                                 ws, proposal_payload, request_counter, preferred=0.35
                             )
                             if not prop or not prop.get("id"):
+                                update_market_scan(market, status="NO TRADE", reason="No valid contract quote was returned.")
                                 state["message"] = f"{market}: minimum-stake proposal unavailable â no trade."
                                 continue
                             stake = float(accepted_stake or 0.35)
@@ -2417,6 +2432,7 @@ async def demo_bot_worker(
                             prop_msg = await ws_request(ws, proposal_payload, request_counter)
                             prop = prop_msg.get("proposal", {})
                             if not prop.get("id"):
+                                update_market_scan(market, status="NO TRADE", reason="No valid contract quote was returned.")
                                 state["message"] = f"{market}: configured stake proposal unavailable â no trade."
                                 continue
 
@@ -2453,10 +2469,14 @@ async def demo_bot_worker(
                             )
                             continue
 
-                        if abc_profit_filter_enabled and expected_profit < float(abc_min_expected_profit or 5.0):
-                            state["message"] = f"{market}: ABC rejected â expected profit ${expected_profit:.2f} is below ${float(abc_min_expected_profit or 5.0):.2f}."
+                        min_profit = float(abc_min_expected_profit or 5.0)
+                        update_market_scan(market, direction=direction, ask=round(ask, 2), payout=round(payout, 2), expected_profit=round(expected_profit, 2), risk_cap=round(risk_cap, 2))
+                        if abc_profit_filter_enabled and expected_profit < min_profit:
+                            update_market_scan(market, status="NO TRADE", reason=f"Quoted profit ${expected_profit:.2f} is below the ${min_profit:.2f} minimum.")
+                            state["message"] = f"{market}: ABC rejected â expected profit ${expected_profit:.2f} is below ${min_profit:.2f}."
                             continue
 
+                        update_market_scan(market, status="READY", reason="All ABC gates passed â waiting for execution.")
                         state["message"] = (
                             f"{market}: ABC {direction} confirmed; buying demo contract..."
                         )
@@ -2500,6 +2520,7 @@ async def demo_bot_worker(
                         }
 
                         state["_position_map"][market] = position
+                        update_market_scan(market, status="TRADE OPEN", reason=f"{direction} contract opened after all gates passed.", contract_id=contract_id, stake=round(ask, 2), expected_profit=round(max_profit, 2))
 
                         state["positions"] = list(
                             state["_position_map"].values()
@@ -3650,6 +3671,7 @@ async def trading_state(request: Request):
         "activity": state.get("activity", []),
         "engine": state.get("engine", "ABC"),
         "market_data": state.get("market_data", {}),
+        "market_scan": state.get("market_scan", {}),
         "signals": state.get("signals", []),
         "recovery": {
             "amount_due": round(float(state.get("recovery_due", 0) or 0), 2),
