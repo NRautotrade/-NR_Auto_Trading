@@ -694,7 +694,7 @@ async def login(
             {
                 "request": request,
                 "title": APP_NAME,
-                "error": "Invalid email/username or password.",
+                "error": "Invalid email or password.",
             },
             status_code=401,
         )
