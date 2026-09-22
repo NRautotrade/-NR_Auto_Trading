@@ -725,7 +725,6 @@ async def register_page(request: Request):
 @app.post("/register")
 async def register(
     request: Request,
-    username: str = Form(""),
     first_name: str = Form(...),
     last_name: str = Form(...),
     date_of_birth: str = Form(...),
@@ -733,46 +732,10 @@ async def register(
     password: str = Form(...),
     confirm: str = Form(...),
 ):
-    username = username.strip().lower()
     first_name = first_name.strip()
     last_name = last_name.strip()
     date_of_birth = date_of_birth.strip()
     email = email.strip().lower()
-
-    if not username:
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Choose a username.",
-            },
-            status_code=400,
-        )
-
-    if len(username) < 3 or len(username) > 30:
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Username must be 3â30 characters.",
-            },
-            status_code=400,
-        )
-
-    if any(ch.isspace() for ch in username) or not all(
-        ch.isalnum() or ch in "._-" for ch in username
-    ):
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Username can use letters, numbers, dots, underscores and hyphens only.",
-            },
-            status_code=400,
-        )
 
     if not first_name or not last_name:
         return templates.TemplateResponse(
@@ -829,41 +792,10 @@ async def register(
             status_code=400,
         )
 
+    # New accounts use email as the internal username.
+    username = email
+
     conn = db()
-
-    existing_username = conn.execute(
-        "SELECT id FROM users WHERE LOWER(username)=? LIMIT 1",
-        (username,),
-    ).fetchone()
-
-    if existing_username:
-        conn.close()
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "That username is already taken. Please choose another.",
-            },
-            status_code=400,
-        )
-
-    existing_email = conn.execute(
-        "SELECT id FROM users WHERE LOWER(email)=? LIMIT 1",
-        (email,),
-    ).fetchone()
-
-    if existing_email:
-        conn.close()
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "An account with that email already exists.",
-            },
-            status_code=400,
-        )
 
     try:
         cur = conn.execute(
