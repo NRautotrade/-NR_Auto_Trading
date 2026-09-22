@@ -665,10 +665,10 @@ async def home(request: Request):
 @app.post("/login")
 async def login(
     request: Request,
-    username: str = Form(...),
+    email: str = Form(...),
     password: str = Form(...),
 ):
-    login_value = username.strip().lower()
+    login_email = email.strip().lower()
 
     conn = db()
 
@@ -676,11 +676,10 @@ async def login(
         """
         SELECT *
         FROM users
-        WHERE LOWER(username)=?
-           OR LOWER(email)=?
+        WHERE LOWER(email)=?
         LIMIT 1
         """,
-        (login_value, login_value),
+        (login_email,),
     ).fetchone()
 
     conn.close()
@@ -725,7 +724,6 @@ async def register_page(request: Request):
 @app.post("/register")
 async def register(
     request: Request,
-    username: str = Form(""),
     first_name: str = Form(...),
     last_name: str = Form(...),
     date_of_birth: str = Form(...),
@@ -733,120 +731,47 @@ async def register(
     password: str = Form(...),
     confirm: str = Form(...),
 ):
-    username = username.strip().lower()
     first_name = first_name.strip()
     last_name = last_name.strip()
     date_of_birth = date_of_birth.strip()
     email = email.strip().lower()
 
-    if not username:
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Choose a username.",
-            },
-            status_code=400,
-        )
-
-    if len(username) < 3 or len(username) > 30:
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Username must be 3â30 characters.",
-            },
-            status_code=400,
-        )
-
-    if any(ch.isspace() for ch in username) or not all(
-        ch.isalnum() or ch in "._-" for ch in username
-    ):
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Username can use letters, numbers, dots, underscores and hyphens only.",
-            },
-            status_code=400,
-        )
-
     if not first_name or not last_name:
         return templates.TemplateResponse(
             "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "First name and last name are required.",
-            },
+            {"request": request, "title": APP_NAME, "error": "First name and last name are required."},
             status_code=400,
         )
 
     if not date_of_birth:
         return templates.TemplateResponse(
             "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Date of birth is required.",
-            },
+            {"request": request, "title": APP_NAME, "error": "Date of birth is required."},
             status_code=400,
         )
 
     if "@" not in email or "." not in email.split("@")[-1]:
         return templates.TemplateResponse(
             "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Enter a valid email address.",
-            },
+            {"request": request, "title": APP_NAME, "error": "Enter a valid email address."},
             status_code=400,
         )
 
     if len(password) < 8:
         return templates.TemplateResponse(
             "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Password must be at least 8 characters.",
-            },
+            {"request": request, "title": APP_NAME, "error": "Password must be at least 8 characters."},
             status_code=400,
         )
 
     if password != confirm:
         return templates.TemplateResponse(
             "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Passwords do not match.",
-            },
+            {"request": request, "title": APP_NAME, "error": "Passwords do not match."},
             status_code=400,
         )
 
     conn = db()
-
-    existing_username = conn.execute(
-        "SELECT id FROM users WHERE LOWER(username)=? LIMIT 1",
-        (username,),
-    ).fetchone()
-
-    if existing_username:
-        conn.close()
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "That username is already taken. Please choose another.",
-            },
-            status_code=400,
-        )
 
     existing_email = conn.execute(
         "SELECT id FROM users WHERE LOWER(email)=? LIMIT 1",
@@ -857,68 +782,38 @@ async def register(
         conn.close()
         return templates.TemplateResponse(
             "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "An account with that email already exists.",
-            },
+            {"request": request, "title": APP_NAME, "error": "An account with that email already exists."},
             status_code=400,
         )
+
+    # The database keeps its legacy username column for compatibility with
+    # existing accounts, but the user never chooses or uses a username.
+    internal_username = email
 
     try:
         cur = conn.execute(
             """
             INSERT INTO users
-            (
-                username,
-                first_name,
-                last_name,
-                date_of_birth,
-                email,
-                password_hash
-            )
+            (username, first_name, last_name, date_of_birth, email, password_hash)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (
-                username,
-                first_name,
-                last_name,
-                date_of_birth,
-                email,
-                pw_hash(password),
-            ),
+            (internal_username, first_name, last_name, date_of_birth, email, pw_hash(password)),
         )
-
         uid = cur.lastrowid
-
-        conn.execute(
-            "INSERT INTO settings(user_id) VALUES (?)",
-            (uid,),
-        )
-
+        conn.execute("INSERT INTO settings(user_id) VALUES (?)", (uid,))
         conn.commit()
-
     except sqlite3.IntegrityError:
         conn.close()
-
         return templates.TemplateResponse(
             "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "An account with that email already exists.",
-            },
+            {"request": request, "title": APP_NAME, "error": "An account with that email already exists."},
             status_code=400,
         )
 
     conn.close()
-
     request.session["user_id"] = uid
 
-    return RedirectResponse(
-        "/dashboard",
-        status_code=303,
-    )
+    return RedirectResponse("/dashboard", status_code=303)
 
 
 # ============================================================
