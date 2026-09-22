@@ -257,9 +257,6 @@ def init_db():
         "digit_duration": "INTEGER NOT NULL DEFAULT 5",
         "digit_duration_unit": "TEXT NOT NULL DEFAULT 't'",
         "digit_min_confidence": "REAL NOT NULL DEFAULT 65",
-        "digit_market_stakes": "TEXT NOT NULL DEFAULT '{}'",
-        "digit_risk_cap_percent": "REAL NOT NULL DEFAULT 1.0",
-        "digit_max_loss_usd": "REAL NOT NULL DEFAULT 2.0",
         "magnet_stage1": "REAL NOT NULL DEFAULT 10",
         "magnet_lock1": "REAL NOT NULL DEFAULT 0",
         "magnet_stage2": "REAL NOT NULL DEFAULT 20",
@@ -518,19 +515,16 @@ def save_settings(user_id, form):
             lock_profit_r, max_trades, stake_mode, martingale_multiplier,
             tp_adjust_percent, digit_trade_type, digit_barrier,
             digit_duration, digit_duration_unit, digit_min_confidence,
-            digit_market_stakes, digit_risk_cap_percent, digit_max_loss_usd,
             magnet_stage1, magnet_lock1, magnet_stage2, magnet_lock2,
             magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4,
             abc_enabled, digit_enabled, over_under_filter, choppy_filter,
             recovery_enabled, magnet_enabled, minimum_lot_only, live_scanner, auto_trading,
             abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(user_id) DO UPDATE SET
             markets=excluded.markets, strategies=excluded.strategies,
-            digit_market_stakes=excluded.digit_market_stakes, digit_risk_cap_percent=excluded.digit_risk_cap_percent,
-            digit_max_loss_usd=excluded.digit_max_loss_usd,
             risk_trade=excluded.risk_trade, reward_risk=excluded.reward_risk,
             daily_target=excluded.daily_target, max_daily_profit=excluded.max_daily_profit,
             max_daily_loss=excluded.max_daily_loss, protect_tp=excluded.protect_tp,
@@ -572,9 +566,6 @@ def save_settings(user_id, form):
             min(10, max(1, int(float(form.get("digit_duration", 5))))),
             str(form.get("digit_duration_unit", "t")),
             min(95.0, max(50.0, float(form.get("digit_min_confidence", 65)))),
-            json.dumps({m: max(0.35, float(form.get("digit_stake_" + m.replace(" ", "_"), 0.35) or 0.35)) for m in ["Step Index","Volatility 5 Index","Volatility 10 Index","Volatility 15 Index","Volatility 25 Index","Volatility 30 Index","Volatility 50 Index","Volatility 75 Index","Volatility 100 Index"]}),
-            min(1.5, max(0.1, float(form.get("digit_risk_cap_percent", 1.0)))),
-            max(0.0, float(form.get("digit_max_loss_usd", 2.0))),
             float(form.get("magnet_stage1", 10)),
             float(form.get("magnet_lock1", 0)),
             float(form.get("magnet_stage2", 20)),
@@ -589,8 +580,8 @@ def save_settings(user_id, form):
             1 if form.get("choppy_filter") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("recovery_enabled") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("magnet_enabled") in {"1", "true", "on", "yes"} else 0,
-            # Minimum-lot-only is a permanent safety rule for this bot.
-            1,
+            # ABC Trader minimum-lot switch. Digit Trader uses its own stake logic.
+            1 if form.get("minimum_lot_only") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("live_scanner") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("auto_trading") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("abc_profit_filter_enabled") in {"1", "true", "on", "yes"} else 0,
@@ -2758,25 +2749,18 @@ def digit_signal(digits, trade_type="Over/Under", fixed_barrier=1, min_confidenc
 
 
 def magnet_lock_floor(stake, max_profit, peak_profit, stage_locks, stage_triggers, reached_stage):
-    """Progressive early-sell floor based on meaningful live profit.
+    """Aggressive Digit profit protection at live-profit thresholds.
 
-    The floor follows realized peak profit rather than pretending a tiny $1-$2
-    fluctuation is a meaningful locked gain. Stages are monotonic.
+    Stage 1 activates at $5 peak profit and protects 80% of that peak.
+    Stage 2 activates at $10 peak profit and protects 92% of that peak.
+    The floor is monotonic and only applies while the contract remains sellable.
     """
     peak = max(0.0, float(peak_profit or 0))
-    if peak < 5.0:
-        return 0, 0.0
-
-    # Protection levels are based on the peak profit itself, not the stake.
-    # This avoids locking $1 on a trade that has not yet produced meaningful
-    # profit. Once active, the floor only moves upward.
-    locks = (0.50, 0.70, 0.85, 0.95)
-    stage = min(4, max(0, int(reached_stage or 0)))
-    if stage <= 0:
-        return 0, 0.0
-    idx = stage - 1
-    floor = peak * locks[idx]
-    return stage, round(max(0.0, floor), 6)
+    if peak >= 10.0:
+        return 2, round(max(9.20, peak * 0.92), 6)
+    if peak >= 5.0:
+        return 1, round(max(4.00, peak * 0.80), 6)
+    return 0, 0.0
 
 
 async def minimum_stake_proposal(ws, payload, req_counter_start, preferred=0.35):
@@ -2852,9 +2836,6 @@ async def digit_bot_worker(
     recovery_enabled=False,
     minimum_lot_only=True,
     live_scanner=True,
-    digit_market_stakes=None,
-    digit_risk_cap_percent=1.0,
-    digit_max_loss_usd=2.0,
     auto_trading=True,
     magnet_enabled=True,
 ):
@@ -2883,16 +2864,6 @@ async def digit_bot_worker(
         "paused": False,
         "feature_switches": {"digit_enabled": bool(digit_enabled), "over_under_filter": bool(over_under_filter), "choppy_filter": bool(choppy_filter), "recovery_enabled": bool(recovery_enabled), "minimum_lot_only": bool(minimum_lot_only), "live_scanner": bool(live_scanner), "auto_trading": bool(auto_trading), "magnet_enabled": bool(magnet_enabled)},
     })
-
-    digit_market_stakes = digit_market_stakes or {}
-    try:
-        digit_risk_cap_percent = min(1.5, max(0.1, float(digit_risk_cap_percent)))
-    except Exception:
-        digit_risk_cap_percent = 1.0
-    try:
-        digit_max_loss_usd = max(0.0, float(digit_max_loss_usd))
-    except Exception:
-        digit_max_loss_usd = 2.0
 
     req = 12000
     open_contracts = {}
@@ -2990,25 +2961,15 @@ async def digit_bot_worker(
                     return
 
                 balance = float(state.get("balance", 0) or 0)
-                if balance <= 0:
+                # Digit stake can be increased for stronger P/L movement, but the
+                # contract exposure is hard-capped at $2.00. Losses never increase it.
+                stake = min(2.00, max(0.35, float(risk or 0)))
+                if balance <= 0 or stake > balance:
                     return
 
-                # AI Scan / Digit Trader uses a configured stake per market,
-                # then applies two independent loss ceilings. The effective
-                # stake can never exceed the account-percentage cap or the
-                # configured dollar loss cap. Loss recovery never increases it.
-                market_stake = float(digit_market_stakes.get(market, 0.35) or 0.35)
-                market_stake = max(0.35, market_stake)
-                percent_cap = balance * (digit_risk_cap_percent / 100.0)
-                dollar_cap = digit_max_loss_usd if digit_max_loss_usd > 0 else float("inf")
-                risk_cap = min(percent_cap, dollar_cap)
-                stake = min(market_stake, risk_cap)
-                if stake < 0.35:
-                    update_market_scan(market, status="NO TRADE", reason="Risk cap is below Deriv minimum stake.", risk_cap=round(risk_cap, 2))
-                    return
-                if stake > balance:
-                    return
-
+                # Digit contract durations can vary by market/account. The
+                # bot also discovers the minimum accepted stake for this exact
+                # contract. Losses never increase the stake.
                 requested_duration = max(1, int(duration))
                 duration_candidates = [requested_duration] + [
                     d for d in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
@@ -3016,6 +2977,7 @@ async def digit_bot_worker(
                 ]
                 proposal = None
                 used_duration = requested_duration
+                stake = 0.35
                 last_duration_error = None
 
                 for candidate_duration in duration_candidates:
@@ -3029,21 +2991,18 @@ async def digit_bot_worker(
                         "underlying_symbol": symbol,
                         "barrier": str(signal["barrier"]),
                     }
-                    req += 1
-                    proposal_msg = await ws_request(trade_ws, {**proposal_payload, "amount": stake}, req)
-                    proposal = proposal_msg.get("proposal", {})
-                    accepted_stake = stake
-                    candidate_error = (proposal_msg.get("error") or {}).get("message")
+                    if minimum_lot_only:
+                        proposal, accepted_stake, req, candidate_error = await minimum_stake_proposal(
+                            trade_ws, proposal_payload, req, preferred=0.35
+                        )
+                    else:
+                        req += 1
+                        proposal_msg = await ws_request(trade_ws, {**proposal_payload, "amount": stake}, req)
+                        proposal = proposal_msg.get("proposal", {})
+                        accepted_stake = stake
+                        candidate_error = (proposal_msg.get("error") or {}).get("message")
                     if proposal and proposal.get("id"):
                         stake = float(accepted_stake or stake)
-                        # The quoted ask is the actual contract purchase amount.
-                        # Reject a quote that would exceed either loss ceiling.
-                        quoted_ask = float(proposal.get("ask_price", stake) or stake)
-                        if quoted_ask > risk_cap + 1e-9:
-                            proposal = None
-                            candidate_error = "Quoted stake exceeds the Digit risk cap."
-                            last_duration_error = candidate_error
-                            continue
                         used_duration = candidate_duration
                         break
                     last_duration_error = candidate_error
@@ -3192,7 +3151,7 @@ async def digit_bot_worker(
                         max_profit = max(0.0, float(c.get("payout", 0) or 0) - float(position.get("entry", 0) or 0))
                         position["max_profit"] = max_profit
                     progress = (position["peak_profit"] / max_profit * 100) if max_profit else 0
-                    reached = sum(progress >= float(t) for t in magnet_stages) if magnet_enabled else 0
+                    reached = (2 if position["peak_profit"] >= 10.0 else (1 if position["peak_profit"] >= 5.0 else 0)) if magnet_enabled else 0
                     stage, floor = magnet_lock_floor(
                         position.get("stake", 0), max_profit, position["peak_profit"],
                         magnet_locks, magnet_stages, reached,
@@ -3409,15 +3368,11 @@ async def start_trading(request: Request):
     choppy_filter = bool(settings["choppy_filter"] if "choppy_filter" in settings.keys() else 1)
     recovery_enabled = bool(settings["recovery_enabled"] if "recovery_enabled" in settings.keys() else 0)
     magnet_enabled = bool(settings["magnet_enabled"] if "magnet_enabled" in settings.keys() else 1)
-    minimum_lot_only = True  # ABC keeps its existing minimum-lot safety rule. Digit uses per-market stake caps.
+    minimum_lot_only = bool(settings["minimum_lot_only"] if "minimum_lot_only" in settings.keys() else 1)
+    # Digit Trader is intentionally not forced to minimum lot; its stake is capped at $2.
+    digit_minimum_lot_only = False
     live_scanner = bool(settings["live_scanner"] if "live_scanner" in settings.keys() else 1)
     auto_trading = bool(settings["auto_trading"] if "auto_trading" in settings.keys() else 1)
-    try:
-        digit_market_stakes = json.loads(settings["digit_market_stakes"] or "{}") if "digit_market_stakes" in settings.keys() else {}
-    except Exception:
-        digit_market_stakes = {}
-    digit_risk_cap_percent = float(settings["digit_risk_cap_percent"] if "digit_risk_cap_percent" in settings.keys() else 1.0)
-    digit_max_loss_usd = float(settings["digit_max_loss_usd"] if "digit_max_loss_usd" in settings.keys() else 2.0)
 
     if "Digit Over/Under" in strategies and digit_enabled:
         selected_engine = "digit"
@@ -3501,11 +3456,8 @@ async def start_trading(request: Request):
                 over_under_filter,
                 choppy_filter,
                 recovery_enabled,
-                minimum_lot_only,
+                digit_minimum_lot_only,
                 live_scanner,
-                digit_market_stakes,
-                digit_risk_cap_percent,
-                digit_max_loss_usd,
                 auto_trading,
                 magnet_enabled,
             )
