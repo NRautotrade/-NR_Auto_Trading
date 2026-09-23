@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -289,6 +288,7 @@ def init_db():
         "magnet_enabled": "INTEGER NOT NULL DEFAULT 1",
         "minimum_lot_only": "INTEGER NOT NULL DEFAULT 1",
         "abc_minimum_lot_only": "INTEGER NOT NULL DEFAULT 1",
+        "digit_minimum_lot_only": "INTEGER NOT NULL DEFAULT 0",
         "live_scanner": "INTEGER NOT NULL DEFAULT 1",
         "auto_trading": "INTEGER NOT NULL DEFAULT 1",
         "abc_profit_filter_enabled": "INTEGER NOT NULL DEFAULT 1",
@@ -520,10 +520,10 @@ def save_settings(user_id, form):
             magnet_stage1, magnet_lock1, magnet_stage2, magnet_lock2,
             magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4,
             abc_enabled, digit_enabled, over_under_filter, choppy_filter,
-            recovery_enabled, magnet_enabled, minimum_lot_only, abc_minimum_lot_only, live_scanner, auto_trading,
+            recovery_enabled, magnet_enabled, minimum_lot_only, abc_minimum_lot_only, digit_minimum_lot_only, live_scanner, auto_trading,
             abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(user_id) DO UPDATE SET
             markets=excluded.markets, strategies=excluded.strategies,
@@ -542,7 +542,8 @@ def save_settings(user_id, form):
             abc_enabled=excluded.abc_enabled, digit_enabled=excluded.digit_enabled,
             over_under_filter=excluded.over_under_filter, choppy_filter=excluded.choppy_filter,
             recovery_enabled=excluded.recovery_enabled, magnet_enabled=excluded.magnet_enabled,
-            minimum_lot_only=excluded.minimum_lot_only, abc_minimum_lot_only=excluded.abc_minimum_lot_only, live_scanner=excluded.live_scanner,
+            minimum_lot_only=excluded.minimum_lot_only, abc_minimum_lot_only=excluded.abc_minimum_lot_only,
+            digit_minimum_lot_only=excluded.digit_minimum_lot_only, live_scanner=excluded.live_scanner,
             auto_trading=excluded.auto_trading,
             abc_profit_filter_enabled=excluded.abc_profit_filter_enabled,
             abc_min_expected_profit=excluded.abc_min_expected_profit,
@@ -582,8 +583,10 @@ def save_settings(user_id, form):
             1 if form.get("choppy_filter") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("recovery_enabled") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("magnet_enabled") in {"1", "true", "on", "yes"} else 0,
+            # Legacy minimum_lot_only is retained for compatibility.
             1,
             1 if form.get("abc_minimum_lot_only") in {"1", "true", "on", "yes"} else 0,
+            1 if form.get("digit_minimum_lot_only") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("live_scanner") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("auto_trading") in {"1", "true", "on", "yes"} else 0,
             1 if form.get("abc_profit_filter_enabled") in {"1", "true", "on", "yes"} else 0,
@@ -2599,7 +2602,7 @@ async def demo_bot_worker(
                 abc_enabled,
                 choppy_filter,
                 recovery_enabled,
-                abc_minimum_lot_only,
+                minimum_lot_only,
                 auto_trading,
                 magnet_enabled,
                 abc_profit_filter_enabled,
@@ -2751,23 +2754,17 @@ def digit_signal(digits, trade_type="Over/Under", fixed_barrier=1, min_confidenc
 
 
 def magnet_lock_floor(stake, max_profit, peak_profit, stage_locks, stage_triggers, reached_stage):
-    """Progressive early-sell floor based on meaningful live profit.
+    """Aggressive dollar-based Digit profit protection.
 
-    The floor follows realized peak profit rather than pretending a tiny $1-$2
-    fluctuation is a meaningful locked gain. Stages are monotonic.
+    Stage 1 activates at $5 peak profit and Stage 2 at $10 peak profit.
+    The floor is based on live dollar profit, not payout percentage, so the
+    configured $5/$10 behavior is explicit.
     """
     peak = max(0.0, float(peak_profit or 0))
-    if peak < 5.0:
-        return 0, 0.0
-
-    # Aggressive profit protection requested for Digit Trader.
-    # Stage 1 activates at $5 peak profit and protects 50% of that peak.
-    # Stage 2 activates at $10 peak profit and protects 80% of that peak.
-    # The floor only moves upward.
     if peak >= 10.0:
-        return 2, round(max(5.0, peak * 0.80), 6)
+        return 2, round(max(9.0, peak * 0.92), 6)
     if peak >= 5.0:
-        return 1, round(max(2.50, peak * 0.50), 6)
+        return 1, round(max(4.0, peak * 0.80), 6)
     return 0, 0.0
 
 
@@ -2842,7 +2839,7 @@ async def digit_bot_worker(
     over_under_filter=True,
     choppy_filter=True,
     recovery_enabled=False,
-    minimum_lot_only=True,
+    digit_minimum_lot_only=False,
     live_scanner=True,
     auto_trading=True,
     magnet_enabled=True,
@@ -2870,7 +2867,7 @@ async def digit_bot_worker(
         "trade_history": [],
         "activity": [],
         "paused": False,
-        "feature_switches": {"digit_enabled": bool(digit_enabled), "over_under_filter": bool(over_under_filter), "choppy_filter": bool(choppy_filter), "recovery_enabled": bool(recovery_enabled), "minimum_lot_only": bool(minimum_lot_only), "live_scanner": bool(live_scanner), "auto_trading": bool(auto_trading), "magnet_enabled": bool(magnet_enabled)},
+        "feature_switches": {"digit_enabled": bool(digit_enabled), "over_under_filter": bool(over_under_filter), "choppy_filter": bool(choppy_filter), "recovery_enabled": bool(recovery_enabled), "digit_minimum_lot_only": bool(digit_minimum_lot_only), "live_scanner": bool(live_scanner), "auto_trading": bool(auto_trading), "magnet_enabled": bool(magnet_enabled)},
     })
 
     req = 12000
@@ -2969,10 +2966,11 @@ async def digit_bot_worker(
                     return
 
                 balance = float(state.get("balance", 0) or 0)
-                # Minimum-stake-only rule: never increase stake after a loss.
-                # Start at Deriv's common minimum and let the proposal response
-                # validate the amount for the selected market/account.
-                stake = 0.35 if minimum_lot_only else 2.00
+                # Digit risk model: either use Deriv minimum (switch ON), or
+                # use an aggressive fixed stake capped at $2.00 (switch OFF).
+                # The $2.00 stake is the maximum contract exposure; it is not a
+                # guaranteed separate stop-loss order for an Options contract.
+                stake = 0.35 if digit_minimum_lot_only else min(2.0, max(0.35, float(risk or 2.0)))
                 if balance <= 0 or stake > balance:
                     return
 
@@ -2986,7 +2984,7 @@ async def digit_bot_worker(
                 ]
                 proposal = None
                 used_duration = requested_duration
-                stake = 0.35 if minimum_lot_only else 2.00
+                stake = 0.35 if digit_minimum_lot_only else min(2.0, max(0.35, float(risk or 2.0)))
                 last_duration_error = None
 
                 for candidate_duration in duration_candidates:
@@ -3000,7 +2998,7 @@ async def digit_bot_worker(
                         "underlying_symbol": symbol,
                         "barrier": str(signal["barrier"]),
                     }
-                    if minimum_lot_only:
+                    if digit_minimum_lot_only:
                         proposal, accepted_stake, req, candidate_error = await minimum_stake_proposal(
                             trade_ws, proposal_payload, req, preferred=0.35
                         )
@@ -3012,6 +3010,9 @@ async def digit_bot_worker(
                         candidate_error = (proposal_msg.get("error") or {}).get("message")
                     if proposal and proposal.get("id"):
                         stake = float(accepted_stake or stake)
+                        if stake > 2.0:
+                            state["message"] = f"{market}: proposed stake ${stake:.2f} exceeds the $2.00 Digit risk cap â no trade."
+                            return
                         used_duration = candidate_duration
                         break
                     last_duration_error = candidate_error
@@ -3160,7 +3161,7 @@ async def digit_bot_worker(
                         max_profit = max(0.0, float(c.get("payout", 0) or 0) - float(position.get("entry", 0) or 0))
                         position["max_profit"] = max_profit
                     progress = (position["peak_profit"] / max_profit * 100) if max_profit else 0
-                    reached = sum(progress >= float(t) for t in magnet_stages) if magnet_enabled else 0
+                    reached = (2 if position["peak_profit"] >= 10.0 else (1 if position["peak_profit"] >= 5.0 else 0)) if magnet_enabled else 0
                     stage, floor = magnet_lock_floor(
                         position.get("stake", 0), max_profit, position["peak_profit"],
                         magnet_locks, magnet_stages, reached,
@@ -3377,8 +3378,8 @@ async def start_trading(request: Request):
     choppy_filter = bool(settings["choppy_filter"] if "choppy_filter" in settings.keys() else 1)
     recovery_enabled = bool(settings["recovery_enabled"] if "recovery_enabled" in settings.keys() else 0)
     magnet_enabled = bool(settings["magnet_enabled"] if "magnet_enabled" in settings.keys() else 1)
-    minimum_lot_only = bool(settings["minimum_lot_only"] if "minimum_lot_only" in settings.keys() else 1)
     abc_minimum_lot_only = bool(settings["abc_minimum_lot_only"] if "abc_minimum_lot_only" in settings.keys() else 1)
+    digit_minimum_lot_only = bool(settings["digit_minimum_lot_only"] if "digit_minimum_lot_only" in settings.keys() else 0)
     live_scanner = bool(settings["live_scanner"] if "live_scanner" in settings.keys() else 1)
     auto_trading = bool(settings["auto_trading"] if "auto_trading" in settings.keys() else 1)
 
@@ -3464,7 +3465,7 @@ async def start_trading(request: Request):
                 over_under_filter,
                 choppy_filter,
                 recovery_enabled,
-                minimum_lot_only,
+                digit_minimum_lot_only,
                 live_scanner,
                 auto_trading,
                 magnet_enabled,
@@ -3487,7 +3488,7 @@ async def start_trading(request: Request):
                 abc_enabled,
                 choppy_filter,
                 recovery_enabled,
-                minimum_lot_only,
+                abc_minimum_lot_only,
                 auto_trading,
                 magnet_enabled,
                 bool(settings["abc_profit_filter_enabled"] if "abc_profit_filter_enabled" in settings.keys() else 1),
