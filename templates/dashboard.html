@@ -174,7 +174,24 @@ a{text-decoration:none;color:inherit}
         </div>
       </section>
 
-      <section class="card page-section" data-page="abc">
+      <section class="card page-section" data-page="settings" id="mt5ConnectionCard">
+        <div class="card-title">DERIV MT5 CONNECTION</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Account</label><select class="select" id="mt5Mode"><option value="demo">DEMO</option><option value="real">REAL</option></select></div>
+          <div class="form-group"><label class="form-label">Broker</label><input class="input" value="Deriv.com Limited" disabled></div>
+          <div class="form-group"><label class="form-label">Server</label><input class="input" id="mt5Server" value="Deriv-Demo"></div>
+          <div class="form-group"><label class="form-label">MT5 Login / Account ID</label><input class="input" id="mt5Login" inputmode="numeric" autocomplete="off"></div>
+          <div class="form-group"><label class="form-label">MT5 Password</label><input class="input" id="mt5Password" type="password" autocomplete="off"></div>
+        </div>
+        <div class="controls" style="margin-top:12px">
+          <button type="button" class="btn blue" onclick="connectMT5()">CONNECT / TEST MT5</button>
+          <button type="button" class="btn" onclick="mt5Status()">REFRESH STATUS</button>
+        </div>
+        <div id="mt5Status" class="statusline">â MT5: NOT CONNECTED</div>
+        <div class="note">Use your Deriv MT5 credentials. Demo must be verified before enabling REAL. Your MT5 password is sent to the configured bridge over HTTPS and is not displayed back in the dashboard.</div>
+      </section>
+
+<section class="card page-section" data-page="abc">
         <div class="card-title">ABC TRADER / STRATEGIES</div>
         <div class="section">
           {% set saved_strategies = settings.strategies|from_json if settings else ['ABC Pattern'] %}
@@ -471,6 +488,6 @@ updateConnectButton();
 const initialPage=(location.hash||'#dashboard').slice(1);
 showPage(initialPage,false);
 refresh(); setInterval(refresh,3000);
-</script>
+\nasync function connectMT5(){\n  const out=document.getElementById('mt5Status');\n  out.textContent='Connecting to MT5...';\n  const fd=new FormData();\n  fd.append('mode',document.getElementById('mt5Mode').value);\n  fd.append('server',document.getElementById('mt5Server').value);\n  fd.append('login_id',document.getElementById('mt5Login').value);\n  fd.append('password',document.getElementById('mt5Password').value);\n  try{\n    const r=await fetch('/mt5/connect',{method:'POST',body:fd}); const x=await r.json();\n    out.textContent=x.ok?`â MT5 CONNECTED â ${x.mode.toUpperCase()} â ${x.server} â Balance $${Number(x.balance||0).toFixed(2)}`:`â MT5 ERROR â ${x.error||'Connection failed'}`;\n  }catch(e){out.textContent='â MT5 ERROR â '+e.message;}\n}\nasync function mt5Status(){\n  const out=document.getElementById('mt5Status');\n  try{const r=await fetch('/mt5/status',{cache:'no-store'});const x=await r.json();out.textContent=x.connected?`â MT5 CONNECTED â ${String(x.mode||'').toUpperCase()} â ${x.server||''} â Balance $${Number(x.balance||0).toFixed(2)}`:`â MT5 NOT CONNECTED â ${x.error||''}`;}catch(e){out.textContent='â MT5 ERROR â '+e.message;}\n}\ndocument.getElementById('mt5Mode')?.addEventListener('change',function(){if(this.value==='demo')document.getElementById('mt5Server').value='Deriv-Demo';});\n</script>
 </body>
 </html>
