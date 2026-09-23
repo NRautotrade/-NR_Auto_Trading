@@ -179,9 +179,12 @@ a{text-decoration:none;color:inherit}
         <div class="section">
           {% set saved_strategies = settings.strategies|from_json if settings else ['ABC Pattern'] %}
           <label class="check"><input type="checkbox" name="strategies" value="ABC Pattern" {% if 'ABC Pattern' in saved_strategies %}checked{% endif %}>ABC Pattern</label>
+          <label class="check"><input type="checkbox" name="strategies" value="ABCDE" {% if 'ABCDE' in saved_strategies %}checked{% endif %}>ABCDE â 1D + 4H + 1H + 15M</label>
+          <div class="form-row" style="margin-top:12px"><div class="form-group"><label class="form-label">ABCDE Lot Size</label><select class="select" name="abcde_lot_size"><option value="0.35" {% if settings and settings.abcde_lot_size == 0.35 %}selected{% endif %}>0.35</option><option value="0.50" {% if settings and settings.abcde_lot_size == 0.5 %}selected{% endif %}>0.50</option><option value="1.00" {% if settings and settings.abcde_lot_size == 1 %}selected{% endif %}>1.00</option><option value="2.00" {% if settings and settings.abcde_lot_size == 2 %}selected{% endif %}>2.00</option><option value="5.00" {% if settings and settings.abcde_lot_size == 5 %}selected{% endif %}>5.00</option><option value="10.00" {% if settings and settings.abcde_lot_size == 10 %}selected{% endif %}>10.00</option></select></div></div>
           <label class="check"><input type="checkbox" name="strategies" value="Digit Over/Under" {% if 'Digit Over/Under' in saved_strategies %}checked{% endif %}>Digit Over/Under â Live Scanner</label>
           <label class="check"><input type="checkbox" name="strategies" value="Breakout" {% if 'Breakout' in saved_strategies %}checked{% endif %}>Breakout</label>
           <label class="check"><input type="checkbox" name="strategies" value="Trend" {% if 'Trend' in saved_strategies %}checked{% endif %}>Trend</label>
+          <div class="note">ABCDE uses 1D + 4H + 1H alignment, then requires a confirmed 15M ABCDE retest. If the 15M setup is not clean, it does not trade. ABCDE target/protection: 80% TP; once 50% is reached, protect 30% of maximum contract profit.</div>
           <label class="check" style="justify-content:space-between"><span>Minimum Lot Only</span><label class="switch"><input type="checkbox" name="abc_minimum_lot_only" value="1" {% if not settings or settings.abc_minimum_lot_only %}checked{% endif %}><span class="slider"></span></label></label>
         </div>
       </section>
