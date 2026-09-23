@@ -272,6 +272,11 @@ def init_db():
                 f"ALTER TABLE settings ADD COLUMN {column} {definition}"
             )
 
+    if "abcde_lot_size" not in settings_columns:
+        conn.execute(
+            "ALTER TABLE settings ADD COLUMN abcde_lot_size REAL NOT NULL DEFAULT 0.35"
+        )
+
     if "lock_profit_r" not in settings_columns:
         conn.execute(
             "ALTER TABLE settings ADD COLUMN lock_profit_r REAL NOT NULL DEFAULT 1"
@@ -521,9 +526,9 @@ def save_settings(user_id, form):
             magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4,
             abc_enabled, digit_enabled, over_under_filter, choppy_filter,
             recovery_enabled, magnet_enabled, minimum_lot_only, abc_minimum_lot_only, digit_minimum_lot_only, live_scanner, auto_trading,
-            abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent
+            abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent, abcde_lot_size
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(user_id) DO UPDATE SET
             markets=excluded.markets, strategies=excluded.strategies,
@@ -547,7 +552,8 @@ def save_settings(user_id, form):
             auto_trading=excluded.auto_trading,
             abc_profit_filter_enabled=excluded.abc_profit_filter_enabled,
             abc_min_expected_profit=excluded.abc_min_expected_profit,
-            abc_min_risk_percent=excluded.abc_min_risk_percent
+            abc_min_risk_percent=excluded.abc_min_risk_percent,
+            abcde_lot_size=excluded.abcde_lot_size
         """,
         (
             user_id,
@@ -592,6 +598,7 @@ def save_settings(user_id, form):
             1 if form.get("abc_profit_filter_enabled") in {"1", "true", "on", "yes"} else 0,
             max(0.0, float(form.get("abc_min_expected_profit", 5))),
             min(2.0, max(0.1, float(form.get("abc_min_risk_percent", 2)))),
+            min(1000.0, max(0.35, float(form.get("abcde_lot_size", 0.35)))),
         ),
     )
 
@@ -1857,6 +1864,83 @@ def abc_signal(
     return None
 
 
+def abcde_signal(candles, htf_bias=None):
+    """Strict ABCDE 15M setup.
+
+    SELL: H-L-H-L-H structure with lower highs/lows. The final lower-high
+    candle's low is the trigger level. The following candle must retest that
+    level without breaking below it, while the higher timeframes agree SELL.
+
+    BUY: mirrored L-H-L-H-L structure. The final lower-low candle's high is
+    the trigger level. The following candle must retest that level without
+    breaking above it, while the higher timeframes agree BUY.
+    """
+    if len(candles) < 60 or not htf_bias:
+        return None
+    if any(htf_bias.get(tf) not in {"BUY", "SELL"} for tf in ("1D","4H","1H")):
+        return None
+    if len({htf_bias.get("1D"), htf_bias.get("4H"), htf_bias.get("1H")}) != 1:
+        return None
+
+    def o(c): return float(c["open"] if isinstance(c, dict) else c[1])
+    def h(c): return float(c["high"] if isinstance(c, dict) else c[2])
+    def l(c): return float(c["low"] if isinstance(c, dict) else c[3])
+    def cl(c): return float(c["close"] if isinstance(c, dict) else c[4])
+
+    highs=[h(c) for c in candles]
+    lows=[l(c) for c in candles]
+    closes=[cl(c) for c in candles]
+
+    # Use confirmed pivots; the last candle is reserved for the retest.
+    piv_h=[]; piv_l=[]; sl=2
+    for i in range(sl, len(candles)-sl-1):
+        if highs[i] > max(highs[i-sl:i]) and highs[i] >= max(highs[i+1:i+sl+1]):
+            piv_h.append((i, highs[i]))
+        if lows[i] < min(lows[i-sl:i]) and lows[i] <= min(lows[i+1:i+sl+1]):
+            piv_l.append((i, lows[i]))
+
+    # Find the latest five alternating pivots ending before the retest candle.
+    pivots=sorted([(i,"H",v) for i,v in piv_h]+[(i,"L",v) for i,v in piv_l])
+    pivots=pivots[-10:]
+    if len(pivots) < 5:
+        return None
+
+    last = len(candles)-1
+    # SELL: H-L-H-L-H, with lower highs and lower lows.
+    for j in range(len(pivots)-5, -1, -1):
+        seq=pivots[j:j+5]
+        if [x[1] for x in seq] == ["H","L","H","L","H"]:
+            A,B,C,D,E=seq
+            if E[0] >= last-1:
+                continue
+            if not (C[2] < A[2] and E[2] < C[2] and D[2] < B[2]):
+                continue
+            level=l(candles[E[0]])
+            retest=candles[last]
+            # Retest must touch the LH candle's bottom but not pass through it.
+            tol=max(level*0.00005, (h(retest)-l(retest))*0.10, 1e-9)
+            if l(retest) >= level-tol and l(retest) <= level+tol and cl(retest) < o(retest):
+                if htf_bias["1D"]==htf_bias["4H"]==htf_bias["1H"]=="SELL":
+                    return {"direction":"SELL","A_idx":A[0],"B_idx":B[0],"C_idx":C[0],"D_idx":D[0],"E_idx":E[0],"level":level}
+
+    # BUY: L-H-L-H-L, mirrored.
+    for j in range(len(pivots)-5, -1, -1):
+        seq=pivots[j:j+5]
+        if [x[1] for x in seq] == ["L","H","L","H","L"]:
+            A,B,C,D,E=seq
+            if E[0] >= last-1:
+                continue
+            if not (C[2] > A[2] and E[2] > C[2] and D[2] > B[2]):
+                continue
+            level=h(candles[E[0]])
+            retest=candles[last]
+            tol=max(level*0.00005, (h(retest)-l(retest))*0.10, 1e-9)
+            if h(retest) >= level-tol and h(retest) <= level+tol and cl(retest) > o(retest):
+                if htf_bias["1D"]==htf_bias["4H"]==htf_bias["1H"]=="BUY":
+                    return {"direction":"BUY","A_idx":A[0],"B_idx":B[0],"C_idx":C[0],"D_idx":D[0],"E_idx":E[0],"level":level}
+    return None
+
+
 async def fetch_abc_timeframes(ws, symbol):
     data = {}
     for label, granularity, count in (("15M",900,120),("1H",3600,80),("4H",14400,60),("1D",86400,40)):
@@ -1927,6 +2011,8 @@ async def demo_bot_worker(
     abc_profit_filter_enabled=True,
     abc_min_expected_profit=5.0,
     abc_min_risk_percent=2.0,
+    abcde_mode=False,
+    abcde_lot_size=0.35,
 ):
     state = BOT_STATE[user_id]
 
@@ -2130,13 +2216,27 @@ async def demo_bot_worker(
                         # CFD-style price TP. Instead, optionally request an
                         # early cash-out when the live profit reaches the
                         # configured percentage of the maximum contract profit.
-                        if (
-                            not c.get("is_sold")
+                        abcde_max = float(position.get("max_profit", 0) or 0)
+                        abcde_target = abcde_max * 0.80
+                        abcde_lock_trigger = abcde_max * 0.50
+                        abcde_lock_floor = abcde_max * 0.30
+                        if abcde_mode and not c.get("is_sold") and abcde_max > 0 and profit >= abcde_lock_trigger:
+                            position["abcde_lock_armed"] = True
+                        should_sell_abcde = (
+                            abcde_mode
+                            and not c.get("is_sold")
+                            and abcde_max > 0
+                            and not position.get("tp_requested")
+                            and (profit >= abcde_target or (position.get("abcde_lock_armed") and profit <= abcde_lock_floor and profit > 0))
+                        )
+                        if (should_sell_abcde or (
+                            not abcde_mode
+                            and not c.get("is_sold")
                             and max(0.0, profit) > 0
                             and float(position.get("max_profit", 0) or 0) > 0
                             and profit >= float(position.get("max_profit", 0)) * (float(tp_adjust_percent) / 100.0)
                             and not position.get("tp_requested")
-                        ):
+                        )):
                             try:
                                 request_counter += 1
                                 await ws_request(
@@ -2145,10 +2245,15 @@ async def demo_bot_worker(
                                     request_counter,
                                 )
                                 position["tp_requested"] = True
-                                state["message"] = (
-                                    f"{market}: early TP requested at "
-                                    f"{float(tp_adjust_percent):.0f}% of max profit."
-                                )
+                                if abcde_mode:
+                                    state["message"] = (
+                                        f"{market}: ABCDE profit protection â 80% TP / 50% trigger / 30% lock."
+                                    )
+                                else:
+                                    state["message"] = (
+                                        f"{market}: early TP requested at "
+                                        f"{float(tp_adjust_percent):.0f}% of max profit."
+                                    )
                             except Exception:
                                 # If early selling is unavailable for the contract,
                                 # leave it running to normal settlement.
@@ -2340,11 +2445,22 @@ async def demo_bot_worker(
                             update_market_scan(market, status="NO TRADE", reason="Higher-timeframe direction is not clean.")
                             state["message"] = f"{market}: ABC rejected â higher-timeframe direction is not clean."
                             continue
-                        signal = abc_signal(candles, choppy_filter=choppy_filter, htf_bias=htf_bias)
-                        if not signal:
-                            update_market_scan(market, status="NO TRADE", reason="15M ABC structure / trend / choppy-market checks did not all pass.")
-                            state["message"] = f"{market}: ABC rejected â setup is not 100% clean."
-                            continue
+                        if abcde_mode:
+                            abcde = abcde_signal(candles, htf_bias=htf_bias)
+                            if not abcde:
+                                update_market_scan(market, status="NO TRADE", reason="15M ABCDE structure / retest / higher-timeframe alignment did not all pass.")
+                                state["message"] = f"{market}: ABCDE rejected â no complete clean retest."
+                                continue
+                            direction = abcde["direction"]
+                            ai,bi,ci = abcde["A_idx"],abcde["B_idx"],abcde["C_idx"]
+                            A=B=C=0
+                            signal = (direction, ai, bi, ci, A, B, C)
+                        else:
+                            signal = abc_signal(candles, choppy_filter=choppy_filter, htf_bias=htf_bias)
+                            if not signal:
+                                update_market_scan(market, status="NO TRADE", reason="15M ABC structure / trend / choppy-market checks did not all pass.")
+                                state["message"] = f"{market}: ABC rejected â setup is not 100% clean."
+                                continue
                         if not auto_trading:
                             update_market_scan(market, status="READY", reason="Clean ABC setup found, but Auto Trading is OFF.")
                             state["message"] = f"{market}: clean ABC setup found â AUTO TRADING OFF."
@@ -2407,7 +2523,11 @@ async def demo_bot_worker(
                         # a loss. The recovery tracker below records what remains
                         # to recover, but it never changes the stake size.
                         risk_cap = balance * (min(2.0, max(0.1, float(abc_min_risk_percent or 2.0))) / 100.0)
-                        stake = 0.35 if minimum_lot_only else min(max(0.35, float(risk or 0)), risk_cap)
+                        if abcde_mode:
+                            configured_lot = min(1000.0, max(0.35, float(abcde_lot_size or 0.35)))
+                            stake = configured_lot if not minimum_lot_only else 0.35
+                        else:
+                            stake = 0.35 if minimum_lot_only else min(max(0.35, float(risk or 0)), risk_cap)
                         if balance <= 0 or stake > risk_cap:
                             update_market_scan(market, status="NO TRADE", reason="Risk cap would be exceeded by the minimum stake.", risk_cap=round(risk_cap, 2))
                             state["message"] = f"{market}: ABC rejected â minimum stake exceeds the 2% risk cap."
@@ -2608,6 +2728,8 @@ async def demo_bot_worker(
                 abc_profit_filter_enabled,
                 abc_min_expected_profit,
                 abc_min_risk_percent,
+                abcde_mode,
+                abcde_lot_size,
             )
         )
         BOT_TASKS[user_id] = task
@@ -2647,6 +2769,8 @@ async def demo_bot_worker(
                 abc_profit_filter_enabled,
                 abc_min_expected_profit,
                 abc_min_risk_percent,
+                abcde_mode,
+                abcde_lot_size,
             )
         )
         BOT_TASKS[user_id] = task
@@ -3353,7 +3477,7 @@ async def start_trading(request: Request):
         else ["ABC Pattern"]
     )
 
-    supported = {"ABC Pattern", "Digit Over/Under"}
+    supported = {"ABC Pattern", "ABCDE", "Digit Over/Under"}
     if not any(strategy in supported for strategy in strategies):
         return JSONResponse(
             {
@@ -3379,13 +3503,15 @@ async def start_trading(request: Request):
     recovery_enabled = bool(settings["recovery_enabled"] if "recovery_enabled" in settings.keys() else 0)
     magnet_enabled = bool(settings["magnet_enabled"] if "magnet_enabled" in settings.keys() else 1)
     abc_minimum_lot_only = bool(settings["abc_minimum_lot_only"] if "abc_minimum_lot_only" in settings.keys() else 1)
+    abcde_lot_size = float(settings["abcde_lot_size"] if "abcde_lot_size" in settings.keys() else 0.35)
     digit_minimum_lot_only = bool(settings["digit_minimum_lot_only"] if "digit_minimum_lot_only" in settings.keys() else 0)
     live_scanner = bool(settings["live_scanner"] if "live_scanner" in settings.keys() else 1)
     auto_trading = bool(settings["auto_trading"] if "auto_trading" in settings.keys() else 1)
 
+    abcde_mode = "ABCDE" in strategies
     if "Digit Over/Under" in strategies and digit_enabled:
         selected_engine = "digit"
-    elif "ABC Pattern" in strategies and abc_enabled:
+    elif ("ABC Pattern" in strategies or abcde_mode) and abc_enabled:
         selected_engine = "abc"
     else:
         return JSONResponse({"ok": False, "error": "The selected strategy is switched OFF. Turn it ON in Feature Switches."}, status_code=400)
@@ -3494,6 +3620,8 @@ async def start_trading(request: Request):
                 bool(settings["abc_profit_filter_enabled"] if "abc_profit_filter_enabled" in settings.keys() else 1),
                 float(settings["abc_min_expected_profit"] if "abc_min_expected_profit" in settings.keys() else 5),
                 float(settings["abc_min_risk_percent"] if "abc_min_risk_percent" in settings.keys() else 2),
+                abcde_mode,
+                abcde_lot_size,
             )
         )
 
