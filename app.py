@@ -27,6 +27,9 @@ DERIV_REDIRECT_URI = os.getenv(
     "http://localhost:8000/deriv/callback",
 )
 ALLOW_REAL_TRADING = os.getenv("ALLOW_REAL_TRADING", "false").lower() == "true"
+MT5_BRIDGE_URL = os.getenv("MT5_BRIDGE_URL", "").rstrip("/")
+MT5_BRIDGE_SECRET = os.getenv("MT5_BRIDGE_SECRET", "")
+ALLOW_REAL_MT5 = os.getenv("ALLOW_REAL_MT5", "false").lower() == "true"
 
 SMTP_HOST = os.getenv("NR_SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("NR_SMTP_PORT", "587"))
@@ -303,6 +306,18 @@ def init_db():
     for column, definition in feature_columns.items():
         if column not in settings_columns:
             conn.execute(f"ALTER TABLE settings ADD COLUMN {column} {definition}")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mt5_connections (
+            user_id INTEGER PRIMARY KEY,
+            mode TEXT NOT NULL DEFAULT 'demo',
+            server TEXT NOT NULL DEFAULT 'Deriv-Demo',
+            login_id TEXT NOT NULL DEFAULT '',
+            password_encrypted TEXT NOT NULL DEFAULT '',
+            bridge_url TEXT NOT NULL DEFAULT '',
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -1245,6 +1260,77 @@ async def update_settings(request: Request):
         status_code=303,
     )
 
+
+# ============================================================
+# MT5 CONNECTION / BRIDGE
+# ============================================================
+
+async def mt5_bridge_request(method: str, path: str, payload=None):
+    if not MT5_BRIDGE_URL or not MT5_BRIDGE_SECRET:
+        raise RuntimeError("MT5 bridge is not configured on the server.")
+    headers = {"Authorization": f"Bearer {MT5_BRIDGE_SECRET}"}
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.request(method, MT5_BRIDGE_URL + path, json=payload, headers=headers)
+        try:
+            data = r.json()
+        except Exception:
+            data = {"error": r.text}
+        if r.status_code >= 400:
+            raise RuntimeError(str(data.get("detail") or data.get("error") or f"Bridge HTTP {r.status_code}"))
+        return data
+
+
+@app.post("/mt5/connect")
+async def mt5_connect(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Login required."}, status_code=401)
+    form = await request.form()
+    mode = str(form.get("mode", "demo")).lower()
+    if mode not in {"demo", "real"}:
+        mode = "demo"
+    if mode == "real" and not ALLOW_REAL_MT5:
+        return JSONResponse({"ok": False, "error": "Real MT5 trading is locked. Enable ALLOW_REAL_MT5 only after demo testing."}, status_code=403)
+    try:
+        login_id = int(str(form.get("login_id", "")).strip())
+        password = str(form.get("password", ""))
+        server = str(form.get("server", "Deriv-Demo")).strip()
+        result = await mt5_bridge_request("POST", "/connect", {"mode": mode, "login": login_id, "password": password, "server": server, "terminal_path": str(form.get("terminal_path", "")).strip() or None})
+        conn = db()
+        enc = protect_token(password)
+        conn.execute("INSERT INTO mt5_connections(user_id,mode,server,login_id,password_encrypted,bridge_url,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET mode=excluded.mode,server=excluded.server,login_id=excluded.login_id,password_encrypted=excluded.password_encrypted,bridge_url=excluded.bridge_url,updated_at=CURRENT_TIMESTAMP", (user["id"], mode, server, str(login_id), enc, MT5_BRIDGE_URL))
+        conn.commit(); conn.close()
+        return JSONResponse(result)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
+
+
+@app.get("/mt5/status")
+async def mt5_status(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Login required."}, status_code=401)
+    try:
+        result = await mt5_bridge_request("GET", "/status")
+        return JSONResponse(result)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "connected": False, "error": str(exc)})
+
+
+@app.post("/mt5/test-order")
+async def mt5_test_order(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Login required."}, status_code=401)
+    conn = db(); row = conn.execute("SELECT mode FROM mt5_connections WHERE user_id=?", (user["id"],)).fetchone(); conn.close()
+    if not row or row["mode"] != "demo":
+        return JSONResponse({"ok": False, "error": "Connect a DEMO MT5 account first."}, status_code=403)
+    body = await request.json()
+    try:
+        result = await mt5_bridge_request("POST", "/order", {"symbol": body.get("symbol"), "direction": body.get("direction", "BUY"), "volume": float(body.get("volume", 0.01)), "sl": body.get("sl"), "tp": body.get("tp"), "comment": "NR AUTO TRADING DEMO TEST", "magic": 250025})
+        return JSONResponse(result)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
 
 # ============================================================
 # DERIV OAUTH
