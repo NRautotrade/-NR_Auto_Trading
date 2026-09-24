@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -27,6 +28,19 @@ DERIV_REDIRECT_URI = os.getenv(
     "http://localhost:8000/deriv/callback",
 )
 ALLOW_REAL_TRADING = os.getenv("ALLOW_REAL_TRADING", "false").lower() == "true"
+
+# MT5 execution bridge. Keep the bridge token in environment variables; never hard-code it.
+MT5_BRIDGE_URL = os.getenv("MT5_BRIDGE_URL", "http://127.0.0.1:8787").rstrip("/")
+MT5_BRIDGE_TOKEN = os.getenv("MT5_BRIDGE_TOKEN", "")
+MT5_EXECUTION_ENABLED = os.getenv("MT5_EXECUTION_ENABLED", "false").lower() == "true"
+MT5_MAGIC = int(os.getenv("MT5_MAGIC", "250025"))
+MT5_SYMBOL_MAP = {}
+try:
+    MT5_SYMBOL_MAP = json.loads(os.getenv("MT5_SYMBOL_MAP", "{}"))
+    if not isinstance(MT5_SYMBOL_MAP, dict):
+        MT5_SYMBOL_MAP = {}
+except Exception:
+    MT5_SYMBOL_MAP = {}
 
 SMTP_HOST = os.getenv("NR_SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("NR_SMTP_PORT", "587"))
@@ -1987,6 +2001,341 @@ async def fetch_m5_candles(
 
 
 # ============================================================
+# MT5 EXECUTION BRIDGE / ABCDE ENGINE
+# ============================================================
+
+async def mt5_bridge_request(method, path, *, params=None, payload=None, timeout=20.0):
+    if not MT5_BRIDGE_TOKEN:
+        raise RuntimeError("MT5_BRIDGE_TOKEN is not configured.")
+    headers = {"x-bridge-token": MT5_BRIDGE_TOKEN}
+    url = f"{MT5_BRIDGE_URL}{path}"
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.request(method, url, headers=headers, params=params, json=payload)
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get("detail", response.text)
+            except Exception:
+                detail = response.text
+            raise RuntimeError(f"MT5 bridge {path} failed ({response.status_code}): {detail}")
+        return response.json()
+
+
+async def mt5_bridge_health():
+    return await mt5_bridge_request("GET", "/health")
+
+
+async def mt5_resolve_symbol(market, symbol_cache):
+    if market in symbol_cache:
+        return symbol_cache[market]
+    mapped = MT5_SYMBOL_MAP.get(market)
+    if mapped:
+        symbol_cache[market] = str(mapped)
+        return symbol_cache[market]
+    query = str(market).replace(" Index", "").strip()
+    data = await mt5_bridge_request("GET", "/symbols", params={"query": query})
+    rows = data.get("symbols", [])
+    wanted = str(market).lower().replace(" index", "").strip()
+    candidates = []
+    for row in rows:
+        name = str(row.get("name", ""))
+        norm = name.lower().replace(" index", "").strip()
+        if wanted in norm or norm in wanted:
+            candidates.append(row)
+    candidates.sort(key=lambda x: (not bool(x.get("visible")), len(str(x.get("name", "")))))
+    if not candidates:
+        raise RuntimeError(f"No MT5 symbol matched {market!r}. Set MT5_SYMBOL_MAP for this market.")
+    symbol_cache[market] = candidates[0]["name"]
+    return symbol_cache[market]
+
+
+async def mt5_rates(symbol, timeframe, count=120):
+    data = await mt5_bridge_request("GET", "/rates", params={"symbol": symbol, "timeframe": timeframe, "count": count})
+    return data.get("rates", [])
+
+
+def mt5_price_progress(direction, entry, target, current):
+    distance = abs(float(target) - float(entry))
+    if distance <= 0:
+        return 0.0
+    if direction == "BUY":
+        return max(0.0, min(1.0, (float(current) - float(entry)) / distance))
+    return max(0.0, min(1.0, (float(entry) - float(current)) / distance))
+
+
+def mt5_initial_levels(direction, candles, signal, rr):
+    entry = float(candles[-1]["close"])
+    e_idx = int(signal["E_idx"])
+    e = candles[e_idx]
+    retest = candles[-1]
+    recent_range = max(float(retest["high"]) - float(retest["low"]), 0.0)
+    buffer = max(recent_range * 0.10, abs(entry) * 0.00001)
+    if direction == "SELL":
+        sl = max(float(e["high"]), float(retest["high"])) + buffer
+        risk_distance = sl - entry
+        tp = entry - risk_distance * max(0.1, float(rr or 2.0))
+    else:
+        sl = min(float(e["low"]), float(retest["low"])) - buffer
+        risk_distance = entry - sl
+        tp = entry + risk_distance * max(0.1, float(rr or 2.0))
+    return entry, sl, tp
+
+
+def mt5_better_sl(direction, current_sl, candidate):
+    if candidate is None or candidate <= 0:
+        return current_sl
+    if not current_sl or current_sl <= 0:
+        return candidate
+    # Only move protection in the favorable direction; never loosen the stop.
+    if direction == "BUY":
+        return max(float(current_sl), float(candidate))
+    return min(float(current_sl), float(candidate))
+
+
+async def mt5_abcde_worker(
+    user_id,
+    markets,
+    rr=2.0,
+    max_daily_profit=1200.0,
+    max_trades=200,
+    minimum_lot_only=True,
+    auto_trading=True,
+    abcde_lot_size=0.35,
+    abc_profit_filter_enabled=True,
+    abc_min_expected_profit=5.0,
+    abc_min_risk_percent=2.0,
+):
+    """Run the existing ABCDE scanner against MT5 prices and execute through the MT5 bridge.
+
+    This branch is intentionally separate from the existing Deriv Options worker:
+    ABC Pattern and Digit Over/Under remain unchanged. Only ABCDE can opt into MT5
+    execution when MT5_EXECUTION_ENABLED=true.
+    """
+    state = BOT_STATE[user_id]
+    state.update({
+        "running": True,
+        "mode": "demo",
+        "engine": "ABCDE_MT5",
+        "message": "Connecting to MT5 bridge...",
+        "market_data": {},
+        "signals": [],
+        "positions": [],
+        "_position_map": {},
+        "market_scan": {},
+    })
+
+    symbol_cache = {}
+    last_setup = {}
+    entry_meta = {}
+
+    try:
+        health = await mt5_bridge_health()
+        state["balance"] = float(health.get("balance", 0) or 0)
+        state["equity"] = float(health.get("equity", state["balance"]) or state["balance"])
+        state["currency"] = health.get("currency", "USD")
+        if not bool(health.get("trade_allowed")):
+            raise RuntimeError("MT5 reports trading is not allowed.")
+        state["message"] = "MT5 connected. Waiting for clean ABCDE setups..."
+
+        while not state.get("stop_requested"):
+            if state.get("paused"):
+                state["message"] = "Bot paused. Existing MT5 positions are still monitored."
+            try:
+                account = await mt5_bridge_request("GET", "/account")
+                state["balance"] = float(account.get("balance", state.get("balance", 0)) or 0)
+                state["equity"] = float(account.get("equity", state.get("equity", 0)) or 0)
+                state["currency"] = account.get("currency", state.get("currency", "USD"))
+            except Exception as exc:
+                state["message"] = f"MT5 account update error: {exc}"
+
+            # Read actual MT5 positions so the dashboard reflects the broker state.
+            try:
+                pdata = await mt5_bridge_request("GET", "/positions")
+                broker_positions = [p for p in pdata.get("positions", []) if int(p.get("magic", 0) or 0) == MT5_MAGIC]
+            except Exception as exc:
+                broker_positions = []
+                state["message"] = f"MT5 position read error: {exc}"
+
+            current_map = {}
+            for p in broker_positions:
+                direction = "BUY" if int(p.get("type", 0)) == 0 else "SELL"
+                pos = {
+                    "symbol": p.get("symbol"), "direction": direction,
+                    "entry": float(p.get("price_open", 0) or 0),
+                    "current": float(p.get("price_current", 0) or 0),
+                    "profit": float(p.get("profit", 0) or 0),
+                    "status": "OPEN", "ticket": int(p.get("ticket")),
+                    "volume": float(p.get("volume", 0) or 0),
+                    "sl": float(p.get("sl", 0) or 0), "tp": float(p.get("tp", 0) or 0),
+                    "magic": int(p.get("magic", 0) or 0),
+                }
+                meta = entry_meta.get(pos["ticket"], {})
+                pos.update(meta)
+                current_map[pos["ticket"]] = pos
+
+                entry = float(pos["entry"])
+                tp = float(pos["tp"] or 0)
+                progress = mt5_price_progress(direction, entry, tp, float(pos["current"])) if tp else 0.0
+                pos["progress"] = round(progress * 100, 2)
+
+                # 50% progress -> lock 30% progress. This only tightens the SL.
+                if tp and progress >= 0.50:
+                    lock_price = entry + (tp - entry) * 0.30
+                    new_sl = mt5_better_sl(direction, float(pos["sl"] or 0), lock_price)
+                    if new_sl and abs(new_sl - float(pos["sl"] or 0)) > 1e-12:
+                        try:
+                            await mt5_bridge_request("POST", "/position/modify", payload={"ticket": pos["ticket"], "sl": new_sl, "tp": tp})
+                            pos["sl"] = new_sl
+                            pos["abcde_30pct_lock"] = True
+                            state["message"] = f"{pos['symbol']}: ABCDE 50% progress reached â SL locked at 30%."
+                        except Exception as exc:
+                            state["message"] = f"{pos['symbol']}: SL lock update failed â {exc}"
+
+                # 80% of the configured TP distance -> close the position.
+                if tp and progress >= 0.80 and not pos.get("tp80_requested"):
+                    try:
+                        await mt5_bridge_request("POST", "/position/close", payload={"ticket": pos["ticket"]})
+                        pos["tp80_requested"] = True
+                        state["message"] = f"{pos['symbol']}: ABCDE 80% TP reached â position close requested."
+                    except Exception as exc:
+                        state["message"] = f"{pos['symbol']}: 80% TP close failed â {exc}"
+
+                # Candle rule: after entry, first same-direction push, then second
+                # same-direction push closes -> move SL to the close of the first push.
+                try:
+                    m15 = await mt5_rates(pos["symbol"], "M15", 80)
+                    closed = m15[:-1] if len(m15) > 1 else m15
+                    entry_time = int(meta.get("entry_time", 0) or 0)
+                    pushes = [c for c in closed if int(c.get("time", 0)) > entry_time]
+                    same = [c for c in pushes if (float(c["close"]) < float(c["open"]) if direction == "SELL" else float(c["close"]) > float(c["open"]))]
+                    if len(same) >= 2:
+                        first_push, second_push = same[0], same[1]
+                        if int(second_push["time"]) >= int(first_push["time"]):
+                            candidate = float(first_push["close"])
+                            new_sl = mt5_better_sl(direction, float(pos["sl"] or 0), candidate)
+                            if new_sl and abs(new_sl - float(pos["sl"] or 0)) > 1e-12:
+                                await mt5_bridge_request("POST", "/position/modify", payload={"ticket": pos["ticket"], "sl": new_sl, "tp": tp})
+                                pos["sl"] = new_sl
+                                pos["push_rule_locked"] = True
+                                state["message"] = f"{pos['symbol']}: second push closed â SL moved to first push close."
+                except Exception:
+                    pass
+
+            # Update completed positions in dashboard history.
+            previous = set(state.get("_position_map", {}).keys())
+            current = set(current_map.keys())
+            for ticket in previous - current:
+                old = state["_position_map"].get(ticket, {})
+                try:
+                    latest = await mt5_bridge_request("GET", "/positions")
+                    still = [p for p in latest.get("positions", []) if int(p.get("ticket", 0)) == ticket]
+                    if still:
+                        continue
+                except Exception:
+                    pass
+                old = dict(old)
+                old["status"] = "CLOSED"
+                old["is_open"] = False
+                state["last_trade"] = old
+                state.setdefault("abc_trade_history", []).insert(0, old)
+
+            state["_position_map"] = current_map
+            state["positions"] = list(current_map.values())
+            state["open_trades"] = len(current_map)
+
+            # Daily caps.
+            trade_cap = min(200, max(1, int(max_trades or 200)))
+            daily_cap = max(0.0, float(max_daily_profit or 1200))
+            if int(state.get("trades", 0) or 0) >= trade_cap or float(state.get("today_pl", 0) or 0) >= daily_cap:
+                await asyncio.sleep(5)
+                continue
+
+            if state.get("paused") or not auto_trading:
+                await asyncio.sleep(5)
+                continue
+
+            for market in markets:
+                if state.get("stop_requested") or state.get("paused"):
+                    break
+                if any(str(p.get("symbol")) == str(symbol_cache.get(market, "")) for p in current_map.values()):
+                    continue
+                try:
+                    symbol = await mt5_resolve_symbol(market, symbol_cache)
+                    state.setdefault("market_scan", {}).setdefault(market, {}).update({"market": market, "symbol": symbol, "status": "SCANNING", "updated_at": time.time()})
+                    data = {}
+                    for tf, count in (("M15", 120), ("H1", 80), ("H4", 60), ("D1", 40)):
+                        data[tf] = await mt5_rates(symbol, tf, count)
+                    candles = data["M15"][:-1] if len(data["M15"]) > 1 else []
+                    htf_bias = {"1H": timeframe_bias(data["H1"][:-1] if len(data["H1"]) > 1 else data["H1"]), "4H": timeframe_bias(data["H4"][:-1] if len(data["H4"]) > 1 else data["H4"]), "1D": timeframe_bias(data["D1"][:-1] if len(data["D1"]) > 1 else data["D1"])}
+                    scan = state["market_scan"][market]
+                    scan.update({"htf_1d": htf_bias["1D"], "htf_4h": htf_bias["4H"], "htf_1h": htf_bias["1H"], "updated_at": time.time()})
+                    if any(htf_bias[x] not in {"BUY", "SELL"} for x in ("1D", "4H", "1H")):
+                        scan.update({"status": "NO TRADE", "reason": "Higher-timeframe direction is not clean."})
+                        continue
+                    signal = abcde_signal(candles, htf_bias=htf_bias)
+                    if not signal:
+                        scan.update({"status": "NO TRADE", "reason": "15M ABCDE structure / retest / higher-timeframe alignment did not all pass."})
+                        continue
+                    direction = signal["direction"]
+                    key = (direction, signal["A_idx"], signal["B_idx"], signal["C_idx"], signal["D_idx"], signal["E_idx"])
+                    if last_setup.get(market) == key:
+                        continue
+                    last_setup[market] = key
+
+                    account = await mt5_bridge_request("GET", "/account")
+                    balance = float(account.get("balance", 0) or 0)
+                    risk_cap = balance * (min(2.0, max(0.1, float(abc_min_risk_percent or 2.0))) / 100.0)
+                    entry, sl, tp = mt5_initial_levels(direction, candles, signal, rr)
+                    risk_distance = abs(entry - sl)
+                    if risk_distance <= 0 or risk_distance >= abs(entry) * 0.25:
+                        scan.update({"status": "NO TRADE", "reason": "Initial stop distance is invalid or too large."})
+                        continue
+
+                    # Use the selected ABCDE lot, or the broker minimum when the switch is ON.
+                    symbol_info = await mt5_bridge_request("GET", "/symbols", params={"query": symbol})
+                    rows = [x for x in symbol_info.get("symbols", []) if x.get("name") == symbol]
+                    if not rows:
+                        raise RuntimeError(f"MT5 symbol metadata unavailable for {symbol}.")
+                    row = rows[0]
+                    min_lot = float(row.get("volume_min", 0) or 0)
+                    volume = min_lot if minimum_lot_only else float(abcde_lot_size or min_lot)
+                    if volume <= 0:
+                        raise RuntimeError(f"MT5 minimum lot unavailable for {symbol}.")
+                    # Position-size guard: approximate loss at SL must stay within the configured risk cap.
+                    profit_check = await mt5_bridge_request("GET", "/calc-profit", params={"symbol": symbol, "direction": direction, "volume": volume, "price_open": entry, "price_close": sl})
+                    estimated_loss = abs(float(profit_check.get("profit", 0) or 0))
+                    if estimated_loss > risk_cap and risk_cap > 0:
+                        scan.update({"status": "NO TRADE", "reason": f"Selected lot risks about ${estimated_loss:.2f}, above the ${risk_cap:.2f} cap."})
+                        continue
+
+                    scan.update({"direction": direction, "level": signal.get("level"), "status": "READY", "reason": "1D + 4H + 1H + 15M ABCDE alignment confirmed."})
+                    order = await mt5_bridge_request("POST", "/order", payload={"symbol": symbol, "direction": direction, "volume": volume, "sl": sl, "tp": tp, "magic": MT5_MAGIC, "comment": "NR AUTO TRADING ABCDE"})
+                    ticket = int(order.get("ticket") or order.get("deal"))
+                    entry_meta[ticket] = {
+                        "market": market, "strategy": "ABCDE", "entry_time": int(time.time()),
+                        "initial_sl": sl, "initial_tp": tp, "tp80_price": entry + (tp-entry)*0.80,
+                        "signal": signal,
+                    }
+                    state["trades"] = int(state.get("trades", 0) or 0) + 1
+                    scan.update({"status": "TRADE OPEN", "ticket": ticket, "volume": volume, "entry": order.get("price", entry), "sl": sl, "tp": tp})
+                    state["message"] = f"MT5 ABCDE TRADE OPEN: {market} {direction} {volume} lot"
+                    activity = state.setdefault("activity", [])
+                    activity.insert(0, f"OPEN: {market} {direction} {volume} lot @ {float(order.get('price', entry)):.5f}")
+                    state["activity"] = activity[:20]
+                except Exception as exc:
+                    state["market_scan"].setdefault(market, {}).update({"status": "ERROR", "reason": str(exc), "updated_at": time.time()})
+                    state["message"] = f"{market}: MT5 execution error - {exc}"
+
+            await asyncio.sleep(5)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        state["message"] = f"MT5 ABCDE worker stopped: {type(exc).__name__} - {exc}"
+    finally:
+        state["running"] = False
+        state["stop_requested"] = False
+
+
+# ============================================================
 # LIVE DEMO BOT WORKER
 # ============================================================
 
@@ -2015,6 +2364,13 @@ async def demo_bot_worker(
     abcde_lot_size=0.35,
 ):
     state = BOT_STATE[user_id]
+
+    if abcde_mode and MT5_EXECUTION_ENABLED:
+        return await mt5_abcde_worker(
+            user_id, markets, rr, max_daily_profit, max_trades,
+            abc_minimum_lot_only, auto_trading, abcde_lot_size,
+            abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent,
+        )
 
     reconnecting = bool(state.pop("_reconnecting", False))
 
