@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -2206,17 +2205,25 @@ async def mt5_abcde_worker(
                     closed = m15[:-1] if len(m15) > 1 else m15
                     entry_time = int(meta.get("entry_time", 0) or 0)
                     pushes = [c for c in closed if int(c.get("time", 0)) > entry_time]
-                    same = [c for c in pushes if (float(c["close"]) < float(c["open"]) if direction == "SELL" else float(c["close"]) > float(c["open"]))]
-                    if len(same) >= 2:
-                        first_push, second_push = same[0], same[1]
-                        if int(second_push["time"]) >= int(first_push["time"]):
-                            candidate = float(first_push["close"])
-                            new_sl = mt5_better_sl(direction, float(pos["sl"] or 0), candidate)
-                            if new_sl and abs(new_sl - float(pos["sl"] or 0)) > 1e-12:
-                                await mt5_bridge_request("POST", "/position/modify", payload={"ticket": pos["ticket"], "sl": new_sl, "tp": tp})
-                                pos["sl"] = new_sl
-                                pos["push_rule_locked"] = True
-                                state["message"] = f"{pos['symbol']}: second push closed â SL moved to first push close."
+                    # The protection rule requires two consecutive closed candles
+                    # pushing in the trade direction. Do not skip an opposite candle.
+                    first_push = None
+                    second_push = None
+                    for i in range(len(pushes) - 1):
+                        a, b = pushes[i], pushes[i + 1]
+                        a_push = (float(a["close"]) < float(a["open"])) if direction == "SELL" else (float(a["close"]) > float(a["open"]))
+                        b_push = (float(b["close"]) < float(b["open"])) if direction == "SELL" else (float(b["close"]) > float(b["open"]))
+                        if a_push and b_push:
+                            first_push, second_push = a, b
+                            break
+                    if first_push is not None and second_push is not None and not pos.get("push_rule_locked"):
+                        candidate = float(first_push["close"])
+                        new_sl = mt5_better_sl(direction, float(pos["sl"] or 0), candidate)
+                        if new_sl and abs(new_sl - float(pos["sl"] or 0)) > 1e-12:
+                            await mt5_bridge_request("POST", "/position/modify", payload={"ticket": pos["ticket"], "sl": new_sl, "tp": tp})
+                            pos["sl"] = new_sl
+                            pos["push_rule_locked"] = True
+                            state["message"] = f"{pos['symbol']}: second push closed â SL moved to first push close."
                 except Exception:
                     pass
 
