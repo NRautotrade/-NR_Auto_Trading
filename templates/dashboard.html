@@ -2,159 +2,475 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NR AUTO TRADING</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>{{ title or 'NR AUTO TRADING' }}</title>
 <style>
-:root{--bg:#07111f;--panel:#0e1a2d;--panel2:#111f34;--border:#23334c;--text:#e8eef7;--muted:#8fa0b8;--green:#22c55e;--red:#ef4444;--blue:#38bdf8;--yellow:#f59e0b}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
-.wrap{max-width:1400px;margin:auto;padding:18px}.top{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0 16px}.brand{font-size:25px;font-weight:800}.sub{color:var(--muted);font-size:12px;margin-top:4px}.right{display:flex;gap:10px;align-items:center}.pill{padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;background:#12301f;color:#58e889}.btn{border:1px solid var(--border);background:#132238;color:var(--text);padding:10px 15px;border-radius:7px;cursor:pointer;font-weight:700}.btn:hover{filter:brightness(1.15)}.btn.green{background:#17823f;border-color:#1da957}.btn.red{background:#8d2020;border-color:#b52d2d}.btn.yellow{background:#7a5310;border-color:#a87516}.btn.blue{background:#15577a;border-color:#2180ae}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px}.full{grid-column:1/-1}.title{font-size:13px;font-weight:800;letter-spacing:.4px;margin-bottom:12px}.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}.stat{background:var(--panel2);border:1px solid var(--border);padding:13px;border-radius:7px}.stat small{display:block;color:var(--muted);font-size:10px;font-weight:700}.stat strong{display:block;font-size:18px;margin-top:7px}.ok{color:var(--green)}.bad{color:var(--red)}.muted{color:var(--muted)}
-.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.check{display:flex;align-items:center;gap:7px;margin:6px 10px 6px 0}.check input{accent-color:var(--green);width:16px;height:16px}.section{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:11px;margin-top:10px}.section label{font-size:11px;color:var(--muted);display:block;margin-bottom:5px}.field{background:#081322;border:1px solid var(--border);color:var(--text);padding:9px;border-radius:6px;width:120px}.wide{width:180px}.note{font-size:11px;color:var(--muted);margin-top:9px}.account{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.account-id{font-weight:800}.table{width:100%;border-collapse:collapse;font-size:12px}.table th{color:var(--muted);text-align:left;background:#15243b}.table th,.table td{padding:10px;border-bottom:1px solid var(--border)}.empty{text-align:center;color:var(--muted);padding:18px}.activity{margin:0;padding-left:20px;color:var(--muted);font-size:12px}.activity li{padding:4px 0}.controls{display:flex;gap:9px;flex-wrap:wrap}.statusline{padding:10px;background:#081322;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;margin-top:10px}
-@media(max-width:900px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.stats{grid-template-columns:repeat(2,1fr)}}
+:root{
+  --bg:#071321;--panel:#0d1a2d;--panel2:#091525;--border:#263a56;
+  --text:#edf3fb;--muted:#91a4c0;--green:#18a94b;--green2:#22c55e;
+  --red:#8f2020;--redText:#ff8b8b;--blue:#214f78;--yellow:#75510d;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
+body{min-height:100vh}
+a{text-decoration:none;color:inherit}
+.wrap{width:100%;max-width:1500px;margin:0 auto}
+.topbar{padding:28px 36px 24px;border-bottom:1px solid #26364e;background:#081527}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:18px}
+.brand{font-size:28px;font-weight:800;letter-spacing:.5px}
+.subtitle{margin-top:7px;color:var(--muted);font-size:15px}
+.top-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pill{padding:12px 20px;border-radius:12px;font-size:15px;font-weight:800;background:#4a2020;color:#ff9292}
+.pill.demo{background:transparent;color:#55f091}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 28px;border:1px solid var(--border);border-radius:10px;background:#172840;color:var(--text);font-weight:800;font-size:17px;cursor:pointer}
+.btn.green{background:#16883f;border-color:#1ca34c}.btn.green:hover{background:#1aa84e}
+.btn.red{background:#7e1d1d;border-color:#a72b2b}.btn.yellow{background:#75510d}.btn.blue{background:#214f78}
+.btn.small{min-height:44px;font-size:14px;padding:0 18px}
+.navbar{display:flex;gap:34px;align-items:center;overflow-x:auto;white-space:nowrap;padding:22px 30px;border-bottom:1px solid #26364e;background:#081527}
+.navitem{font-size:20px;font-weight:800;color:#e8eef8;padding:14px 18px;border-radius:10px;cursor:pointer}
+.navitem.active{background:#1d4d79}
+.main{padding:32px 34px 60px}
+.page-title{font-size:36px;font-weight:800;margin:0 0 10px}.page-sub{font-size:17px;color:var(--muted);line-height:1.4;margin-bottom:28px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px;margin-bottom:20px}
+.card-title{font-size:20px;font-weight:800;letter-spacing:.6px;margin-bottom:24px}
+.account-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.field-label{display:block;color:#91a4c0;font-size:17px;font-weight:800;margin:0 0 12px;text-transform:uppercase}
+.field-box,.field-select{width:100%;min-height:68px;border:1px solid var(--border);border-radius:10px;background:#071321;color:var(--text);padding:0 22px;font-size:20px;outline:none}
+.field-select{appearance:auto}
+.account-actions{margin-top:22px;display:flex;gap:14px;flex-wrap:wrap}
+.status-connected{color:#52ee8c;font-weight:800}.status-disconnected{color:#f1f4fa}
+.notice{border:1px solid #664949;background:#21171b;color:#ffb3b3;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:20px}.stat small{display:block;color:var(--muted);font-weight:800;font-size:12px}.stat strong{display:block;font-size:24px;margin-top:9px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.section{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:18px}.check{display:flex;align-items:center;gap:10px;margin:10px 0;color:#dce5f2;font-size:15px}.check input{width:18px;height:18px;accent-color:var(--green2)}
+.form-row{display:flex;flex-wrap:wrap;gap:14px}.form-group{flex:1 1 170px}.form-label{display:block;color:var(--muted);font-size:12px;font-weight:800;margin-bottom:7px}.input,.select{width:100%;min-height:44px;background:#071321;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0 12px;font-size:14px}
+.controls{display:flex;gap:12px;flex-wrap:wrap}.statusline{margin-top:14px;background:#071321;border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--muted);font-size:13px}
+.tablewrap{overflow:auto}.trade-history-scroll{max-height:520px;overflow-y:auto;overflow-x:auto}.trade-history-scroll table{margin:0}.trade-history-scroll thead th{position:sticky;top:0;background:var(--card);z-index:2}table{width:100%;border-collapse:collapse;min-width:650px}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--border);font-size:13px}th{color:var(--muted);font-size:11px}.empty{text-align:center;color:var(--muted);padding:20px}.ok{color:#4ee889}.bad{color:#ff7474}
+.hidden{display:none!important}
+.scanner-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.scanner-market{background:#071321;border:1px solid var(--border);border-radius:10px;padding:16px}.scanner-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.scanner-name{font-weight:800}.scanner-quote{font-size:22px;font-weight:800}.digit-row{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;margin-top:12px}.digit-box{border:1px solid var(--border);border-radius:7px;text-align:center;padding:7px 2px;background:#0b1a2b;font-size:11px}.digit-box strong{display:block;font-size:14px}.digit-box span{color:var(--muted);font-size:10px}.signal-box{margin-top:12px;border-radius:8px;padding:10px;background:#0b1a2b;border:1px solid var(--border);font-size:12px}.signal-live{color:#4ee889}.magnet-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stage{background:#071321;border:1px solid var(--border);border-radius:8px;padding:10px}.stage small{display:block;color:var(--muted);font-size:10px}.stage input{margin-top:6px;width:100%;min-height:40px}
+.page-section{display:none}.page-section.page-visible{display:block}.page-header{margin:0 0 24px}.page-header h1{margin:0 0 8px;font-size:34px}.page-header p{margin:0;color:var(--muted);font-size:16px}.magnet-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.magnet-stat{background:#071321;border:1px solid var(--border);border-radius:10px;padding:16px}.magnet-stat small{display:block;color:var(--muted);font-size:11px;font-weight:800}.magnet-stat strong{display:block;font-size:22px;margin-top:7px}.stage-track{display:flex;gap:7px;margin-top:14px}.stage-dot{flex:1;height:8px;border-radius:99px;background:#1a2a40;border:1px solid #2b4261}.stage-dot.active{background:#21c66b;border-color:#21c66b}.subnav-note{font-size:13px;color:var(--muted);margin-top:10px}.mobile-scroll{overflow-x:auto}
+@media(max-width:900px){.scanner-grid{grid-template-columns:1fr}.magnet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.topbar{padding:20px 22px}.topline{display:block}.top-actions{margin-top:18px}.navbar{padding:16px 18px;gap:8px}.navitem{font-size:17px;padding:12px 16px}.main{padding:24px 16px 50px}.page-title{font-size:32px}.account-grid,.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.btn{font-size:16px;min-height:48px}.field-box,.field-select{min-height:60px;font-size:18px}}
+@media(max-width:520px){.brand{font-size:24px}.subtitle{font-size:13px}.stats{grid-template-columns:1fr 1fr}.card{padding:20px}.account-grid{gap:16px}.field-label{font-size:14px}}
+
+.feature-switches{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.feature-switch{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#071321;border:1px solid var(--border);border-radius:10px;padding:14px}.feature-switch strong{display:block}.feature-switch small{display:block;color:var(--muted);margin-top:4px;font-size:11px;line-height:1.35}.switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;cursor:pointer;inset:0;background:#27384e;border:1px solid var(--border);border-radius:30px;transition:.2s}.slider:before{content:"";position:absolute;height:22px;width:22px;left:3px;top:3px;background:#c5d2e5;border-radius:50%;transition:.2s}.switch input:checked+.slider{background:#1cab55;border-color:#2bd56e}.switch input:checked+.slider:before{transform:translateX(22px);background:#fff}
+
 </style>
 </head>
 <body>
 <div class="wrap">
-<header class="top">
-  <div><div class="brand">NR AUTO TRADING</div><div class="sub">Online Trading Dashboard</div></div>
-  <div class="right"><span id="botPill" class="pill">BOT STOPPED</span><span class="muted">USER: {{ user.username }}</span><a class="btn" href="/logout" style="text-decoration:none">LOG OUT</a></div>
+<header class="topbar">
+  <div class="topline">
+    <div>
+      <div class="brand">NR AUTO TRADING</div>
+      <div class="subtitle">Professional automated trading control center</div>
+    </div>
+    <div class="top-actions">
+      <span id="botPill" class="pill">BOT STOPPED</span>
+      <span class="pill demo">DEMO ACCOUNT</span>
+      <a class="btn green" href="/deriv/connect?mode=demo">CONNECT ACCOUNT</a>
+      <a class="btn" href="/logout">LOG OUT</a>
+    </div>
+  </div>
 </header>
 
-<div class="card full" style="margin-top:14px">
-  <div class="title">TRADING ACCOUNT</div>
-  <div class="account">
-    <span class="account-id">{{ connection.account_id if connection else 'Not connected' }}</span>
-    <span id="acctType" class="muted">{{ connection.account_type|upper if connection else 'â' }}</span>
-    {% if connection %}
-      <span class="ok">â CONNECTED</span>
-    {% else %}
-      <a class="btn green" href="/deriv/connect?mode=demo">CONNECT DERIV DEMO</a>
-    {% endif %}
-    <a class="btn" href="/deriv/connect?mode=demo">RECONNECT DEMO</a>
-    {% if allow_real %}<a class="btn" href="/deriv/connect?mode=real">CONNECT REAL</a>{% endif %}
-  </div>
-</div>
+<nav class="navbar" id="mainNav">
+  <a class="navitem active" data-page-link="dashboard" href="#dashboard">Dashboard</a>
+  <a class="navitem" data-page-link="abc" href="#abc">ABC Trader</a>
+  <a class="navitem" data-page-link="digit" href="#digit">Digit Trader</a>
+  <a class="navitem" data-page-link="transactions" href="#transactions">Transactions</a>
+  <a class="navitem" data-page-link="settings" href="#settings">Settings</a>
+</nav>
 
-<div class="card full">
-  <div class="title">ACCOUNT / TODAY</div>
-  <div class="stats">
-    <div class="stat"><small>BALANCE</small><strong id="balance">$0.00</strong></div>
-    <div class="stat"><small>EQUITY</small><strong id="equity">$0.00</strong></div>
-    <div class="stat"><small>TODAY'S P/L</small><strong id="pl">$0.00</strong></div>
-    <div class="stat"><small>OPEN TRADES</small><strong id="open">0</strong></div>
-    <div class="stat"><small>WINS</small><strong id="wins">0</strong></div>
-    <div class="stat"><small>LOSSES</small><strong id="losses">0</strong></div>
-  </div>
-</div>
+<main class="main" id="dashboard">
+  {% set oauth_error = request.query_params.get('oauth_error') %}
+  {% if oauth_error == 'client' %}
+    <div class="notice">Deriv Client ID is not configured on the server.</div>
+  {% elif oauth_error == 'real_locked' %}
+    <div class="notice">Real-account connection is currently locked. Demo mode remains available.</div>
+  {% endif %}
 
-<form id="settingsForm" method="post" action="/settings">
-<div class="grid">
-  <div class="card">
-    <div class="title">MARKETS</div>
-    <div class="section">
-      {% for m in ["Step Index","Volatility 5 Index","Volatility 10 Index","Volatility 15 Index","Volatility 25 Index","Volatility 30 Index","Volatility 50 Index","Volatility 75 Index","Volatility 100 Index"] %}
-      <label class="check"><input type="checkbox" name="markets" value="{{ m }}" {% if settings and m in (settings.markets|from_json) %}checked{% endif %}>{{ m }}</label>
-      {% endfor %}
+
+  <section class="card page-section page-visible" data-page="dashboard">
+    <div class="card-title">ACCOUNT CONNECTION</div>
+    <div class="account-grid">
+      <div>
+        <label class="field-label" for="accountMode">Account Mode</label>
+        <select id="accountMode" class="field-select" onchange="updateConnectButton()">
+          <option value="demo" selected>Demo Account</option>
+          {% if allow_real %}<option value="real">Real Account</option>{% endif %}
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Account Status</label>
+        <div class="field-box" style="display:flex;align-items:center">
+          {% if connection %}
+            <span class="status-connected">â Connected</span>
+          {% else %}
+            <span class="status-disconnected">Not connected</span>
+          {% endif %}
+        </div>
+      </div>
+      <div>
+        <label class="field-label">Account ID</label>
+        <div class="field-box" style="display:flex;align-items:center">{{ connection.account_id if connection else 'â' }}</div>
+      </div>
+      <div>
+        <label class="field-label">Currency</label>
+        <div class="field-box" style="display:flex;align-items:center">{{ connection.account_currency if connection else 'â' }}</div>
+      </div>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="title">STRATEGIES</div>
-    <div class="section">
-      <label class="check"><input type="checkbox" name="strategies" value="ABC Pattern" checked>ABC Pattern</label>
-      <label class="check"><input type="checkbox" name="strategies" value="Breakout">Breakout</label>
-      <label class="check"><input type="checkbox" name="strategies" value="Trend">Trend</label>
-      <label class="check"><input type="checkbox" name="strategies" value="Martingale">Martingale</label>
-      <label class="check"><input type="checkbox" name="strategies" value="Flat Stake">Flat Stake</label>
-      <div class="note">Martingale and Flat Stake are stake-management modes, while ABC/Breakout/Trend are entry strategies.</div>
+    <div class="account-actions">
+      <button id="selectedConnect" class="btn green" type="button" onclick="connectSelected()">CONNECT SELECTED ACCOUNT</button>
+      {% if connection %}<a class="btn" href="/deriv/connect?mode=demo">RECONNECT DEMO</a>{% endif %}
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="title">STAKE & TRADE CONTROL</div>
-    <div class="section row">
-      <div><label>Stake Mode</label><select class="field wide" name="stake_mode"><option>Flat Stake</option><option>Martingale</option></select></div>
-      <div><label>Base Risk / Stake ($)</label><input class="field" name="risk_trade" value="{{ settings.risk_trade if settings else 50 }}"></div>
-      <div><label>Martingale Multiplier</label><input class="field" name="martingale_multiplier" value="2"></div>
-      <div><label>Maximum Trades / Day</label><input class="field" name="max_trades" value="15"></div>
+  <section class="card page-section page-visible" data-page="dashboard">
+    <div class="card-title">ACCOUNT / TODAY</div>
+    <div class="stats">
+      <div class="stat"><small>BALANCE</small><strong id="balance">$0.00</strong></div>
+      <div class="stat"><small>EQUITY</small><strong id="equity">$0.00</strong></div>
+      <div class="stat"><small>TODAY'S P/L</small><strong id="pl">$0.00</strong></div>
+      <div class="stat"><small>OPEN TRADES</small><strong id="open">0</strong></div>
+      <div class="stat"><small>WINS</small><strong id="wins">0</strong></div>
+      <div class="stat"><small>LOSSES</small><strong id="losses">0</strong></div>
+      <div class="stat"><small>WIN RATE</small><strong id="winRate">0.00%</strong></div>
+      <div class="stat"><small>BOT STATUS</small><strong id="botStatus">STOPPED</strong></div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="title">RISK & PROTECTION</div>
-    <div class="section row">
-      <div><label>Reward / Risk</label><input class="field" name="reward_risk" value="{{ settings.reward_risk if settings else 2 }}"></div>
-      <div><label>Daily Target ($)</label><input class="field" name="daily_target" value="100"></div>
-      <div><label>Max Daily Profit ($)</label><input class="field" name="max_daily_profit" value="200"></div>
-      <div><label>Max Daily Loss ($)</label><input class="field" name="max_daily_loss" value="{{ settings.max_daily_loss if settings else 50 }}"></div>
-      <div><label>Protect at TP (%)</label><input class="field" name="protect_tp" value="50"></div>
-      <div><label>Lock Profit (R)</label><input class="field" name="lock_profit_r" value="1"></div>
-      <div><label>TP Adjustment (%)</label><input class="field" name="tp_adjust_percent" value="90"></div>
+  <section class="card page-section page-visible" data-page="dashboard">
+    <div class="card-title">MAGNET PROFIT PROTECTION â LIVE</div>
+    <div class="magnet-summary">
+      <div class="magnet-stat"><small>ACTIVE STAGE</small><strong id="magnetStage">STAGE 0</strong></div>
+      <div class="magnet-stat"><small>PEAK PROFIT</small><strong id="magnetPeak">$0.00</strong></div>
+      <div class="magnet-stat"><small>LOCKED PROFIT</small><strong id="magnetLocked">$0.00</strong></div>
+      <div class="magnet-stat"><small>OPEN MAGNETS</small><strong id="magnetOpen">0</strong></div>
     </div>
-    <div class="note">M5 locked â¢ Protection 70% â 1R</div>
-  </div>
+    <div class="stage-track"><span id="stageDot1" class="stage-dot"></span><span id="stageDot2" class="stage-dot"></span><span id="stageDot3" class="stage-dot"></span><span id="stageDot4" class="stage-dot"></span></div>
+    <div id="magnetMessage" class="subnav-note">The bot will move the protection floor upward as an open trade reaches each stage.</div>
+  </section>
 
-  <div class="card full">
-    <div class="title">BOT CONTROLS</div>
-    <div class="controls">
-      <button type="button" class="btn green" onclick="startBot()">RUN BOT</button>
-      <button type="button" class="btn yellow" onclick="pauseBot()">PAUSE BOT</button>
-      <button type="button" class="btn blue" onclick="resumeBot()">RESUME BOT</button>
-      <button type="button" class="btn red" onclick="stopBot()">STOP BOT</button>
-      <button type="submit" class="btn">SAVE SETTINGS</button>
+  <section class="card page-section" data-page="dashboard">
+    <div class="card-title">LOSS RECOVERY â LIVE</div>
+    <div class="magnet-summary">
+      <div class="magnet-stat"><small>RECOVERY DUE</small><strong id="recoveryDue">$0.00</strong></div>
+      <div class="magnet-stat"><small>RECOVERY MODE</small><strong id="recoveryMode">OFF</strong></div>
+      <div class="magnet-stat"><small>STAKE</small><strong>MINIMUM</strong></div>
+      <div class="magnet-stat"><small>NEXT RULE</small><strong>CLEAN SETUP</strong></div>
     </div>
-    <div id="message" class="statusline">Loading bot status...</div>
-  </div>
-</div>
-</form>
+    <div class="subnav-note">After a loss, the bot records the amount still to recover. It never increases the stake to chase the loss; it waits for another exceptionally clean setup.</div>
+  </section>
 
-<div class="grid">
-  <div class="card">
-    <div class="title">OPEN POSITIONS</div>
-    <table class="table"><thead><tr><th>MARKET</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="6" class="empty">No open trades</td></tr></tbody></table>
-  </div>
-  <div class="card">
-    <div class="title">LAST TRADE</div>
-    <div id="lastTrade" class="empty">No trades yet.</div>
-    <div class="title" style="margin-top:18px">ACTIVITY</div>
-    <ul id="activity" class="activity"></ul>
-  </div>
-</div>
+  <form id="settingsForm" method="post" action="/settings">
+    <div class="grid" id="settings">
+      <section class="card page-section" data-page="settings">
+        <div class="card-title">MARKETS</div>
+        <div class="section">
+          {% set saved_markets = settings.markets|from_json if settings else ['Volatility 25 Index'] %}
+          {% for m in ["Step Index","Volatility 5 Index","Volatility 10 Index","Volatility 15 Index","Volatility 25 Index","Volatility 30 Index","Volatility 50 Index","Volatility 75 Index","Volatility 100 Index"] %}
+          <label class="check"><input type="checkbox" name="markets" value="{{ m }}" {% if m in saved_markets %}checked{% endif %}>{{ m }}</label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="card page-section" data-page="abc">
+        <div class="card-title">ABC TRADER / STRATEGIES</div>
+        <div class="section">
+          {% set saved_strategies = settings.strategies|from_json if settings else ['ABC Pattern'] %}
+          <label class="check"><input type="checkbox" name="strategies" value="ABC Pattern" {% if 'ABC Pattern' in saved_strategies %}checked{% endif %}>ABC Pattern</label>
+          <label class="check"><input type="checkbox" name="strategies" value="ABCDE" {% if 'ABCDE' in saved_strategies %}checked{% endif %}>ABCDE â 1D + 4H + 1H + 15M</label>
+          <div class="form-row" style="margin-top:12px"><div class="form-group"><label class="form-label">ABCDE Lot Size</label><select class="select" name="abcde_lot_size"><option value="0.35" {% if settings and settings.abcde_lot_size == 0.35 %}selected{% endif %}>0.35</option><option value="0.50" {% if settings and settings.abcde_lot_size == 0.5 %}selected{% endif %}>0.50</option><option value="1.00" {% if settings and settings.abcde_lot_size == 1 %}selected{% endif %}>1.00</option><option value="2.00" {% if settings and settings.abcde_lot_size == 2 %}selected{% endif %}>2.00</option><option value="5.00" {% if settings and settings.abcde_lot_size == 5 %}selected{% endif %}>5.00</option><option value="10.00" {% if settings and settings.abcde_lot_size == 10 %}selected{% endif %}>10.00</option></select></div></div>
+          <label class="check"><input type="checkbox" name="strategies" value="Digit Over/Under" {% if 'Digit Over/Under' in saved_strategies %}checked{% endif %}>Digit Over/Under â Live Scanner</label>
+          <label class="check"><input type="checkbox" name="strategies" value="Breakout" {% if 'Breakout' in saved_strategies %}checked{% endif %}>Breakout</label>
+          <label class="check"><input type="checkbox" name="strategies" value="Trend" {% if 'Trend' in saved_strategies %}checked{% endif %}>Trend</label>
+          <div class="note">ABCDE uses 1D + 4H + 1H alignment, then requires a confirmed 15M ABCDE retest. If the 15M setup is not clean, it does not trade. ABCDE target/protection: 80% TP; once 50% is reached, protect 30% of maximum contract profit.</div>
+          <label class="check" style="justify-content:space-between"><span>Minimum Lot Only</span><label class="switch"><input type="checkbox" name="abc_minimum_lot_only" value="1" {% if not settings or settings.abc_minimum_lot_only %}checked{% endif %}><span class="slider"></span></label></label>
+        </div>
+      </section>
+
+      <section class="card page-section" data-page="settings">
+        <div class="card-title">STAKE & TRADE CONTROL</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Stake Mode</label><select class="select" name="stake_mode"><option {% if settings and settings.stake_mode == 'Flat Stake' %}selected{% endif %}>Flat Stake</option><option {% if settings and settings.stake_mode == 'Martingale' %}selected{% endif %}>Martingale</option></select></div>
+          <div class="form-group"><label class="form-label">Max Risk / Trade (%)</label><input class="input" type="number" min="0.1" max="2" step="0.1" name="risk_trade" value="{{ settings.risk_trade if settings else 2 }}"></div>
+          <div class="form-group"><label class="form-label">Martingale Multiplier</label><input class="input" name="martingale_multiplier" value="{{ settings.martingale_multiplier if settings else 2 }}"></div>
+          <div class="form-group"><label class="form-label">Maximum Trades / Day</label><input class="input" name="max_trades" value="{{ settings.max_trades if settings else 200 }}"></div>
+        </div>
+      </section>
+
+      <section class="card page-section" data-page="settings">
+        <div class="card-title">RISK & PROTECTION</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Reward / Risk</label><input class="input" name="reward_risk" value="{{ settings.reward_risk if settings else 2 }}"></div><div class="form-group"><label class="form-label">ABC Minimum Expected Profit ($)</label><input class="input" type="number" min="0" step="0.01" name="abc_min_expected_profit" value="{{ settings.abc_min_expected_profit if settings else 5 }}"></div>
+          <div class="form-group"><label class="form-label">Daily Target ($)</label><input class="input" name="daily_target" value="{{ settings.daily_target if settings else 500 }}"></div>
+          <div class="form-group"><label class="form-label">Max Daily Profit ($)</label><input class="input" name="max_daily_profit" value="{{ settings.max_daily_profit if settings else 1200 }}"></div>
+          <div class="form-group"><label class="form-label">Max Daily Loss ($)</label><input class="input" name="max_daily_loss" value="{{ settings.max_daily_loss if settings else 50 }}"></div>
+          <div class="form-group"><label class="form-label">Protect at TP (%)</label><input class="input" name="protect_tp" value="{{ settings.protect_tp if settings else 50 }}"></div>
+          <div class="form-group"><label class="form-label">Lock Profit (R)</label><input class="input" name="lock_profit_r" value="{{ settings.lock_profit_r if settings else 1 }}"></div>
+          <div class="form-group"><label class="form-label">TP Adjustment (%)</label><input class="input" name="tp_adjust_percent" value="{{ settings.tp_adjust_percent if settings else 90 }}"></div>
+        </div>
+      </section>
+
+      <section class="card page-section" data-page="settings">
+        <div class="card-title">FEATURE SWITCHES</div>
+        <div class="subnav-note" style="margin-bottom:12px">Turn optional bot features on or off. These switches control the actual trading engine; they are not display-only.</div>
+        <div class="feature-switches">
+          <div class="feature-switch"><div><strong>ABC TRADER</strong><small>Allow ABC setups to generate trades.</small></div><label class="switch"><input type="checkbox" name="abc_enabled" value="1" {% if not settings or settings.abc_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>DIGIT TRADER</strong><small>Allow the Digit engine to generate trades.</small></div><label class="switch"><input type="checkbox" name="digit_enabled" value="1" {% if not settings or settings.digit_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>STRICT OVER 1 FILTER</strong><small>Use the current OVER 1 / 94%+ entry rule.</small></div><label class="switch"><input type="checkbox" name="over_under_filter" value="1" {% if not settings or settings.over_under_filter %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>CHOPPY MARKET FILTER</strong><small>Block entries when price action is choppy.</small></div><label class="switch"><input type="checkbox" name="choppy_filter" value="1" {% if not settings or settings.choppy_filter %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>LOSS RECOVERY</strong><small>Track losses and require stricter recovery setups. Never increases the stake.</small></div><label class="switch"><input type="checkbox" name="recovery_enabled" value="1" {% if settings and settings.recovery_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>MAGNET PROFIT PROTECTION</strong><small>Use progressive early-sell protection on open Digit contracts.</small></div><label class="switch"><input type="checkbox" name="magnet_enabled" value="1" {% if not settings or settings.magnet_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>MINIMUM PAYOUT FILTER</strong><small>Only allow Digit trades when the quoted profit meets the minimum expected-profit setting.</small></div><label class="switch"><input type="checkbox" name="min_profit_filter_enabled" value="1" {% if not settings or settings.min_profit_filter_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>ABC MINIMUM PROFIT FILTER</strong><small>Only allow ABC trades when the quoted profit is at least the selected amount. It never increases the stake to reach it.</small></div><label class="switch"><input type="checkbox" name="abc_profit_filter_enabled" value="1" {% if not settings or settings.abc_profit_filter_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>DIGIT MINIMUM LOT ONLY</strong><small>ON = use Deriv minimum stake. OFF = use the aggressive Digit stake, capped at $2.00 maximum contract exposure.</small></div><label class="switch"><input type="checkbox" name="digit_minimum_lot_only" value="1" {% if settings and settings.digit_minimum_lot_only %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>LIVE SCANNER</strong><small>Continuously receive and analyze live market ticks.</small></div><label class="switch"><input type="checkbox" name="live_scanner" value="1" {% if not settings or settings.live_scanner %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>AUTO TRADING</strong><small>When OFF, the bot can scan but will not open new trades.</small></div><label class="switch"><input type="checkbox" name="auto_trading" value="1" {% if not settings or settings.auto_trading %}checked{% endif %}><span class="slider"></span></label></div>
+        </div>
+      </section>
+
+      <section class="card page-section" data-page="digit">
+        <div class="card-title">DIGIT TRADER / REFERENCE SETTINGS</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Trade Type</label><select class="select" name="digit_trade_type"><option value="Over/Under" {% if not settings or settings.digit_trade_type == 'Over/Under' %}selected{% endif %}>Over/Under</option><option value="Auto" {% if settings and settings.digit_trade_type == 'Auto' %}selected{% endif %}>AI Auto Over/Under</option></select></div>
+          <div class="form-group"><label class="form-label">Prediction Barrier</label><input class="input" type="number" min="1" max="8" name="digit_barrier" value="{{ settings.digit_barrier if settings else 5 }}"></div>
+          <div class="form-group"><label class="form-label">Duration (Ticks)</label><input class="input" type="number" min="1" max="10" name="digit_duration" value="{{ settings.digit_duration if settings else 5 }}"></div>
+          <div class="form-group"><label class="form-label">Minimum Confidence (%)</label><input class="input" type="number" min="50" max="95" name="digit_min_confidence" value="{{ settings.digit_min_confidence if settings else 65 }}"></div>
+          <div class="form-group"><label class="form-label">Minimum Expected Profit ($)</label><input class="input" type="number" min="0" step="0.01" name="min_expected_profit" value="{{ settings.min_expected_profit if settings else 1.00 }}"></div>
+        </div>
+        <div class="note">Digit aggressive risk mode uses up to $2.00 stake per contract when DIGIT MINIMUM LOT ONLY is OFF. The $2.00 amount is the maximum contract stake/exposure; it is not a guaranteed separate stop-loss order.</div>
+        <div class="note">MAGNET PROFIT PROTECTION is dollar-based for Digit: Stage 1 activates at $5 peak profit and Stage 2 activates at $10 peak profit, with the protection floor moving only upward.</div>
+        <div class="note">ABC entries now require 1D + 4H + 1H direction agreement, a confirmed 15M ABC structure, clean price action, the 2% maximum risk cap, and the ABC minimum-profit filter when enabled. If any check fails, the bot waits.</div>
+        <div class="note">The scanner continuously reads incoming ticks for every selected market and builds a rolling last-digit distribution.</div>
+      </section>
+
+      <section class="card page-section" data-page="settings">
+        <div class="card-title">MAGNET PROFIT PROTECTION</div>
+        <div class="magnet-grid">
+          <div class="stage"><small>STAGE 1 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage1" value="{{ settings.magnet_stage1 if settings else 10 }}"><input class="input" name="magnet_lock1" value="{{ settings.magnet_lock1 if settings else 0 }}"></div>
+          <div class="stage"><small>STAGE 2 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage2" value="{{ settings.magnet_stage2 if settings else 20 }}"><input class="input" name="magnet_lock2" value="{{ settings.magnet_lock2 if settings else 0.5 }}"></div>
+          <div class="stage"><small>STAGE 3 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage3" value="{{ settings.magnet_stage3 if settings else 50 }}"><input class="input" name="magnet_lock3" value="{{ settings.magnet_lock3 if settings else 1 }}"></div>
+          <div class="stage"><small>STAGE 4 â PROFIT % / LOCK R</small><input class="input" name="magnet_stage4" value="{{ settings.magnet_stage4 if settings else 70 }}"><input class="input" name="magnet_lock4" value="{{ settings.magnet_lock4 if settings else 1.5 }}"></div>
+        </div>
+        <div class="note">When an open trade reaches a stage, its profit floor can only move upward. If profit falls back to that protected floor, the online bot requests an early sell.</div>
+      </section>
+    </div>
+
+    <section class="card page-section" data-page="digit">
+      <div class="card-title">LIVE MARKET SCANNER</div>
+      <div class="controls" style="margin-top:12px"><button type="button" class="btn blue" onclick="botAction('/api/trading/scan')">AI SCAN NOW</button></div>
+      <div id="scannerStatus" class="statusline">Scanner is waiting for the bot.</div>
+      <div id="scannerMarkets" class="scanner-grid" style="margin-top:14px"><div class="empty">Start the Digit Over/Under engine to stream selected markets.</div></div>
+    </section>
+
+    <section class="card page-section" data-page="digit">
+      <div class="card-title">DIGIT BOT CONTROLS</div>
+      <div class="controls">
+        <button type="button" class="btn green" onclick="botAction('/api/trading/start')">RUN BOT</button>
+        <button type="button" class="btn yellow" onclick="botAction('/api/trading/pause')">PAUSE BOT</button>
+        <button type="button" class="btn blue" onclick="botAction('/api/trading/resume')">RESUME BOT</button>
+        <button type="button" class="btn red" onclick="botAction('/api/trading/stop')">STOP BOT</button>
+      </div>
+      <div class="statusline">The scanner and trade-management worker continue in the background when you switch to another tab.</div>
+    </section>
+
+    <section class="card page-section" data-page="abc">
+      <div class="card-title">LIVE ABC MARKET SCANNER</div>
+      <div class="subnav-note" style="margin-bottom:12px">The bot continuously checks each selected market. A market is shown as <b>NO TRADE</b> whenever any required gate fails.</div>
+      <div id="abcScannerStatus" class="statusline">ABC scanner is waiting for the bot.</div>
+      <div id="abcScannerMarkets" class="scanner-grid" style="margin-top:14px"><div class="empty">Start the ABC engine to scan the selected markets.</div></div>
+    </section>
+
+    <section class="card page-section" data-page="abc">
+      <div class="card-title">ABC TRADE HISTORY</div>
+      <div class="subnav-note" style="margin-bottom:12px">All completed ABC trades are kept here. Scroll inside the history box to view older trades.</div>
+      <div class="tablewrap trade-history-scroll" style="max-height:520px">
+        <table><thead><tr><th>MARKET</th><th>CONTRACT</th><th>DIRECTION</th><th>ENTRY</th><th>EXIT</th><th>P/L</th><th>STATUS</th></tr></thead>
+        <tbody id="abcTradeHistory"><tr><td colspan="7" class="empty">No completed ABC trades</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <section class="card page-section page-visible" data-page="dashboard">
+      <div class="card-title">BOT CONTROLS</div>
+      <div class="controls">
+        <button type="button" class="btn green" onclick="botAction('/api/trading/start')">RUN BOT</button>
+        <button type="button" class="btn yellow" onclick="botAction('/api/trading/pause')">PAUSE BOT</button>
+        <button type="button" class="btn blue" onclick="botAction('/api/trading/resume')">RESUME BOT</button>
+        <button type="button" class="btn red" onclick="botAction('/api/trading/stop')">STOP BOT</button>
+        <button type="button" class="btn" onclick="showPage('settings')">OPEN SETTINGS</button>
+      </div>
+      <div id="message" class="statusline">Loading bot status...</div>
+    </section>
+
+    <section class="card page-section" data-page="settings">
+      <div class="card-title">SAVE SETTINGS</div>
+      <div class="subnav-note">Changes made in Settings are applied the next time the online bot starts. The current running worker is not silently restarted.</div>
+      <div class="controls" style="margin-top:14px">
+        <button type="submit" class="btn green">SAVE ALL SETTINGS</button>
+      </div>
+    </section>
+  </form>
+
+  <section class="grid page-section" data-page="transactions" id="transactions">
+    <div class="card">
+      <div class="card-title">OPEN POSITIONS</div>
+      <div class="tablewrap"><table><thead><tr><th>MARKET</th><th>CONTRACT</th><th>DIRECTION</th><th>ENTRY</th><th>CURRENT</th><th>P/L</th><th>MAGNET</th><th>LOCKED</th><th>STATUS</th></tr></thead><tbody id="positions"><tr><td colspan="9" class="empty">No open trades</td></tr></tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="card-title">LAST TRADE</div>
+      <div id="lastTrade" class="empty">No trades yet.</div>
+      <div class="card-title" style="margin-top:24px">ACTIVITY</div>
+      <ul id="activity" style="margin:0;padding-left:20px;color:var(--muted);font-size:13px"></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">TRADE HISTORY</div>
+      <div class="tablewrap trade-history-scroll"><table><thead><tr><th>MARKET</th><th>CONTRACT</th><th>TYPE</th><th>BARRIER</th><th>CONF.</th><th>P/L</th><th>STATUS</th></tr></thead><tbody id="tradeHistory"><tr><td colspan="7" class="empty">No completed trades</td></tr></tbody></table></div>
+    </div>
+  </section>
+</main>
 </div>
 
 <script>
-async function post(url){
-  const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"}});
-  return await r.json();
+const pageDescriptions={
+  dashboard:['Dashboard','Account overview, live bot status, and active profit protection.'],
+  abc:['ABC Trader','ABC strategies, market selection, and automated setup controls.'],
+  digit:['Digit Trader','Live digit scanning, Over/Under signals, and reference-bot behavior.'],
+  transactions:['Transactions','Open positions, completed trades, P/L, and bot activity.'],
+  settings:['Settings','Risk, stake, market, and Magnet protection configuration.']
+};
+function showPage(page, updateHash=true){
+  if(!pageDescriptions[page]) page='dashboard';
+  document.querySelectorAll('.page-section').forEach(el=>el.classList.toggle('page-visible',el.dataset.page===page));
+  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active',el.dataset.pageLink===page));
+  let header=document.getElementById('pageHeader');
+  if(!header){
+    header=document.createElement('div'); header.id='pageHeader'; header.className='page-header';
+    const main=document.querySelector('main.main'); main.insertBefore(header,main.firstElementChild);
+  }
+  header.innerHTML='<h1>'+pageDescriptions[page][0]+'</h1><p>'+pageDescriptions[page][1]+'</p>';
+  if(updateHash) history.replaceState(null,'','#'+page);
+  window.scrollTo({top:0,behavior:'smooth'});
 }
-async function startBot(){const x=await post("/api/trading/start");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
-async function stopBot(){const x=await post("/api/trading/stop");document.getElementById("message").textContent=x.message||x.error||"Done";refresh();}
-async function pauseBot(){document.getElementById("message").textContent="Pause control requires the backend pause endpoint."; }
-async function resumeBot(){document.getElementById("message").textContent="Resume control requires the backend pause endpoint."; }
-function money(v){return "$"+Number(v||0).toFixed(2)}
+document.querySelectorAll('[data-page-link]').forEach(el=>el.addEventListener('click',e=>{e.preventDefault();showPage(el.dataset.pageLink);}));
+function connectSelected(){
+  const mode=document.getElementById('accountMode').value;
+  if(mode==='real' && {{ 'false' if allow_real else 'true' }}){
+    document.getElementById('message').textContent='Real-account connection is locked.';
+    return;
+  }
+  window.location.href='/deriv/connect?mode='+encodeURIComponent(mode);
+}
+function updateConnectButton(){
+  const mode=document.getElementById('accountMode').value;
+  const btn=document.getElementById('selectedConnect');
+  btn.textContent=mode==='real'?'CONNECT REAL ACCOUNT':'CONNECT SELECTED ACCOUNT';
+}
+async function botAction(url){
+  const message=document.getElementById('message');
+  message.textContent='Working...';
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'}});
+    const x=await r.json();
+    message.textContent=x.message||x.error||'Request completed.';
+    await refresh();
+  }catch(e){message.textContent='Unable to contact the trading service.';}
+}
+function money(v){return '$'+Number(v||0).toFixed(2)}
 async function refresh(){
- try{
-  const r=await fetch("/api/trading/state"); const x=await r.json(); if(!x.ok)return;
-  document.getElementById("balance").textContent=money(x.balance);
-  document.getElementById("equity").textContent=money(x.equity);
-  const pl=document.getElementById("pl"); pl.textContent=money(x.today_pl); pl.className=x.today_pl>=0?"ok":"bad";
-  document.getElementById("open").textContent=x.open_trades||0;
-  document.getElementById("wins").textContent=x.wins||0;
-  document.getElementById("losses").textContent=x.losses||0;
-  document.getElementById("botPill").textContent=x.running?"BOT RUNNING":"BOT STOPPED";
-  document.getElementById("botPill").style.background=x.running?"#12301f":"#3a2020";
-  document.getElementById("botPill").style.color=x.running?"#58e889":"#ff7b7b";
-  document.getElementById("message").textContent=x.message||"";
-  const p=document.getElementById("positions");
-  if(!x.positions?.length)p.innerHTML='<tr><td colspan="6" class="empty">No open trades</td></tr>';
-  else p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||""}</td><td>${a.direction||""}</td><td>${a.entry??""}</td><td>${a.current??""}</td><td class="${Number(a.profit||0)>=0?"ok":"bad"}">${money(a.profit)}</td><td>${a.status||"OPEN"}</td></tr>`).join("");
-  const l=document.getElementById("lastTrade");
-  if(x.last_trade)l.innerHTML=`<b>${x.last_trade.symbol||""}</b><br>${x.last_trade.direction||""} â¢ ${x.last_trade.status||""}<br><span class="${Number(x.last_trade.profit||0)>=0?"ok":"bad"}">${money(x.last_trade.profit)}</span>`;
-  else l.textContent="No trades yet.";
-  document.getElementById("activity").innerHTML=(x.activity||[]).map(a=>`<li>${a}</li>`).join("");
- }catch(e){document.getElementById("message").textContent="Unable to refresh bot status."}
+  try{
+    const r=await fetch('/api/trading/state',{cache:'no-store'});
+    const x=await r.json();
+    if(!x.ok)return;
+    document.getElementById('balance').textContent=money(x.balance);
+    document.getElementById('equity').textContent=money(x.equity);
+    const pl=document.getElementById('pl');
+    pl.textContent=money(x.today_pl); pl.className=x.today_pl>=0?'ok':'bad';
+    document.getElementById('open').textContent=x.open_trades||0;
+    document.getElementById('wins').textContent=x.wins||0;
+    document.getElementById('losses').textContent=x.losses||0;
+    const total=(Number(x.wins)||0)+(Number(x.losses)||0);
+    document.getElementById('winRate').textContent=total?((Number(x.wins)||0)/total*100).toFixed(2)+'%':'0.00%';
+    const running=!!x.running;
+    document.getElementById('botPill').textContent=running?'BOT RUNNING':'BOT STOPPED';
+    document.getElementById('botStatus').textContent=running?(x.paused?'PAUSED':'RUNNING'):'STOPPED';
+    document.getElementById('message').textContent=x.message||'Ready.';
+    const p=document.getElementById('positions');
+    if(!x.positions||!x.positions.length){p.innerHTML='<tr><td colspan="9" class="empty">No open trades</td></tr>';}
+    else{p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.entry??''}</td><td>${a.current??a.current_spot??''}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>Stage ${a.magnet_stage||0}</td><td class="ok">${money(a.locked_profit)}</td><td>${a.status||'OPEN'}</td></tr>`).join('');}
+    const l=document.getElementById('lastTrade');
+    if(x.last_trade){l.innerHTML=`<b>${x.last_trade.symbol||''}</b><br>${x.last_trade.direction||''} â¢ ${x.last_trade.status||''}<br><span class="${Number(x.last_trade.profit||0)>=0?'ok':'bad'}">${money(x.last_trade.profit)}</span>`;}
+    else{l.textContent='No trades yet.';}
+    document.getElementById('activity').innerHTML=(x.activity||[]).map(a=>`<li>${a}</li>`).join('');
+    const abcHistory=document.getElementById('abcTradeHistory');
+    const abcTrades=x.abc_trade_history||[];
+    if(abcHistory){
+      abcHistory.innerHTML=abcTrades.length ? abcTrades.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.entry!=null?Number(a.entry).toFixed(2):'â'}</td><td>${a.exit_spot!=null?a.exit_spot:(a.current_spot!=null?a.current_spot:'â')}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||''}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No completed ABC trades</td></tr>';
+    }
+    const history=document.getElementById('tradeHistory');
+    const trades=x.trade_history||[];
+    history.innerHTML=trades.length ? trades.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.barrier??'â'}</td><td>${a.confidence!=null?Number(a.confidence).toFixed(1)+'%':'â'}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>${a.status||''}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No completed trades</td></tr>';
+
+    const abcScanner=document.getElementById('abcScannerMarkets');
+    const abcScannerStatus=document.getElementById('abcScannerStatus');
+    const scanMap=x.market_scan||{};
+    const scanEntries=Object.entries(scanMap);
+    if(abcScannerStatus) abcScannerStatus.textContent = x.engine==='ABC' ? (x.message||'ABC live scanner running.') : 'Select ABC Pattern and run the bot to activate the ABC scanner.';
+    if(abcScanner){
+      if(!scanEntries.length){
+        abcScanner.innerHTML='<div class="empty">No ABC market data yet.</div>';
+      }else{
+        abcScanner.innerHTML=scanEntries.map(([name,a])=>{
+          const status=String(a.status||'SCANNING');
+          const cls=status==='TRADE OPEN'||status==='READY'?'signal-live':(status==='NO TRADE'?'bad':'');
+          return `<div class="scanner-market">
+            <div class="scanner-head"><div><div class="scanner-name">${name}</div><div class="muted">${a.symbol||''}</div></div><div class="scanner-quote ${cls}">${status}</div></div>
+            <div class="signal-box">1D: <b>${a.htf_1d||'â'}</b> &nbsp; 4H: <b>${a.htf_4h||'â'}</b> &nbsp; 1H: <b>${a.htf_1h||'â'}</b></div>
+            <div class="signal-box">${a.direction?`Direction: <b>${a.direction}</b> â¢ `:''}${a.expected_profit!=null?`Quoted profit: <b>$${Number(a.expected_profit).toFixed(2)}</b> â¢ `:''}${a.risk_cap!=null?`Risk cap: <b>$${Number(a.risk_cap).toFixed(2)}</b>`:'Risk cap: â'}</div>
+            <div class="signal-box">${a.reason||'Analyzingâ¦'}</div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    const scanner=document.getElementById('scannerMarkets');
+    const scannerStatus=document.getElementById('scannerStatus');
+    const md=x.market_data||{};
+    const entries=Object.entries(md);
+    scannerStatus.textContent=x.engine==='DIGIT_OVER_UNDER' ? (x.message||'Live scanner running.') : 'Select Digit Over/Under and run the bot to activate the reference-style scanner.';
+    if(!entries.length){
+      scanner.innerHTML='<div class="empty">No live market data yet.</div>';
+    }else{
+      scanner.innerHTML=entries.map(([name,a])=>{
+        const p=a.percentages||[];
+        const sig=a.signal;
+        return `<div class="scanner-market">
+          <div class="scanner-head"><div><div class="scanner-name">${name}</div><div class="muted">${a.symbol||''} â¢ Ticks ${a.ticks||0}</div></div><div class="scanner-quote">${a.quote??'â'}</div></div>
+          <div class="digit-row">${Array.from({length:10},(_,i)=>`<div class="digit-box"><strong>${i}</strong><span>${Number(p[i]||0).toFixed(1)}%</span></div>`).join('')}</div>
+          <div class="signal-box">Last digit: <b>${a.last_digit??'â'}</b> ${sig?`â¢ <span class="signal-live">${sig.direction} ${sig.barrier} â ${Number(sig.confidence||0).toFixed(1)}%</span>`:'â¢ waiting for confidence threshold'}</div>
+        </div>`;
+      }).join('');
+    }
+    const recovery=x.recovery||{};
+    const recoveryDue=Number(recovery.amount_due||0);
+    const recoveryDueEl=document.getElementById('recoveryDue');
+    const recoveryModeEl=document.getElementById('recoveryMode');
+    if(recoveryDueEl) recoveryDueEl.textContent=money(recoveryDue);
+    if(recoveryModeEl) recoveryModeEl.textContent=recovery.active?'ON':'OFF';
+    const magnet=x.magnet||{};
+    document.getElementById('magnetStage').textContent='STAGE '+(magnet.stage||0);
+    document.getElementById('magnetPeak').textContent=money(magnet.open_peak_profit);
+    document.getElementById('magnetLocked').textContent=money(magnet.open_locked_profit);
+    document.getElementById('magnetOpen').textContent=(magnet.positions||[]).length;
+    [1,2,3,4].forEach(i=>document.getElementById('stageDot'+i).classList.toggle('active',(magnet.stage||0)>=i));
+    const activeMag=(magnet.positions||[])[0];
+    document.getElementById('magnetMessage').textContent=activeMag ? `${activeMag.market}: Stage ${activeMag.stage} â¢ peak ${money(activeMag.peak_profit)} â¢ locked ${money(activeMag.locked_profit)}` : 'The bot will move the protection floor upward as an open trade reaches each stage.';
+  }catch(e){document.getElementById('message').textContent='Unable to refresh bot status.';}
 }
-refresh();setInterval(refresh,3000);
+updateConnectButton();
+const initialPage=(location.hash||'#dashboard').slice(1);
+showPage(initialPage,false);
+refresh(); setInterval(refresh,3000);
 </script>
 </body>
 </html>
