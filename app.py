@@ -745,6 +745,9 @@ async def register(
     password: str = Form(...),
     confirm: str = Form(...),
 ):
+    # Registration uses ONLY:
+    # Username + Email + Password + Confirm Password.
+    # First name, last name, and date of birth are NOT required.
     username = username.strip()
     email = email.strip().lower()
 
@@ -784,18 +787,62 @@ async def register(
         )
 
     conn = db()
+
+    existing_username = conn.execute(
+        "SELECT id FROM users WHERE LOWER(username)=? LIMIT 1",
+        (username.lower(),),
+    ).fetchone()
+
+    if existing_username:
+        conn.close()
+        return templates.TemplateResponse(
+            "register.html",
+            {"request": request, "title": APP_NAME, "error": "That username is already registered."},
+            status_code=400,
+        )
+
+    existing_email = conn.execute(
+        "SELECT id FROM users WHERE LOWER(email)=? LIMIT 1",
+        (email,),
+    ).fetchone()
+
+    if existing_email:
+        conn.close()
+        return templates.TemplateResponse(
+            "register.html",
+            {"request": request, "title": APP_NAME, "error": "That email is already registered."},
+            status_code=400,
+        )
+
     try:
         cur = conn.execute(
             """
-            INSERT INTO users (username, email, password_hash)
+            INSERT INTO users
+            (
+                username,
+                email,
+                password_hash
+            )
             VALUES (?, ?, ?)
             """,
-            (username, email, pw_hash(password)),
+            (
+                username,
+                email,
+                pw_hash(password),
+            ),
         )
+
         uid = cur.lastrowid
-        conn.execute("INSERT INTO settings(user_id) VALUES (?)", (uid,))
+
+        conn.execute(
+            "INSERT INTO settings(user_id) VALUES (?)",
+            (uid,),
+        )
+
         conn.commit()
+
     except sqlite3.IntegrityError:
+        conn.rollback()
         conn.close()
         return templates.TemplateResponse(
             "register.html",
@@ -804,8 +851,13 @@ async def register(
         )
 
     conn.close()
+
     request.session["user_id"] = uid
-    return RedirectResponse("/dashboard", status_code=303)
+
+    return RedirectResponse(
+        "/dashboard",
+        status_code=303,
+    )
 
 
 # ============================================================
