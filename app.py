@@ -1,3 +1,4 @@
+
 import smtplib
 from email.message import EmailMessage
 import os
@@ -2205,25 +2206,17 @@ async def mt5_abcde_worker(
                     closed = m15[:-1] if len(m15) > 1 else m15
                     entry_time = int(meta.get("entry_time", 0) or 0)
                     pushes = [c for c in closed if int(c.get("time", 0)) > entry_time]
-                    # The protection rule requires two consecutive closed candles
-                    # pushing in the trade direction. Do not skip an opposite candle.
-                    first_push = None
-                    second_push = None
-                    for i in range(len(pushes) - 1):
-                        a, b = pushes[i], pushes[i + 1]
-                        a_push = (float(a["close"]) < float(a["open"])) if direction == "SELL" else (float(a["close"]) > float(a["open"]))
-                        b_push = (float(b["close"]) < float(b["open"])) if direction == "SELL" else (float(b["close"]) > float(b["open"]))
-                        if a_push and b_push:
-                            first_push, second_push = a, b
-                            break
-                    if first_push is not None and second_push is not None and not pos.get("push_rule_locked"):
-                        candidate = float(first_push["close"])
-                        new_sl = mt5_better_sl(direction, float(pos["sl"] or 0), candidate)
-                        if new_sl and abs(new_sl - float(pos["sl"] or 0)) > 1e-12:
-                            await mt5_bridge_request("POST", "/position/modify", payload={"ticket": pos["ticket"], "sl": new_sl, "tp": tp})
-                            pos["sl"] = new_sl
-                            pos["push_rule_locked"] = True
-                            state["message"] = f"{pos['symbol']}: second push closed â SL moved to first push close."
+                    same = [c for c in pushes if (float(c["close"]) < float(c["open"]) if direction == "SELL" else float(c["close"]) > float(c["open"]))]
+                    if len(same) >= 2:
+                        first_push, second_push = same[0], same[1]
+                        if int(second_push["time"]) >= int(first_push["time"]):
+                            candidate = float(first_push["close"])
+                            new_sl = mt5_better_sl(direction, float(pos["sl"] or 0), candidate)
+                            if new_sl and abs(new_sl - float(pos["sl"] or 0)) > 1e-12:
+                                await mt5_bridge_request("POST", "/position/modify", payload={"ticket": pos["ticket"], "sl": new_sl, "tp": tp})
+                                pos["sl"] = new_sl
+                                pos["push_rule_locked"] = True
+                                state["message"] = f"{pos['symbol']}: second push closed â SL moved to first push close."
                 except Exception:
                     pass
 
@@ -2375,7 +2368,7 @@ async def demo_bot_worker(
     if abcde_mode and MT5_EXECUTION_ENABLED:
         return await mt5_abcde_worker(
             user_id, markets, rr, max_daily_profit, max_trades,
-            abc_minimum_lot_only, auto_trading, abcde_lot_size,
+            minimum_lot_only, auto_trading, abcde_lot_size,
             abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent,
         )
 
@@ -4097,8 +4090,9 @@ async def trading_state(request: Request):
         },
     )
 
-    # When the bot is stopped, keep this member's dashboard synced
-    # directly to the Deriv account they connected.
+    # When the bot is stopped, keep the dashboard synced to the
+    # account that the selected execution engine actually uses.
+    # ABCDE + MT5 uses the MT5 bridge account; the other engines use Deriv.
     if not state.get("running"):
         now = time.time()
         last_refresh = float(
@@ -4106,39 +4100,75 @@ async def trading_state(request: Request):
         )
 
         if now - last_refresh >= 8:
-            conn = db()
-            connection = conn.execute(
-                """SELECT account_id, account_type, access_token_encrypted
-                   FROM deriv_connections
-                   WHERE user_id=?""",
-                (uid,),
-            ).fetchone()
-            conn.close()
+            mt5_dashboard_account = False
+            try:
+                conn = db()
+                settings_row = conn.execute(
+                    "SELECT strategies FROM settings WHERE user_id=?",
+                    (uid,),
+                ).fetchone()
+                conn.close()
+                selected_strategies = (
+                    json.loads(settings_row["strategies"])
+                    if settings_row and settings_row["strategies"]
+                    else []
+                )
+                mt5_dashboard_account = (
+                    MT5_EXECUTION_ENABLED and "ABCDE" in selected_strategies
+                )
+            except Exception:
+                mt5_dashboard_account = False
 
-            if connection:
+            if mt5_dashboard_account:
                 try:
-                    token = unprotect_token(
-                        connection["access_token_encrypted"]
-                    )
-
-                    balance, currency = await fetch_live_balance(
-                        connection["account_id"],
-                        token,
-                    )
-
+                    account = await mt5_bridge_request("GET", "/account")
+                    balance = float(account.get("balance", 0) or 0)
+                    equity = float(account.get("equity", balance) or balance)
                     state["balance"] = balance
-
-                    if not state.get("positions"):
-                        state["equity"] = balance
-
-                    state["currency"] = currency
+                    state["equity"] = equity
+                    state["currency"] = account.get("currency", "USD")
+                    state["account_source"] = "MT5"
                     state["_account_refresh_at"] = now
                     state.pop("account_error", None)
-
                 except Exception as exc:
                     state["account_error"] = (
-                        f"{type(exc).__name__}: {exc}"
+                        f"MT5 account update error: {type(exc).__name__}: {exc}"
                     )
+            else:
+                conn = db()
+                connection = conn.execute(
+                    """SELECT account_id, account_type, access_token_encrypted
+                       FROM deriv_connections
+                       WHERE user_id=?""",
+                    (uid,),
+                ).fetchone()
+                conn.close()
+
+                if connection:
+                    try:
+                        token = unprotect_token(
+                            connection["access_token_encrypted"]
+                        )
+
+                        balance, currency = await fetch_live_balance(
+                            connection["account_id"],
+                            token,
+                        )
+
+                        state["balance"] = balance
+
+                        if not state.get("positions"):
+                            state["equity"] = balance
+
+                        state["currency"] = currency
+                        state["account_source"] = "Deriv"
+                        state["_account_refresh_at"] = now
+                        state.pop("account_error", None)
+
+                    except Exception as exc:
+                        state["account_error"] = (
+                            f"{type(exc).__name__}: {exc}"
+                        )
 
     return {
         "ok": True,
