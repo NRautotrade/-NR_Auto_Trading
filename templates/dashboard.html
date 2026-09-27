@@ -1,3 +1,4 @@
+<!-- Authentication is handled by the matching NR AUTO TRADING app: username + password login, username + email + password registration, and forgot-password flow. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -140,7 +141,7 @@ a{text-decoration:none;color:inherit}
   </section>
 
   <section class="card page-section page-visible" data-page="dashboard">
-    <div class="card-title">MAGNET PROFIT PROTECTION â LIVE</div>
+    <div class="card-title">MAGNET PROFIT PROTECTION - LIVE</div>
     <div class="magnet-summary">
       <div class="magnet-stat"><small>ACTIVE STAGE</small><strong id="magnetStage">STAGE 0</strong></div>
       <div class="magnet-stat"><small>PEAK PROFIT</small><strong id="magnetPeak">$0.00</strong></div>
@@ -152,7 +153,7 @@ a{text-decoration:none;color:inherit}
   </section>
 
   <section class="card page-section" data-page="dashboard">
-    <div class="card-title">LOSS RECOVERY â LIVE</div>
+    <div class="card-title">LOSS RECOVERY - LIVE</div>
     <div class="magnet-summary">
       <div class="magnet-stat"><small>RECOVERY DUE</small><strong id="recoveryDue">$0.00</strong></div>
       <div class="magnet-stat"><small>RECOVERY MODE</small><strong id="recoveryMode">OFF</strong></div>
@@ -394,7 +395,7 @@ async function refresh(){
     const running=!!x.running;
     document.getElementById('botPill').textContent=running?'BOT RUNNING':'BOT STOPPED';
     document.getElementById('botStatus').textContent=running?(x.paused?'PAUSED':'RUNNING'):'STOPPED';
-    document.getElementById('message').textContent=x.message||'Ready.';
+    document.getElementById('message').textContent=(x.account_source==='MT5' ? 'MT5 '+(x.mt5_connected?'CONNECTED':'CONNECTING')+' â¢ ' : '')+(x.message||'Ready.');
     const p=document.getElementById('positions');
     if(!x.positions||!x.positions.length){p.innerHTML='<tr><td colspan="9" class="empty">No open trades</td></tr>';}
     else{p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.entry??''}</td><td>${a.current??a.current_spot??''}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>Stage ${a.magnet_stage||0}</td><td class="ok">${money(a.locked_profit)}</td><td>${a.status||'OPEN'}</td></tr>`).join('');}
@@ -415,10 +416,10 @@ async function refresh(){
     const abcScannerStatus=document.getElementById('abcScannerStatus');
     const scanMap=x.market_scan||{};
     const scanEntries=Object.entries(scanMap);
-    if(abcScannerStatus) abcScannerStatus.textContent = x.engine==='ABC' ? (x.message||'ABC live scanner running.') : 'Select ABC Pattern and run the bot to activate the ABC scanner.';
+    if(abcScannerStatus) abcScannerStatus.textContent = (x.engine==='ABC'||x.engine==='ABCDE_MT5') ? (x.message||'ABC live scanner running.') : 'Select ABC Pattern and run the bot to activate the ABC scanner.';
     if(abcScanner){
       if(!scanEntries.length){
-        abcScanner.innerHTML='<div class="empty">No ABC market data yet.</div>';
+        abcScanner.innerHTML='<div class="empty">'+(x.engine==='ABCDE_MT5' ? 'MT5 scanner connected â waiting for market data.' : 'No ABC market data yet.')+'</div>';
       }else{
         abcScanner.innerHTML=scanEntries.map(([name,a])=>{
           const status=String(a.status||'SCANNING');
