@@ -2362,9 +2362,13 @@ async def demo_bot_worker(
     state = BOT_STATE[user_id]
 
     if abcde_mode and MT5_EXECUTION_ENABLED:
+        # ABCDE is the MT5 engine. Pass the actual function parameter
+        # `minimum_lot_only`; the old code referenced the undefined
+        # `abc_minimum_lot_only`, which caused the worker to fail before
+        # it could connect to MT5 and left the dashboard stuck on "Starting...".
         return await mt5_abcde_worker(
             user_id, markets, rr, max_daily_profit, max_trades,
-            abc_minimum_lot_only, auto_trading, abcde_lot_size,
+            minimum_lot_only, auto_trading, abcde_lot_size,
             abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent,
         )
 
@@ -3868,11 +3872,30 @@ async def start_trading(request: Request):
     else:
         return JSONResponse({"ok": False, "error": "The selected strategy is switched OFF. Turn it ON in Feature Switches."}, status_code=400)
 
+    mt5_abcde_active = bool(abcde_mode and MT5_EXECUTION_ENABLED)
+    if abcde_mode and not MT5_EXECUTION_ENABLED:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "ABCDE requires MT5_EXECUTION_ENABLED=true. The MT5 bridge is not enabled on the server.",
+            },
+            status_code=503,
+        )
+
+    initial_engine = (
+        "ABCDE_MT5" if mt5_abcde_active
+        else ("DIGIT_OVER_UNDER" if selected_engine == "digit" else "ABC")
+    )
+    initial_message = (
+        "Connecting to MT5 bridge..." if mt5_abcde_active
+        else "Starting demo trading worker..."
+    )
+
     BOT_STATE[uid] = {
         "running": False,
         "stop_requested": False,
         "mode": "demo",
-        "message": "Starting...",
+        "message": initial_message,
         "trades": 0,
         "balance": 0.0,
         "equity": 0.0,
@@ -3889,7 +3912,7 @@ async def start_trading(request: Request):
         "paused": False,
         "market_data": {},
         "signals": [],
-        "engine": "ABC",
+        "engine": initial_engine,
     }
 
     try:
@@ -4086,15 +4109,31 @@ async def trading_state(request: Request):
         },
     )
 
-    # When the bot is stopped, keep this member's dashboard synced
-    # directly to the Deriv account they connected.
-    if not state.get("running"):
-        now = time.time()
-        last_refresh = float(
-            state.get("_account_refresh_at", 0) or 0
-        )
+    # Keep the dashboard account data live even before the bot is started.
+    # When MT5 execution is enabled, the dashboard balance is sourced from
+    # the MT5 bridge so the displayed balance matches the connected MT5 demo account.
+    now = time.time()
+    last_refresh = float(state.get("_account_refresh_at", 0) or 0)
 
-        if now - last_refresh >= 8:
+    if now - last_refresh >= 5:
+        if MT5_EXECUTION_ENABLED:
+            try:
+                health = await mt5_bridge_health()
+                state["balance"] = float(health.get("balance", state.get("balance", 0)) or 0)
+                state["equity"] = float(health.get("equity", state.get("balance", 0)) or state.get("balance", 0))
+                state["currency"] = health.get("currency", "USD")
+                state["account_source"] = "MT5"
+                state["mt5_connected"] = True
+                state.pop("account_error", None)
+                state.pop("mt5_error", None)
+                state["_account_refresh_at"] = now
+            except Exception as exc:
+                state["mt5_connected"] = False
+                state["mt5_error"] = f"{type(exc).__name__}: {exc}"
+
+        # If MT5 is not enabled/available, preserve the existing Deriv balance
+        # synchronization for the online demo account.
+        if not state.get("mt5_connected"):
             conn = db()
             connection = conn.execute(
                 """SELECT account_id, account_type, access_token_encrypted
@@ -4106,35 +4145,26 @@ async def trading_state(request: Request):
 
             if connection:
                 try:
-                    token = unprotect_token(
-                        connection["access_token_encrypted"]
-                    )
-
-                    balance, currency = await fetch_live_balance(
-                        connection["account_id"],
-                        token,
-                    )
-
+                    token = unprotect_token(connection["access_token_encrypted"])
+                    balance, currency = await fetch_live_balance(connection["account_id"], token)
                     state["balance"] = balance
-
                     if not state.get("positions"):
                         state["equity"] = balance
-
                     state["currency"] = currency
+                    state["account_source"] = "DERIV"
                     state["_account_refresh_at"] = now
                     state.pop("account_error", None)
-
                 except Exception as exc:
-                    state["account_error"] = (
-                        f"{type(exc).__name__}: {exc}"
-                    )
-
+                    state["account_error"] = f"{type(exc).__name__}: {exc}"
     return {
         "ok": True,
         "running": bool(state.get("running", False)),
         "paused": bool(state.get("paused", False)),
         "mode": state.get("mode", "demo"),
         "message": state.get("message", "Bot stopped."),
+        "account_source": state.get("account_source", "MT5" if MT5_EXECUTION_ENABLED else "DERIV"),
+        "mt5_connected": bool(state.get("mt5_connected", False)),
+        "mt5_error": state.get("mt5_error"),
         "balance": float(state.get("balance", 0.0) or 0.0),
         "equity": float(
             state.get(
