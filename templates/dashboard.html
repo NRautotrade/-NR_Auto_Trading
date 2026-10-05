@@ -1,4 +1,3 @@
-<!-- Authentication is handled by the matching NR AUTO TRADING app: username + password login, username + email + password registration, and forgot-password flow. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -55,6 +54,10 @@ a{text-decoration:none;color:inherit}
 
 .feature-switches{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.feature-switch{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#071321;border:1px solid var(--border);border-radius:10px;padding:14px}.feature-switch strong{display:block}.feature-switch small{display:block;color:var(--muted);margin-top:4px;font-size:11px;line-height:1.35}.switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;cursor:pointer;inset:0;background:#27384e;border:1px solid var(--border);border-radius:30px;transition:.2s}.slider:before{content:"";position:absolute;height:22px;width:22px;left:3px;top:3px;background:#c5d2e5;border-radius:50%;transition:.2s}.switch input:checked+.slider{background:#1cab55;border-color:#2bd56e}.switch input:checked+.slider:before{transform:translateX(22px);background:#fff}
 
+.ai-grid{display:grid;grid-template-columns:1fr;gap:12px}.ai-row{background:#071321;border:1px solid var(--border);border-radius:10px;padding:14px}.ai-row-head{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:10px;align-items:end}.ai-result-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}.ai-mini{background:#0b1a2b;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px}.ai-mini small{display:block;color:var(--muted);font-size:10px}.ai-status{margin-top:10px;padding:11px;border-radius:8px;border:1px solid var(--border);font-weight:800}.ai-qualified{color:#4ee889;border-color:#1d7a47}.ai-no-trade{color:#ff8b8b;border-color:#6b2c2c}.ai-note{font-size:12px;color:var(--muted);line-height:1.4}.ai-settings-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.ai-toolbar{display:flex;gap:10px;flex-wrap:wrap}.ai-table-label{color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase}
+@media(max-width:900px){.ai-row-head,.ai-settings-grid{grid-template-columns:1fr 1fr}.ai-result-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.ai-row-head,.ai-settings-grid,.ai-result-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -78,6 +81,7 @@ a{text-decoration:none;color:inherit}
   <a class="navitem active" data-page-link="dashboard" href="#dashboard">Dashboard</a>
   <a class="navitem" data-page-link="abc" href="#abc">ABC Trader</a>
   <a class="navitem" data-page-link="digit" href="#digit">Digit Trader</a>
+  <a class="navitem" data-page-link="ai" href="#ai">AI Scan / AI Trading</a>
   <a class="navitem" data-page-link="transactions" href="#transactions">Transactions</a>
   <a class="navitem" data-page-link="settings" href="#settings">Settings</a>
 </nav>
@@ -141,7 +145,7 @@ a{text-decoration:none;color:inherit}
   </section>
 
   <section class="card page-section page-visible" data-page="dashboard">
-    <div class="card-title">MAGNET PROFIT PROTECTION - LIVE</div>
+    <div class="card-title">MAGNET PROFIT PROTECTION â LIVE</div>
     <div class="magnet-summary">
       <div class="magnet-stat"><small>ACTIVE STAGE</small><strong id="magnetStage">STAGE 0</strong></div>
       <div class="magnet-stat"><small>PEAK PROFIT</small><strong id="magnetPeak">$0.00</strong></div>
@@ -153,7 +157,7 @@ a{text-decoration:none;color:inherit}
   </section>
 
   <section class="card page-section" data-page="dashboard">
-    <div class="card-title">LOSS RECOVERY - LIVE</div>
+    <div class="card-title">LOSS RECOVERY â LIVE</div>
     <div class="magnet-summary">
       <div class="magnet-stat"><small>RECOVERY DUE</small><strong id="recoveryDue">$0.00</strong></div>
       <div class="magnet-stat"><small>RECOVERY MODE</small><strong id="recoveryMode">OFF</strong></div>
@@ -180,13 +184,10 @@ a{text-decoration:none;color:inherit}
         <div class="section">
           {% set saved_strategies = settings.strategies|from_json if settings else ['ABC Pattern'] %}
           <label class="check"><input type="checkbox" name="strategies" value="ABC Pattern" {% if 'ABC Pattern' in saved_strategies %}checked{% endif %}>ABC Pattern</label>
-          <label class="check"><input type="checkbox" name="strategies" value="ABCDE" {% if 'ABCDE' in saved_strategies %}checked{% endif %}>ABCDE â 1D + 4H + 1H + 15M</label>
-          <div class="form-row" style="margin-top:12px"><div class="form-group"><label class="form-label">ABCDE Lot Size</label><select class="select" name="abcde_lot_size"><option value="0.35" {% if settings and settings.abcde_lot_size == 0.35 %}selected{% endif %}>0.35</option><option value="0.50" {% if settings and settings.abcde_lot_size == 0.5 %}selected{% endif %}>0.50</option><option value="1.00" {% if settings and settings.abcde_lot_size == 1 %}selected{% endif %}>1.00</option><option value="2.00" {% if settings and settings.abcde_lot_size == 2 %}selected{% endif %}>2.00</option><option value="5.00" {% if settings and settings.abcde_lot_size == 5 %}selected{% endif %}>5.00</option><option value="10.00" {% if settings and settings.abcde_lot_size == 10 %}selected{% endif %}>10.00</option></select></div></div>
           <label class="check"><input type="checkbox" name="strategies" value="Digit Over/Under" {% if 'Digit Over/Under' in saved_strategies %}checked{% endif %}>Digit Over/Under â Live Scanner</label>
           <label class="check"><input type="checkbox" name="strategies" value="Breakout" {% if 'Breakout' in saved_strategies %}checked{% endif %}>Breakout</label>
           <label class="check"><input type="checkbox" name="strategies" value="Trend" {% if 'Trend' in saved_strategies %}checked{% endif %}>Trend</label>
-          <div class="note">ABCDE uses 1D + 4H + 1H alignment, then requires a confirmed 15M ABCDE retest. If the 15M setup is not clean, it does not trade. ABCDE target/protection: 80% TP; once 50% is reached, protect 30% of maximum contract profit.</div>
-          <label class="check" style="justify-content:space-between"><span>Minimum Lot Only</span><label class="switch"><input type="checkbox" name="abc_minimum_lot_only" value="1" {% if not settings or settings.abc_minimum_lot_only %}checked{% endif %}><span class="slider"></span></label></label>
+          <label class="check"><input type="checkbox" checked disabled>Minimum Lot Only</label>
         </div>
       </section>
 
@@ -225,7 +226,7 @@ a{text-decoration:none;color:inherit}
           <div class="feature-switch"><div><strong>MAGNET PROFIT PROTECTION</strong><small>Use progressive early-sell protection on open Digit contracts.</small></div><label class="switch"><input type="checkbox" name="magnet_enabled" value="1" {% if not settings or settings.magnet_enabled %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>MINIMUM PAYOUT FILTER</strong><small>Only allow Digit trades when the quoted profit meets the minimum expected-profit setting.</small></div><label class="switch"><input type="checkbox" name="min_profit_filter_enabled" value="1" {% if not settings or settings.min_profit_filter_enabled %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>ABC MINIMUM PROFIT FILTER</strong><small>Only allow ABC trades when the quoted profit is at least the selected amount. It never increases the stake to reach it.</small></div><label class="switch"><input type="checkbox" name="abc_profit_filter_enabled" value="1" {% if not settings or settings.abc_profit_filter_enabled %}checked{% endif %}><span class="slider"></span></label></div>
-          <div class="feature-switch"><div><strong>DIGIT MINIMUM LOT ONLY</strong><small>ON = use Deriv minimum stake. OFF = use the aggressive Digit stake, capped at $2.00 maximum contract exposure.</small></div><label class="switch"><input type="checkbox" name="digit_minimum_lot_only" value="1" {% if settings and settings.digit_minimum_lot_only %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>MINIMUM LOT ONLY</strong><small>Permanent rule â the bot always uses Deriv's minimum accepted stake for each contract.</small></div><span class="status-pill on">ALWAYS ON</span></div>
           <div class="feature-switch"><div><strong>LIVE SCANNER</strong><small>Continuously receive and analyze live market ticks.</small></div><label class="switch"><input type="checkbox" name="live_scanner" value="1" {% if not settings or settings.live_scanner %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>AUTO TRADING</strong><small>When OFF, the bot can scan but will not open new trades.</small></div><label class="switch"><input type="checkbox" name="auto_trading" value="1" {% if not settings or settings.auto_trading %}checked{% endif %}><span class="slider"></span></label></div>
         </div>
@@ -240,8 +241,7 @@ a{text-decoration:none;color:inherit}
           <div class="form-group"><label class="form-label">Minimum Confidence (%)</label><input class="input" type="number" min="50" max="95" name="digit_min_confidence" value="{{ settings.digit_min_confidence if settings else 65 }}"></div>
           <div class="form-group"><label class="form-label">Minimum Expected Profit ($)</label><input class="input" type="number" min="0" step="0.01" name="min_expected_profit" value="{{ settings.min_expected_profit if settings else 1.00 }}"></div>
         </div>
-        <div class="note">Digit aggressive risk mode uses up to $2.00 stake per contract when DIGIT MINIMUM LOT ONLY is OFF. The $2.00 amount is the maximum contract stake/exposure; it is not a guaranteed separate stop-loss order.</div>
-        <div class="note">MAGNET PROFIT PROTECTION is dollar-based for Digit: Stage 1 activates at $5 peak profit and Stage 2 activates at $10 peak profit, with the protection floor moving only upward.</div>
+        <div class="note">When the filter is ON, the Digit bot skips any contract whose quoted maximum profit is below this amount. It never increases the stake to reach the threshold.</div>
         <div class="note">ABC entries now require 1D + 4H + 1H direction agreement, a confirmed 15M ABC structure, clean price action, the 2% maximum risk cap, and the ABC minimum-profit filter when enabled. If any check fails, the bot waits.</div>
         <div class="note">The scanner continuously reads incoming ticks for every selected market and builds a rolling last-digit distribution.</div>
       </section>
@@ -313,6 +313,52 @@ a{text-decoration:none;color:inherit}
     </section>
   </form>
 
+
+  <section class="card page-section" data-page="ai" id="ai">
+    <div class="card-title">AI SCAN / AI TRADING</div>
+    <div class="subnav-note">Independent and optional. This section does not change ABC, ABC Candle Protection, Magnet Profit Protection, Digit, or any existing strategy. AI Scan analyzes first; it never trades merely because Scan was pressed.</div>
+
+    <div class="card" style="margin-top:16px;background:#091525">
+      <div class="card-title">AI OBJECTIVE â RISK $2 â TARGET $10</div>
+      <div class="ai-settings-grid">
+        <div><label class="form-label">AI TRADING</label><label class="switch"><input id="aiEnabled" type="checkbox"><span class="slider"></span></label></div>
+        <div><label class="form-label">AI AUTO TRADE</label><label class="switch"><input id="aiAutoTrade" type="checkbox"><span class="slider"></span></label></div>
+        <div><label class="form-label">MINIMUM AI CONFIDENCE %</label><input id="aiConfidence" class="input" type="number" min="50" max="99" step="1" value="85"></div>
+        <div><label class="form-label">MAX OPEN TRADES</label><input id="aiMaxOpen" class="input" type="number" min="1" max="50" step="1" value="1"></div>
+        <div><label class="form-label">MAX TOTAL ACCOUNT RISK ($)</label><input id="aiMaxTotalRisk" class="input" type="number" min="0.01" step="0.01" value="2"></div>
+        <div><label class="form-label">RISK PER TRADE ($)</label><input id="aiRiskPerTrade" class="input" type="number" min="0.01" step="0.01" value="2"></div>
+        <div><label class="form-label">COMPOUNDING</label><label class="switch"><input id="aiCompounding" type="checkbox"><span class="slider"></span></label></div>
+        <div><label class="form-label">STARTING BALANCE</label><input id="aiStartingBalance" class="input" type="number" min="0.01" step="0.01" value="100"></div>
+        <div><label class="form-label">GOAL BALANCE</label><input id="aiGoalBalance" class="input" type="number" min="0.01" step="0.01" value="200"></div>
+        <div><label class="form-label">STOP WHEN GOAL REACHED</label><label class="switch"><input id="aiStopGoal" type="checkbox" checked><span class="slider"></span></label></div>
+        <div><label class="form-label">MAX DAILY LOSS ($)</label><input id="aiMaxDailyLoss" class="input" type="number" min="0" step="0.01" value="10"></div>
+        <div><label class="form-label">TARGET PROFIT ($)</label><input id="aiTarget" class="input" type="number" min="0.01" step="0.01" value="10"></div>
+        <div><label class="form-label">STOP LOSS ($)</label><input id="aiStop" class="input" type="number" min="0.01" step="0.01" value="2"></div>
+        <div><label class="form-label">PROTECT AT 25% â LOCK ($)</label><input id="aiProtect25" class="input" type="number" min="0" step="0.01" value="0"></div>
+        <div><label class="form-label">PROTECT AT 50% â LOCK ($)</label><input id="aiProtect50" class="input" type="number" min="0" step="0.01" value="2"></div>
+        <div><label class="form-label">PROTECT AT 75% â LOCK ($)</label><input id="aiProtect75" class="input" type="number" min="0" step="0.01" value="5"></div>
+      </div>
+      <div class="ai-note" style="margin-top:12px">The confidence number is a model score, not a guaranteed probability or win rate. A setup must also pass the market-quality, multi-timeframe, target-room, risk, and out-of-sample validation gates.</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;background:#091525">
+      <div class="card-title">INDIVIDUAL VOLATILITY SETTINGS</div>
+      <div class="ai-toolbar" style="margin-bottom:12px">
+        <button type="button" class="btn blue" onclick="aiScanAll()">SCAN ALL</button>
+        <button type="button" class="btn green" onclick="aiSaveAll()">SAVE ALL</button>
+        <button type="button" class="btn green" onclick="aiStart()">RUN AI TRADER</button>
+        <button type="button" class="btn red" onclick="aiStop()">STOP AI TRADER</button>
+      </div>
+      <div id="aiRows" class="ai-grid"></div>
+      <div id="aiMessage" class="statusline">AI scanner is waiting.</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;background:#091525">
+      <div class="card-title">AI SCAN RESULTS</div>
+      <div id="aiResults" class="ai-grid"><div class="empty">Press an AI SCAN button or SCAN ALL.</div></div>
+    </div>
+  </section>
+
   <section class="grid page-section" data-page="transactions" id="transactions">
     <div class="card">
       <div class="card-title">OPEN POSITIONS</div>
@@ -337,6 +383,7 @@ const pageDescriptions={
   dashboard:['Dashboard','Account overview, live bot status, and active profit protection.'],
   abc:['ABC Trader','ABC strategies, market selection, and automated setup controls.'],
   digit:['Digit Trader','Live digit scanning, Over/Under signals, and reference-bot behavior.'],
+  ai:['AI Scan / AI Trading','Independent multi-timeframe market scanner and optional MT5 AI execution.'],
   transactions:['Transactions','Open positions, completed trades, P/L, and bot activity.'],
   settings:['Settings','Risk, stake, market, and Magnet protection configuration.']
 };
@@ -377,6 +424,34 @@ async function botAction(url){
     await refresh();
   }catch(e){message.textContent='Unable to contact the trading service.';}
 }
+
+function aiEsc(v){return String(v==null?'':v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function aiRowHtml(m,settings){
+  const lots=(settings.ai_lot_sizes||{})[m]??0.10;
+  const enabled=(settings.ai_markets||[]).includes(m);
+  return `<div class="ai-row" data-ai-market="${aiEsc(m)}">
+    <div class="ai-row-head">
+      <div><div class="ai-table-label">Volatility</div><strong>${aiEsc(m.replace('Volatility ','V').replace(' Index',''))}</strong></div>
+      <div><div class="ai-table-label">Lot Size</div><input class="input ai-lot" type="number" min="0.00001" step="0.01" value="${Number(lots).toFixed(4)}"></div>
+      <div><div class="ai-table-label">Enabled</div><label class="switch"><input class="ai-enabled" type="checkbox" ${enabled?'checked':''}><span class="slider"></span></label></div>
+      <div><div class="ai-table-label">AI Scan</div><button type="button" class="btn blue small" onclick="aiScan('${aiEsc(m)}')">AI SCAN</button></div>
+      <div><div class="ai-table-label">Save</div><button type="button" class="btn green small" onclick="aiSaveMarket('${aiEsc(m)}')">SAVE</button></div>
+    </div></div>`;
+}
+async function aiLoadSettings(){
+  try{const r=await fetch('/api/ai/settings',{cache:'no-store'});const x=await r.json();if(!x.ok)return;const s=x.settings||{};
+    document.getElementById('aiEnabled').checked=!!s.ai_enabled;document.getElementById('aiAutoTrade').checked=!!s.ai_auto_trade;document.getElementById('aiConfidence').value=s.ai_min_confidence??85;document.getElementById('aiMaxOpen').value=s.ai_max_open_trades??1;document.getElementById('aiMaxTotalRisk').value=s.ai_max_total_risk??2;document.getElementById('aiRiskPerTrade').value=s.ai_risk_per_trade??2;document.getElementById('aiCompounding').checked=!!s.ai_compounding;document.getElementById('aiStartingBalance').value=s.ai_starting_balance??100;document.getElementById('aiGoalBalance').value=s.ai_goal_balance??200;document.getElementById('aiStopGoal').checked=s.ai_stop_at_goal!==0;document.getElementById('aiMaxDailyLoss').value=s.ai_max_daily_loss??10;document.getElementById('aiTarget').value=s.ai_target_profit??10;document.getElementById('aiStop').value=s.ai_stop_loss??2;document.getElementById('aiProtect25').value=s.ai_protect_25??0;document.getElementById('aiProtect50').value=s.ai_protect_50??2;document.getElementById('aiProtect75').value=s.ai_protect_75??5;
+    document.getElementById('aiRows').innerHTML=(x.markets||[]).map(m=>aiRowHtml(m,s)).join('');
+  }catch(e){document.getElementById('aiMessage').textContent='Unable to load AI settings.';}
+}
+function aiCollect(){return {ai_enabled:document.getElementById('aiEnabled').checked,ai_auto_trade:document.getElementById('aiAutoTrade').checked,ai_min_confidence:Number(document.getElementById('aiConfidence').value),ai_max_open_trades:Number(document.getElementById('aiMaxOpen').value),ai_max_total_risk:Number(document.getElementById('aiMaxTotalRisk').value),ai_risk_per_trade:Number(document.getElementById('aiRiskPerTrade').value),ai_compounding:document.getElementById('aiCompounding').checked,ai_starting_balance:Number(document.getElementById('aiStartingBalance').value),ai_goal_balance:Number(document.getElementById('aiGoalBalance').value),ai_stop_at_goal:document.getElementById('aiStopGoal').checked,ai_max_daily_loss:Number(document.getElementById('aiMaxDailyLoss').value),ai_target_profit:Number(document.getElementById('aiTarget').value),ai_stop_loss:Number(document.getElementById('aiStop').value),ai_protect_25:Number(document.getElementById('aiProtect25').value),ai_protect_50:Number(document.getElementById('aiProtect50').value),ai_protect_75:Number(document.getElementById('aiProtect75').value)};}
+async function aiSaveMarket(m){const row=document.querySelector(`[data-ai-market="${CSS.escape(m)}"]`);if(!row)return;const r=await fetch('/api/ai/settings/market',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:m,lot_size:Number(row.querySelector('.ai-lot').value),enabled:row.querySelector('.ai-enabled').checked})});const x=await r.json();document.getElementById('aiMessage').textContent=x.message||x.error||'AI market settings saved.';}
+async function aiSaveAll(){const s=aiCollect();s.ai_markets=[];s.ai_lot_sizes={};document.querySelectorAll('[data-ai-market]').forEach(row=>{const m=row.getAttribute('data-ai-market');if(row.querySelector('.ai-enabled').checked)s.ai_markets.push(m);s.ai_lot_sizes[m]=Number(row.querySelector('.ai-lot').value);});const r=await fetch('/api/ai/settings/all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(s)});const x=await r.json();document.getElementById('aiMessage').textContent=x.message||x.error||'AI settings saved.';}
+async function aiScan(m){document.getElementById('aiMessage').textContent=`Scanning ${m} only...`;const r=await fetch('/api/ai/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:m})});const x=await r.json();if(x.result)renderAiResults({[m]:x.result});document.getElementById('aiMessage').textContent=x.message||x.error||'AI scan complete.';}
+async function aiScanAll(){document.getElementById('aiMessage').textContent='Scanning all enabled volatility indices...';const r=await fetch('/api/ai/scan-all',{method:'POST',headers:{'Content-Type':'application/json'}});const x=await r.json();if(x.results)renderAiResults(x.results);document.getElementById('aiMessage').textContent=x.message||x.error||'AI Scan All complete.';}
+async function aiStart(){await aiSaveAll();const r=await fetch('/api/ai/start',{method:'POST'});const x=await r.json();document.getElementById('aiMessage').textContent=x.message||x.error||'AI trader started.';await refresh();}
+async function aiStop(){const r=await fetch('/api/ai/stop',{method:'POST'});const x=await r.json();document.getElementById('aiMessage').textContent=x.message||x.error||'AI trader stopped.';await refresh();}
+function renderAiResults(results){const box=document.getElementById('aiResults');const entries=Object.entries(results||{});if(!entries.length){box.innerHTML='<div class="empty">No AI scan results yet.</div>';return;}box.innerHTML=entries.map(([m,a])=>{const ok=a.status==='QUALIFIED';const oos=a.oos_validation||{};return `<div class="ai-row"><div class="scanner-head"><div><div class="scanner-name">${aiEsc(m.replace('Volatility ','V').replace(' Index',''))} â AI SCAN</div><div class="muted">${aiEsc(a.symbol||'')}</div></div><div class="ai-status ${ok?'ai-qualified':'ai-no-trade'}">STATUS: ${aiEsc(a.status||'NO TRADE')}</div></div><div class="ai-result-grid"><div class="ai-mini"><small>1D</small><b>${aiEsc(a.htf_1d||'â')}</b></div><div class="ai-mini"><small>4H</small><b>${aiEsc(a.htf_4h||'â')}</b></div><div class="ai-mini"><small>1H</small><b>${aiEsc(a.htf_1h||'â')}</b></div><div class="ai-mini"><small>15M</small><b>${aiEsc(a.tf_15m||'â')}</b></div><div class="ai-mini"><small>DIRECTION</small><b>${aiEsc(a.direction||'â')}</b></div><div class="ai-mini"><small>MARKET QUALITY</small><b>${aiEsc(a.market_quality||'â')}</b></div><div class="ai-mini"><small>VOLATILITY</small><b>${aiEsc(a.volatility||'â')}</b></div><div class="ai-mini"><small>MOMENTUM</small><b>${aiEsc(a.momentum||'â')}</b></div><div class="ai-mini"><small>STRUCTURE</small><b>${aiEsc(a.structure||'â')}</b></div><div class="ai-mini"><small>PULLBACK / RETEST</small><b>${aiEsc(a.pullback||'â')}</b></div><div class="ai-mini"><small>ROOM TO TP</small><b>${aiEsc(a.room_to_tp||'â')}</b></div><div class="ai-mini"><small>RISK</small><b>${a.actual_risk!=null?'$'+Number(a.actual_risk).toFixed(2):'$'+Number(a.risk_target||2).toFixed(2)}</b></div><div class="ai-mini"><small>TARGET</small><b>$${Number(a.actual_target??a.target_profit??10).toFixed(2)}</b></div><div class="ai-mini"><small>RISK / REWARD</small><b>1:5</b></div><div class="ai-mini"><small>AI CONFIDENCE</small><b>${a.confidence!=null?Number(a.confidence).toFixed(1)+'%':'â'}</b></div><div class="ai-mini"><small>OOS VALIDATION</small><b>${oos.validated?(Number(oos.win_rate).toFixed(1)+'% / '+oos.samples+' samples'):'NOT VALIDATED'}</b></div><div class="ai-mini"><small>TRADE ACTION</small><b>${aiEsc(a.trade_action||'WAIT')}</b></div></div><div class="ai-status ${ok?'ai-qualified':'ai-no-trade'}">${aiEsc(a.reason||'Waiting.')}</div></div>`;}).join('');}
 function money(v){return '$'+Number(v||0).toFixed(2)}
 async function refresh(){
   try{
@@ -395,7 +470,7 @@ async function refresh(){
     const running=!!x.running;
     document.getElementById('botPill').textContent=running?'BOT RUNNING':'BOT STOPPED';
     document.getElementById('botStatus').textContent=running?(x.paused?'PAUSED':'RUNNING'):'STOPPED';
-    document.getElementById('message').textContent=(x.account_source==='MT5' ? 'MT5 '+(x.mt5_connected?'CONNECTED':'CONNECTING')+' â¢ ' : '')+(x.message||'Ready.');
+    document.getElementById('message').textContent=x.message||'Ready.';
     const p=document.getElementById('positions');
     if(!x.positions||!x.positions.length){p.innerHTML='<tr><td colspan="9" class="empty">No open trades</td></tr>';}
     else{p.innerHTML=x.positions.map(a=>`<tr><td>${a.symbol||''}</td><td><small>${a.contract_id||'â'}</small></td><td>${a.direction||a.contract_type||''}</td><td>${a.entry??''}</td><td>${a.current??a.current_spot??''}</td><td class="${Number(a.profit||0)>=0?'ok':'bad'}">${money(a.profit)}</td><td>Stage ${a.magnet_stage||0}</td><td class="ok">${money(a.locked_profit)}</td><td>${a.status||'OPEN'}</td></tr>`).join('');}
@@ -416,10 +491,10 @@ async function refresh(){
     const abcScannerStatus=document.getElementById('abcScannerStatus');
     const scanMap=x.market_scan||{};
     const scanEntries=Object.entries(scanMap);
-    if(abcScannerStatus) abcScannerStatus.textContent = (x.engine==='ABC'||x.engine==='ABCDE_MT5') ? (x.message||'ABC live scanner running.') : 'Select ABC Pattern and run the bot to activate the ABC scanner.';
+    if(abcScannerStatus) abcScannerStatus.textContent = x.engine==='ABC' ? (x.message||'ABC live scanner running.') : 'Select ABC Pattern and run the bot to activate the ABC scanner.';
     if(abcScanner){
       if(!scanEntries.length){
-        abcScanner.innerHTML='<div class="empty">'+(x.engine==='ABCDE_MT5' ? 'MT5 scanner connected â waiting for market data.' : 'No ABC market data yet.')+'</div>';
+        abcScanner.innerHTML='<div class="empty">No ABC market data yet.</div>';
       }else{
         abcScanner.innerHTML=scanEntries.map(([name,a])=>{
           const status=String(a.status||'SCANNING');
@@ -452,6 +527,10 @@ async function refresh(){
         </div>`;
       }).join('');
     }
+    const ai=x.ai||{};
+    const aiMsg=document.getElementById('aiMessage');
+    if(aiMsg) aiMsg.textContent=ai.message||'AI scanner is waiting.';
+    if(ai.scan && Object.keys(ai.scan).length) renderAiResults(ai.scan);
     const recovery=x.recovery||{};
     const recoveryDue=Number(recovery.amount_due||0);
     const recoveryDueEl=document.getElementById('recoveryDue');
@@ -469,6 +548,7 @@ async function refresh(){
   }catch(e){document.getElementById('message').textContent='Unable to refresh bot status.';}
 }
 updateConnectButton();
+aiLoadSettings();
 const initialPage=(location.hash||'#dashboard').slice(1);
 showPage(initialPage,false);
 refresh(); setInterval(refresh,3000);
