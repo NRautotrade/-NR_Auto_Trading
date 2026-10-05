@@ -46,6 +46,7 @@ a{text-decoration:none;color:inherit}
 .controls{display:flex;gap:12px;flex-wrap:wrap}.statusline{margin-top:14px;background:#071321;border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--muted);font-size:13px}
 .tablewrap{overflow:auto}.trade-history-scroll{max-height:520px;overflow-y:auto;overflow-x:auto}.trade-history-scroll table{margin:0}.trade-history-scroll thead th{position:sticky;top:0;background:var(--card);z-index:2}table{width:100%;border-collapse:collapse;min-width:650px}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--border);font-size:13px}th{color:var(--muted);font-size:11px}.empty{text-align:center;color:var(--muted);padding:20px}.ok{color:#4ee889}.bad{color:#ff7474}
 .hidden{display:none!important}
+.ai-market-grid{display:grid;grid-template-columns:1fr;gap:12px}.ai-market-row{display:grid;grid-template-columns:1.2fr .8fr .8fr auto;gap:10px;align-items:center;background:#071321;border:1px solid var(--border);border-radius:10px;padding:14px}.ai-market-name{font-weight:800}.ai-result{background:#071321;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:12px}.ai-result-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}.ai-chip{background:#0b1a2b;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px}.ai-status-qualified{color:#4ee889;font-weight:800}.ai-status-no{color:#ff7474;font-weight:800}@media(max-width:900px){.ai-market-row{grid-template-columns:1fr 1fr}.ai-result-grid{grid-template-columns:1fr 1fr}}
 .scanner-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.scanner-market{background:#071321;border:1px solid var(--border);border-radius:10px;padding:16px}.scanner-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.scanner-name{font-weight:800}.scanner-quote{font-size:22px;font-weight:800}.digit-row{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;margin-top:12px}.digit-box{border:1px solid var(--border);border-radius:7px;text-align:center;padding:7px 2px;background:#0b1a2b;font-size:11px}.digit-box strong{display:block;font-size:14px}.digit-box span{color:var(--muted);font-size:10px}.signal-box{margin-top:12px;border-radius:8px;padding:10px;background:#0b1a2b;border:1px solid var(--border);font-size:12px}.signal-live{color:#4ee889}.magnet-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stage{background:#071321;border:1px solid var(--border);border-radius:8px;padding:10px}.stage small{display:block;color:var(--muted);font-size:10px}.stage input{margin-top:6px;width:100%;min-height:40px}
 .page-section{display:none}.page-section.page-visible{display:block}.page-header{margin:0 0 24px}.page-header h1{margin:0 0 8px;font-size:34px}.page-header p{margin:0;color:var(--muted);font-size:16px}.magnet-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.magnet-stat{background:#071321;border:1px solid var(--border);border-radius:10px;padding:16px}.magnet-stat small{display:block;color:var(--muted);font-size:11px;font-weight:800}.magnet-stat strong{display:block;font-size:22px;margin-top:7px}.stage-track{display:flex;gap:7px;margin-top:14px}.stage-dot{flex:1;height:8px;border-radius:99px;background:#1a2a40;border:1px solid #2b4261}.stage-dot.active{background:#21c66b;border-color:#21c66b}.subnav-note{font-size:13px;color:var(--muted);margin-top:10px}.mobile-scroll{overflow-x:auto}
 @media(max-width:900px){.scanner-grid{grid-template-columns:1fr}.magnet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -53,10 +54,6 @@ a{text-decoration:none;color:inherit}
 @media(max-width:520px){.brand{font-size:24px}.subtitle{font-size:13px}.stats{grid-template-columns:1fr 1fr}.card{padding:20px}.account-grid{gap:16px}.field-label{font-size:14px}}
 
 .feature-switches{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.feature-switch{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#071321;border:1px solid var(--border);border-radius:10px;padding:14px}.feature-switch strong{display:block}.feature-switch small{display:block;color:var(--muted);margin-top:4px;font-size:11px;line-height:1.35}.switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;cursor:pointer;inset:0;background:#27384e;border:1px solid var(--border);border-radius:30px;transition:.2s}.slider:before{content:"";position:absolute;height:22px;width:22px;left:3px;top:3px;background:#c5d2e5;border-radius:50%;transition:.2s}.switch input:checked+.slider{background:#1cab55;border-color:#2bd56e}.switch input:checked+.slider:before{transform:translateX(22px);background:#fff}
-
-.ai-grid{display:grid;grid-template-columns:1fr;gap:12px}.ai-row{background:#071321;border:1px solid var(--border);border-radius:10px;padding:14px}.ai-row-head{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:10px;align-items:end}.ai-result-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}.ai-mini{background:#0b1a2b;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px}.ai-mini small{display:block;color:var(--muted);font-size:10px}.ai-status{margin-top:10px;padding:11px;border-radius:8px;border:1px solid var(--border);font-weight:800}.ai-qualified{color:#4ee889;border-color:#1d7a47}.ai-no-trade{color:#ff8b8b;border-color:#6b2c2c}.ai-note{font-size:12px;color:var(--muted);line-height:1.4}.ai-settings-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.ai-toolbar{display:flex;gap:10px;flex-wrap:wrap}.ai-table-label{color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase}
-@media(max-width:900px){.ai-row-head,.ai-settings-grid{grid-template-columns:1fr 1fr}.ai-result-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:520px){.ai-row-head,.ai-settings-grid,.ai-result-grid{grid-template-columns:1fr}}
 
 </style>
 </head>
@@ -81,7 +78,7 @@ a{text-decoration:none;color:inherit}
   <a class="navitem active" data-page-link="dashboard" href="#dashboard">Dashboard</a>
   <a class="navitem" data-page-link="abc" href="#abc">ABC Trader</a>
   <a class="navitem" data-page-link="digit" href="#digit">Digit Trader</a>
-  <a class="navitem" data-page-link="ai" href="#ai">AI Scan / AI Trading</a>
+  <a class="navitem" data-page-link="ai" href="#ai">AI Scan</a>
   <a class="navitem" data-page-link="transactions" href="#transactions">Transactions</a>
   <a class="navitem" data-page-link="settings" href="#settings">Settings</a>
 </nav>
@@ -313,50 +310,39 @@ a{text-decoration:none;color:inherit}
     </section>
   </form>
 
-
   <section class="card page-section" data-page="ai" id="ai">
     <div class="card-title">AI SCAN / AI TRADING</div>
-    <div class="subnav-note">Independent and optional. This section does not change ABC, ABC Candle Protection, Magnet Profit Protection, Digit, or any existing strategy. AI Scan analyzes first; it never trades merely because Scan was pressed.</div>
+    <div class="subnav-note">Independent AI scanner. It does not modify or replace ABC, ABC Candle Protection, Magnet, Digit, or any existing strategy.</div>
 
-    <div class="card" style="margin-top:16px;background:#091525">
-      <div class="card-title">AI OBJECTIVE â RISK $2 â TARGET $10</div>
-      <div class="ai-settings-grid">
-        <div><label class="form-label">AI TRADING</label><label class="switch"><input id="aiEnabled" type="checkbox"><span class="slider"></span></label></div>
-        <div><label class="form-label">AI AUTO TRADE</label><label class="switch"><input id="aiAutoTrade" type="checkbox"><span class="slider"></span></label></div>
-        <div><label class="form-label">MINIMUM AI CONFIDENCE %</label><input id="aiConfidence" class="input" type="number" min="50" max="99" step="1" value="85"></div>
-        <div><label class="form-label">MAX OPEN TRADES</label><input id="aiMaxOpen" class="input" type="number" min="1" max="50" step="1" value="1"></div>
-        <div><label class="form-label">MAX TOTAL ACCOUNT RISK ($)</label><input id="aiMaxTotalRisk" class="input" type="number" min="0.01" step="0.01" value="2"></div>
-        <div><label class="form-label">RISK PER TRADE ($)</label><input id="aiRiskPerTrade" class="input" type="number" min="0.01" step="0.01" value="2"></div>
-        <div><label class="form-label">COMPOUNDING</label><label class="switch"><input id="aiCompounding" type="checkbox"><span class="slider"></span></label></div>
-        <div><label class="form-label">STARTING BALANCE</label><input id="aiStartingBalance" class="input" type="number" min="0.01" step="0.01" value="100"></div>
-        <div><label class="form-label">GOAL BALANCE</label><input id="aiGoalBalance" class="input" type="number" min="0.01" step="0.01" value="200"></div>
-        <div><label class="form-label">STOP WHEN GOAL REACHED</label><label class="switch"><input id="aiStopGoal" type="checkbox" checked><span class="slider"></span></label></div>
-        <div><label class="form-label">MAX DAILY LOSS ($)</label><input id="aiMaxDailyLoss" class="input" type="number" min="0" step="0.01" value="10"></div>
-        <div><label class="form-label">TARGET PROFIT ($)</label><input id="aiTarget" class="input" type="number" min="0.01" step="0.01" value="10"></div>
-        <div><label class="form-label">STOP LOSS ($)</label><input id="aiStop" class="input" type="number" min="0.01" step="0.01" value="2"></div>
-        <div><label class="form-label">PROTECT AT 25% â LOCK ($)</label><input id="aiProtect25" class="input" type="number" min="0" step="0.01" value="0"></div>
-        <div><label class="form-label">PROTECT AT 50% â LOCK ($)</label><input id="aiProtect50" class="input" type="number" min="0" step="0.01" value="2"></div>
-        <div><label class="form-label">PROTECT AT 75% â LOCK ($)</label><input id="aiProtect75" class="input" type="number" min="0" step="0.01" value="5"></div>
-      </div>
-      <div class="ai-note" style="margin-top:12px">The confidence number is a model score, not a guaranteed probability or win rate. A setup must also pass the market-quality, multi-timeframe, target-room, risk, and out-of-sample validation gates.</div>
+    <div class="feature-switch" style="margin-top:14px">
+      <div><strong>AI SCAN / AI TRADING</strong><small>Optional feature. Scan can analyze markets without opening a trade.</small></div>
+      <label class="switch"><input id="aiEnabled" type="checkbox"><span class="slider"></span></label>
     </div>
 
-    <div class="card" style="margin-top:16px;background:#091525">
-      <div class="card-title">INDIVIDUAL VOLATILITY SETTINGS</div>
-      <div class="ai-toolbar" style="margin-bottom:12px">
-        <button type="button" class="btn blue" onclick="aiScanAll()">SCAN ALL</button>
-        <button type="button" class="btn green" onclick="aiSaveAll()">SAVE ALL</button>
-        <button type="button" class="btn green" onclick="aiStart()">RUN AI TRADER</button>
-        <button type="button" class="btn red" onclick="aiStop()">STOP AI TRADER</button>
-      </div>
-      <div id="aiRows" class="ai-grid"></div>
-      <div id="aiMessage" class="statusline">AI scanner is waiting.</div>
+    <div class="form-row" style="margin-top:14px">
+      <div class="form-group"><label class="form-label">Minimum AI Confidence (%)</label><input id="aiConfidence" class="input" type="number" min="50" max="99" step="1" value="85"></div>
+      <div class="form-group"><label class="form-label">MAX OPEN TRADES</label><input id="aiMaxOpen" class="input" type="number" min="1" max="50" value="1"></div>
+      <div class="form-group"><label class="form-label">MAX TOTAL ACCOUNT RISK ($)</label><input id="aiMaxRisk" class="input" type="number" min="0" step="0.01" value="2"></div>
+      <div class="form-group"><label class="form-label">RISK PER TRADE ($)</label><input id="aiRisk" class="input" type="number" min="0" step="0.01" value="2"></div>
+      <div class="form-group"><label class="form-label">STARTING BALANCE ($)</label><input id="aiStartBalance" class="input" type="number" min="0" step="0.01" value="100"></div>
+      <div class="form-group"><label class="form-label">GOAL BALANCE ($)</label><input id="aiGoalBalance" class="input" type="number" min="0" step="0.01" value="200"></div>
+      <div class="form-group"><label class="form-label">MAX DAILY LOSS ($)</label><input id="aiDailyLoss" class="input" type="number" min="0" step="0.01" value="2"></div>
     </div>
 
-    <div class="card" style="margin-top:16px;background:#091525">
-      <div class="card-title">AI SCAN RESULTS</div>
-      <div id="aiResults" class="ai-grid"><div class="empty">Press an AI SCAN button or SCAN ALL.</div></div>
+    <div class="feature-switches" style="margin-top:14px">
+      <div class="feature-switch"><div><strong>COMPOUNDING</strong><small>Scale the configured dollar risk from account balance when enabled.</small></div><label class="switch"><input id="aiCompound" type="checkbox"><span class="slider"></span></label></div>
+      <div class="feature-switch"><div><strong>STOP AT GOAL</strong><small>Stop AI execution when the configured goal balance is reached.</small></div><label class="switch"><input id="aiStopGoal" type="checkbox" checked><span class="slider"></span></label></div>
     </div>
+
+    <div class="card-title" style="margin-top:24px">INDIVIDUAL VOLATILITY SETTINGS</div>
+    <div id="aiMarkets" class="ai-market-grid"></div>
+    <div class="controls" style="margin-top:14px">
+      <button type="button" class="btn blue" onclick="aiScanAll()">SCAN ALL</button>
+      <button type="button" class="btn green" onclick="saveAISettings()">SAVE ALL</button>
+    </div>
+    <div id="aiMessage" class="statusline">AI Scan is waiting.</div>
+    <div id="aiResults"></div>
+    <div class="notice" style="margin-top:14px">Safety note: the current bot uses fixed-duration Deriv contracts, not CFD-style stop-loss orders. Therefore this independent AI scanner can qualify/analyze setups, but it will not place an AI trade until a compatible $2-risk / $10-target execution adapter with real SL/TP and out-of-sample validation is implemented.</div>
   </section>
 
   <section class="grid page-section" data-page="transactions" id="transactions">
@@ -383,7 +369,7 @@ const pageDescriptions={
   dashboard:['Dashboard','Account overview, live bot status, and active profit protection.'],
   abc:['ABC Trader','ABC strategies, market selection, and automated setup controls.'],
   digit:['Digit Trader','Live digit scanning, Over/Under signals, and reference-bot behavior.'],
-  ai:['AI Scan / AI Trading','Independent multi-timeframe market scanner and optional MT5 AI execution.'],
+  ai:['AI Scan','Independent multi-timeframe market scanner and optional AI-trading controls.'],
   transactions:['Transactions','Open positions, completed trades, P/L, and bot activity.'],
   settings:['Settings','Risk, stake, market, and Magnet protection configuration.']
 };
@@ -409,6 +395,27 @@ function connectSelected(){
   }
   window.location.href='/deriv/connect?mode='+encodeURIComponent(mode);
 }
+const AI_MARKETS=['Volatility 5 Index','Volatility 10 Index','Volatility 25 Index','Volatility 30 Index','Volatility 50 Index','Volatility 75 Index','Volatility 100 Index','Step Index'];
+function aiMarketLabel(m){return m.replace('Volatility ','V').replace(' Index','');}
+function renderAIMarkets(settings){
+  const box=document.getElementById('aiMarkets'); if(!box)return;
+  const markets=settings?.markets||{};
+  box.innerHTML=AI_MARKETS.map(m=>{const x=markets[m]||{}; return `<div class="ai-market-row"><div class="ai-market-name">${aiMarketLabel(m)}</div><label class="check" style="margin:0"><input type="checkbox" data-ai-enabled="${m}" ${x.enabled?'checked':''}> ENABLED</label><input class="input" data-ai-lot="${m}" type="number" min="0.01" step="0.01" value="${Number(x.lot_size||0.01).toFixed(2)}" placeholder="Lot Size"><button type="button" class="btn small blue" onclick="aiScanMarket('${m.replace(/'/g,"\\'")}')">AI SCAN</button><button type="button" class="btn small" onclick="saveAISingle('${m.replace(/'/g,"\\'")}')">SAVE</button></div>`}).join('');
+}
+async function loadAISettings(){
+  try{const r=await fetch('/api/ai/settings',{cache:'no-store'});const x=await r.json();if(!x.ok)return;const s=x.settings||{};
+    document.getElementById('aiEnabled').checked=!!s.enabled;document.getElementById('aiConfidence').value=s.min_confidence??85;document.getElementById('aiMaxOpen').value=s.max_open_trades??1;document.getElementById('aiMaxRisk').value=s.max_total_risk??2;document.getElementById('aiRisk').value=s.risk_per_trade??2;document.getElementById('aiStartBalance').value=s.starting_balance??100;document.getElementById('aiGoalBalance').value=s.goal_balance??200;document.getElementById('aiDailyLoss').value=s.max_daily_loss??2;document.getElementById('aiCompound').checked=!!s.compound_enabled;document.getElementById('aiStopGoal').checked=s.stop_at_goal!==false;renderAIMarkets(s);
+  }catch(e){document.getElementById('aiMessage').textContent='Unable to load AI settings.';}
+}
+function collectAISettings(){
+  const markets={};AI_MARKETS.forEach(m=>{const en=document.querySelector(`[data-ai-enabled="${m}"]`);const lot=document.querySelector(`[data-ai-lot="${m}"]`);markets[m]={enabled:!!en?.checked,lot_size:Number(lot?.value||0.01)}});
+  return {enabled:document.getElementById('aiEnabled').checked,min_confidence:Number(document.getElementById('aiConfidence').value||85),max_open_trades:Number(document.getElementById('aiMaxOpen').value||1),max_total_risk:Number(document.getElementById('aiMaxRisk').value||2),risk_per_trade:Number(document.getElementById('aiRisk').value||2),starting_balance:Number(document.getElementById('aiStartBalance').value||100),goal_balance:Number(document.getElementById('aiGoalBalance').value||200),compound_enabled:document.getElementById('aiCompound').checked,max_daily_loss:Number(document.getElementById('aiDailyLoss').value||2),stop_at_goal:document.getElementById('aiStopGoal').checked,markets};
+}
+async function saveAISettings(){const msg=document.getElementById('aiMessage');msg.textContent='Saving AI settings...';try{const r=await fetch('/api/ai/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(collectAISettings())});const x=await r.json();msg.textContent=x.ok?'AI settings saved.':(x.error||'Unable to save AI settings.');}catch(e){msg.textContent='Unable to save AI settings.';}}
+async function saveAISingle(market){await saveAISettings();document.getElementById('aiMessage').textContent=aiMarketLabel(market)+' settings saved.';}
+function renderAIResults(results){const box=document.getElementById('aiResults');if(!box)return;box.innerHTML=(results||[]).map(a=>`<div class="ai-result"><div class="scanner-head"><div><div class="scanner-name">${aiMarketLabel(a.market||'Market')} â AI SCAN</div><div class="muted">${a.symbol||''}</div></div><div class="${a.status==='QUALIFIED'?'ai-status-qualified':'ai-status-no'}">${a.status||'NO TRADE'}</div></div><div class="ai-result-grid"><div class="ai-chip">1D: <b>${a.htf_1d||'â'}</b></div><div class="ai-chip">4H: <b>${a.htf_4h||'â'}</b></div><div class="ai-chip">1H: <b>${a.htf_1h||'â'}</b></div><div class="ai-chip">15M: <b>${a.setup||'â'}</b></div><div class="ai-chip">Direction: <b>${a.direction||'â'}</b></div><div class="ai-chip">Market Quality: <b>${a.market_quality||'â'}</b></div><div class="ai-chip">Momentum: <b>${a.momentum||'â'}</b></div><div class="ai-chip">Room to TP: <b>${a.room_to_tp||'â'}</b></div><div class="ai-chip">Risk: <b>$${Number(a.risk||2).toFixed(2)}</b></div><div class="ai-chip">Target: <b>$${Number(a.target||10).toFixed(2)}</b></div><div class="ai-chip">Risk/Reward: <b>${a.risk_reward||'1:5'}</b></div><div class="ai-chip">AI Confidence: <b>${Number(a.confidence||0).toFixed(1)}%</b></div></div><div class="statusline">${a.reason||''}</div></div>`).join('');}
+async function aiScanMarket(market){document.getElementById('aiMessage').textContent='Scanning '+aiMarketLabel(market)+'...';try{const r=await fetch('/api/ai/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market})});const x=await r.json();if(!x.ok){document.getElementById('aiMessage').textContent=x.error||'AI scan failed.';return;}renderAIResults(x.results||[]);document.getElementById('aiMessage').textContent=x.message||'AI scan complete.';}catch(e){document.getElementById('aiMessage').textContent='Unable to contact the AI scan service.';}}
+async function aiScanAll(){await saveAISettings();document.getElementById('aiMessage').textContent='Scanning all enabled volatility indices...';try{const r=await fetch('/api/ai/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});const x=await r.json();if(!x.ok){document.getElementById('aiMessage').textContent=x.error||'AI scan failed.';return;}renderAIResults(x.results||[]);document.getElementById('aiMessage').textContent=x.message||'AI scan complete.';}catch(e){document.getElementById('aiMessage').textContent='Unable to contact the AI scan service.';}}
 function updateConnectButton(){
   const mode=document.getElementById('accountMode').value;
   const btn=document.getElementById('selectedConnect');
@@ -424,34 +431,6 @@ async function botAction(url){
     await refresh();
   }catch(e){message.textContent='Unable to contact the trading service.';}
 }
-
-function aiEsc(v){return String(v==null?'':v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function aiRowHtml(m,settings){
-  const lots=(settings.ai_lot_sizes||{})[m]??0.10;
-  const enabled=(settings.ai_markets||[]).includes(m);
-  return `<div class="ai-row" data-ai-market="${aiEsc(m)}">
-    <div class="ai-row-head">
-      <div><div class="ai-table-label">Volatility</div><strong>${aiEsc(m.replace('Volatility ','V').replace(' Index',''))}</strong></div>
-      <div><div class="ai-table-label">Lot Size</div><input class="input ai-lot" type="number" min="0.00001" step="0.01" value="${Number(lots).toFixed(4)}"></div>
-      <div><div class="ai-table-label">Enabled</div><label class="switch"><input class="ai-enabled" type="checkbox" ${enabled?'checked':''}><span class="slider"></span></label></div>
-      <div><div class="ai-table-label">AI Scan</div><button type="button" class="btn blue small" onclick="aiScan('${aiEsc(m)}')">AI SCAN</button></div>
-      <div><div class="ai-table-label">Save</div><button type="button" class="btn green small" onclick="aiSaveMarket('${aiEsc(m)}')">SAVE</button></div>
-    </div></div>`;
-}
-async function aiLoadSettings(){
-  try{const r=await fetch('/api/ai/settings',{cache:'no-store'});const x=await r.json();if(!x.ok)return;const s=x.settings||{};
-    document.getElementById('aiEnabled').checked=!!s.ai_enabled;document.getElementById('aiAutoTrade').checked=!!s.ai_auto_trade;document.getElementById('aiConfidence').value=s.ai_min_confidence??85;document.getElementById('aiMaxOpen').value=s.ai_max_open_trades??1;document.getElementById('aiMaxTotalRisk').value=s.ai_max_total_risk??2;document.getElementById('aiRiskPerTrade').value=s.ai_risk_per_trade??2;document.getElementById('aiCompounding').checked=!!s.ai_compounding;document.getElementById('aiStartingBalance').value=s.ai_starting_balance??100;document.getElementById('aiGoalBalance').value=s.ai_goal_balance??200;document.getElementById('aiStopGoal').checked=s.ai_stop_at_goal!==0;document.getElementById('aiMaxDailyLoss').value=s.ai_max_daily_loss??10;document.getElementById('aiTarget').value=s.ai_target_profit??10;document.getElementById('aiStop').value=s.ai_stop_loss??2;document.getElementById('aiProtect25').value=s.ai_protect_25??0;document.getElementById('aiProtect50').value=s.ai_protect_50??2;document.getElementById('aiProtect75').value=s.ai_protect_75??5;
-    document.getElementById('aiRows').innerHTML=(x.markets||[]).map(m=>aiRowHtml(m,s)).join('');
-  }catch(e){document.getElementById('aiMessage').textContent='Unable to load AI settings.';}
-}
-function aiCollect(){return {ai_enabled:document.getElementById('aiEnabled').checked,ai_auto_trade:document.getElementById('aiAutoTrade').checked,ai_min_confidence:Number(document.getElementById('aiConfidence').value),ai_max_open_trades:Number(document.getElementById('aiMaxOpen').value),ai_max_total_risk:Number(document.getElementById('aiMaxTotalRisk').value),ai_risk_per_trade:Number(document.getElementById('aiRiskPerTrade').value),ai_compounding:document.getElementById('aiCompounding').checked,ai_starting_balance:Number(document.getElementById('aiStartingBalance').value),ai_goal_balance:Number(document.getElementById('aiGoalBalance').value),ai_stop_at_goal:document.getElementById('aiStopGoal').checked,ai_max_daily_loss:Number(document.getElementById('aiMaxDailyLoss').value),ai_target_profit:Number(document.getElementById('aiTarget').value),ai_stop_loss:Number(document.getElementById('aiStop').value),ai_protect_25:Number(document.getElementById('aiProtect25').value),ai_protect_50:Number(document.getElementById('aiProtect50').value),ai_protect_75:Number(document.getElementById('aiProtect75').value)};}
-async function aiSaveMarket(m){const row=document.querySelector(`[data-ai-market="${CSS.escape(m)}"]`);if(!row)return;const r=await fetch('/api/ai/settings/market',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:m,lot_size:Number(row.querySelector('.ai-lot').value),enabled:row.querySelector('.ai-enabled').checked})});const x=await r.json();document.getElementById('aiMessage').textContent=x.message||x.error||'AI market settings saved.';}
-async function aiSaveAll(){const s=aiCollect();s.ai_markets=[];s.ai_lot_sizes={};document.querySelectorAll('[data-ai-market]').forEach(row=>{const m=row.getAttribute('data-ai-market');if(row.querySelector('.ai-enabled').checked)s.ai_markets.push(m);s.ai_lot_sizes[m]=Number(row.querySelector('.ai-lot').value);});const r=await fetch('/api/ai/settings/all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(s)});const x=await r.json();document.getElementById('aiMessage').textContent=x.message||x.error||'AI settings saved.';}
-async function aiScan(m){document.getElementById('aiMessage').textContent=`Scanning ${m} only...`;const r=await fetch('/api/ai/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:m})});const x=await r.json();if(x.result)renderAiResults({[m]:x.result});document.getElementById('aiMessage').textContent=x.message||x.error||'AI scan complete.';}
-async function aiScanAll(){document.getElementById('aiMessage').textContent='Scanning all enabled volatility indices...';const r=await fetch('/api/ai/scan-all',{method:'POST',headers:{'Content-Type':'application/json'}});const x=await r.json();if(x.results)renderAiResults(x.results);document.getElementById('aiMessage').textContent=x.message||x.error||'AI Scan All complete.';}
-async function aiStart(){await aiSaveAll();const r=await fetch('/api/ai/start',{method:'POST'});const x=await r.json();document.getElementById('aiMessage').textContent=x.message||x.error||'AI trader started.';await refresh();}
-async function aiStop(){const r=await fetch('/api/ai/stop',{method:'POST'});const x=await r.json();document.getElementById('aiMessage').textContent=x.message||x.error||'AI trader stopped.';await refresh();}
-function renderAiResults(results){const box=document.getElementById('aiResults');const entries=Object.entries(results||{});if(!entries.length){box.innerHTML='<div class="empty">No AI scan results yet.</div>';return;}box.innerHTML=entries.map(([m,a])=>{const ok=a.status==='QUALIFIED';const oos=a.oos_validation||{};return `<div class="ai-row"><div class="scanner-head"><div><div class="scanner-name">${aiEsc(m.replace('Volatility ','V').replace(' Index',''))} â AI SCAN</div><div class="muted">${aiEsc(a.symbol||'')}</div></div><div class="ai-status ${ok?'ai-qualified':'ai-no-trade'}">STATUS: ${aiEsc(a.status||'NO TRADE')}</div></div><div class="ai-result-grid"><div class="ai-mini"><small>1D</small><b>${aiEsc(a.htf_1d||'â')}</b></div><div class="ai-mini"><small>4H</small><b>${aiEsc(a.htf_4h||'â')}</b></div><div class="ai-mini"><small>1H</small><b>${aiEsc(a.htf_1h||'â')}</b></div><div class="ai-mini"><small>15M</small><b>${aiEsc(a.tf_15m||'â')}</b></div><div class="ai-mini"><small>DIRECTION</small><b>${aiEsc(a.direction||'â')}</b></div><div class="ai-mini"><small>MARKET QUALITY</small><b>${aiEsc(a.market_quality||'â')}</b></div><div class="ai-mini"><small>VOLATILITY</small><b>${aiEsc(a.volatility||'â')}</b></div><div class="ai-mini"><small>MOMENTUM</small><b>${aiEsc(a.momentum||'â')}</b></div><div class="ai-mini"><small>STRUCTURE</small><b>${aiEsc(a.structure||'â')}</b></div><div class="ai-mini"><small>PULLBACK / RETEST</small><b>${aiEsc(a.pullback||'â')}</b></div><div class="ai-mini"><small>ROOM TO TP</small><b>${aiEsc(a.room_to_tp||'â')}</b></div><div class="ai-mini"><small>RISK</small><b>${a.actual_risk!=null?'$'+Number(a.actual_risk).toFixed(2):'$'+Number(a.risk_target||2).toFixed(2)}</b></div><div class="ai-mini"><small>TARGET</small><b>$${Number(a.actual_target??a.target_profit??10).toFixed(2)}</b></div><div class="ai-mini"><small>RISK / REWARD</small><b>1:5</b></div><div class="ai-mini"><small>AI CONFIDENCE</small><b>${a.confidence!=null?Number(a.confidence).toFixed(1)+'%':'â'}</b></div><div class="ai-mini"><small>OOS VALIDATION</small><b>${oos.validated?(Number(oos.win_rate).toFixed(1)+'% / '+oos.samples+' samples'):'NOT VALIDATED'}</b></div><div class="ai-mini"><small>TRADE ACTION</small><b>${aiEsc(a.trade_action||'WAIT')}</b></div></div><div class="ai-status ${ok?'ai-qualified':'ai-no-trade'}">${aiEsc(a.reason||'Waiting.')}</div></div>`;}).join('');}
 function money(v){return '$'+Number(v||0).toFixed(2)}
 async function refresh(){
   try{
@@ -527,10 +506,6 @@ async function refresh(){
         </div>`;
       }).join('');
     }
-    const ai=x.ai||{};
-    const aiMsg=document.getElementById('aiMessage');
-    if(aiMsg) aiMsg.textContent=ai.message||'AI scanner is waiting.';
-    if(ai.scan && Object.keys(ai.scan).length) renderAiResults(ai.scan);
     const recovery=x.recovery||{};
     const recoveryDue=Number(recovery.amount_due||0);
     const recoveryDueEl=document.getElementById('recoveryDue');
@@ -548,9 +523,9 @@ async function refresh(){
   }catch(e){document.getElementById('message').textContent='Unable to refresh bot status.';}
 }
 updateConnectButton();
-aiLoadSettings();
 const initialPage=(location.hash||'#dashboard').slice(1);
 showPage(initialPage,false);
+loadAISettings();
 refresh(); setInterval(refresh,3000);
 </script>
 </body>
