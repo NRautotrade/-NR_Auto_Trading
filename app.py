@@ -1,4 +1,3 @@
-
 import smtplib
 from email.message import EmailMessage
 import os
@@ -28,24 +27,6 @@ DERIV_REDIRECT_URI = os.getenv(
     "http://localhost:8000/deriv/callback",
 )
 ALLOW_REAL_TRADING = os.getenv("ALLOW_REAL_TRADING", "false").lower() == "true"
-
-# Independent AI Scan / AI Trading bridge settings. These are additive and
-# do not change the existing ABC, Digit, Magnet, or recovery engines.
-MT5_BRIDGE_URL = os.getenv("MT5_BRIDGE_URL", "http://127.0.0.1:8787").rstrip("/")
-MT5_BRIDGE_TOKEN = os.getenv("MT5_BRIDGE_TOKEN", "")
-MT5_AI_MAGIC = int(os.getenv("MT5_AI_MAGIC", "260026"))
-
-AI_MARKETS = [
-    "Volatility 5 Index",
-    "Volatility 10 Index",
-    "Volatility 25 Index",
-    "Volatility 30 Index",
-    "Volatility 50 Index",
-    "Volatility 75 Index",
-    "Volatility 100 Index",
-    "Step Index",
-]
-AI_DEFAULT_LOTS = {m: 0.10 for m in AI_MARKETS}
 
 SMTP_HOST = os.getenv("NR_SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("NR_SMTP_PORT", "587"))
@@ -316,30 +297,43 @@ def init_db():
         if column not in settings_columns:
             conn.execute(f"ALTER TABLE settings ADD COLUMN {column} {definition}")
 
-    # Independent AI Scan / AI Trading settings. Existing settings are untouched.
-    ai_columns = {
-        "ai_enabled": "INTEGER NOT NULL DEFAULT 0",
-        "ai_auto_trade": "INTEGER NOT NULL DEFAULT 0",
-        "ai_min_confidence": "REAL NOT NULL DEFAULT 85",
-        "ai_max_open_trades": "INTEGER NOT NULL DEFAULT 1",
-        "ai_max_total_risk": "REAL NOT NULL DEFAULT 2",
-        "ai_risk_per_trade": "REAL NOT NULL DEFAULT 2",
-        "ai_compounding": "INTEGER NOT NULL DEFAULT 0",
-        "ai_starting_balance": "REAL NOT NULL DEFAULT 100",
-        "ai_goal_balance": "REAL NOT NULL DEFAULT 200",
-        "ai_stop_at_goal": "INTEGER NOT NULL DEFAULT 1",
-        "ai_max_daily_loss": "REAL NOT NULL DEFAULT 10",
-        "ai_target_profit": "REAL NOT NULL DEFAULT 10",
-        "ai_stop_loss": "REAL NOT NULL DEFAULT 2",
-        "ai_protect_25": "REAL NOT NULL DEFAULT 0",
-        "ai_protect_50": "REAL NOT NULL DEFAULT 2",
-        "ai_protect_75": "REAL NOT NULL DEFAULT 5",
-        "ai_markets": "TEXT NOT NULL DEFAULT '[\"Volatility 5 Index\",\"Volatility 10 Index\",\"Volatility 25 Index\",\"Volatility 30 Index\",\"Volatility 50 Index\",\"Volatility 75 Index\",\"Volatility 100 Index\",\"Step Index\"]'",
-        "ai_lot_sizes": "TEXT NOT NULL DEFAULT '{}'",
-    }
-    for column, definition in ai_columns.items():
-        if column not in settings_columns:
-            conn.execute(f"ALTER TABLE settings ADD COLUMN {column} {definition}")
+    # Independent AI Scan settings. This table is deliberately separate from
+    # the existing strategy settings so the AI feature cannot overwrite ABC,
+    # Digit, Magnet, or other existing bot configuration.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_settings (
+            user_id INTEGER PRIMARY KEY,
+            enabled INTEGER NOT NULL DEFAULT 0,
+            min_confidence REAL NOT NULL DEFAULT 85,
+            max_open_trades INTEGER NOT NULL DEFAULT 1,
+            max_total_risk REAL NOT NULL DEFAULT 2,
+            risk_per_trade REAL NOT NULL DEFAULT 2,
+            reward_target REAL NOT NULL DEFAULT 10,
+            starting_balance REAL NOT NULL DEFAULT 100,
+            goal_balance REAL NOT NULL DEFAULT 200,
+            compound_enabled INTEGER NOT NULL DEFAULT 0,
+            max_daily_loss REAL NOT NULL DEFAULT 2,
+            stop_at_goal INTEGER NOT NULL DEFAULT 1,
+            protection_json TEXT NOT NULL DEFAULT '{}',
+            markets_json TEXT NOT NULL DEFAULT '{}',
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_scan_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            market TEXT NOT NULL,
+            direction TEXT,
+            confidence REAL,
+            status TEXT NOT NULL,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            scanned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -638,106 +632,6 @@ def save_settings(user_id, form):
     conn.close()
 
 
-def ai_default_lot_sizes():
-    return dict(AI_DEFAULT_LOTS)
-
-
-def load_ai_settings(user_id):
-    conn = db()
-    row = conn.execute("SELECT * FROM settings WHERE user_id=?", (user_id,)).fetchone()
-    conn.close()
-    if not row:
-        return {
-            "ai_enabled": 0, "ai_auto_trade": 0, "ai_min_confidence": 85.0,
-            "ai_max_open_trades": 1, "ai_max_total_risk": 2.0, "ai_risk_per_trade": 2.0,
-            "ai_compounding": 0, "ai_starting_balance": 100.0, "ai_goal_balance": 200.0,
-            "ai_stop_at_goal": 1, "ai_max_daily_loss": 10.0, "ai_target_profit": 10.0,
-            "ai_stop_loss": 2.0, "ai_protect_25": 0.0, "ai_protect_50": 2.0, "ai_protect_75": 5.0,
-            "ai_markets": list(AI_MARKETS), "ai_lot_sizes": ai_default_lot_sizes(),
-        }
-    try:
-        markets = json.loads(row["ai_markets"] or "[]")
-        if not isinstance(markets, list):
-            markets = []
-    except Exception:
-        markets = []
-    try:
-        lots = json.loads(row["ai_lot_sizes"] or "{}")
-        if not isinstance(lots, dict):
-            lots = {}
-    except Exception:
-        lots = {}
-    defaults = ai_default_lot_sizes()
-    defaults.update({str(k): float(v) for k, v in lots.items() if str(k) in AI_MARKETS})
-    markets = [m for m in markets if m in AI_MARKETS] or list(AI_MARKETS)
-    return {
-        "ai_enabled": int(row["ai_enabled"] or 0), "ai_auto_trade": int(row["ai_auto_trade"] or 0),
-        "ai_min_confidence": float(row["ai_min_confidence"] or 85),
-        "ai_max_open_trades": int(row["ai_max_open_trades"] or 1),
-        "ai_max_total_risk": float(row["ai_max_total_risk"] or 2),
-        "ai_risk_per_trade": float(row["ai_risk_per_trade"] or 2),
-        "ai_compounding": int(row["ai_compounding"] or 0),
-        "ai_starting_balance": float(row["ai_starting_balance"] or 100),
-        "ai_goal_balance": float(row["ai_goal_balance"] or 200),
-        "ai_stop_at_goal": int(row["ai_stop_at_goal"] if row["ai_stop_at_goal"] is not None else 1),
-        "ai_max_daily_loss": float(row["ai_max_daily_loss"] or 10),
-        "ai_target_profit": float(row["ai_target_profit"] or 10),
-        "ai_stop_loss": float(row["ai_stop_loss"] or 2),
-        "ai_protect_25": float(row["ai_protect_25"] or 0),
-        "ai_protect_50": float(row["ai_protect_50"] or 2),
-        "ai_protect_75": float(row["ai_protect_75"] or 5),
-        "ai_markets": markets, "ai_lot_sizes": defaults,
-    }
-
-
-def save_ai_settings(user_id, data, market_only=None):
-    conn = db()
-    row = conn.execute("SELECT * FROM settings WHERE user_id=?", (user_id,)).fetchone()
-    if not row:
-        conn.execute("INSERT INTO settings(user_id) VALUES (?)", (user_id,))
-        row = conn.execute("SELECT * FROM settings WHERE user_id=?", (user_id,)).fetchone()
-    current = load_ai_settings(user_id)
-    if market_only:
-        lots = current["ai_lot_sizes"]
-        lots[market_only] = max(0.00001, float(data.get("lot_size", lots.get(market_only, 0.10))))
-        enabled = bool(data.get("enabled", market_only in current["ai_markets"]))
-        markets = [m for m in current["ai_markets"] if m != market_only]
-        if enabled:
-            markets.append(market_only)
-        data = {"ai_lot_sizes": lots, "ai_markets": markets}
-    lots = dict(current["ai_lot_sizes"]); lots.update(data.get("ai_lot_sizes", {}))
-    markets = [m for m in data.get("ai_markets", current["ai_markets"]) if m in AI_MARKETS]
-    if not markets:
-        markets = list(AI_MARKETS)
-    values = {
-        "ai_enabled": int(bool(data.get("ai_enabled", current["ai_enabled"]))),
-        "ai_auto_trade": int(bool(data.get("ai_auto_trade", current["ai_auto_trade"]))),
-        "ai_min_confidence": min(99.0, max(50.0, float(data.get("ai_min_confidence", current["ai_min_confidence"])))),
-        "ai_max_open_trades": min(50, max(1, int(float(data.get("ai_max_open_trades", current["ai_max_open_trades"]))))),
-        "ai_max_total_risk": max(0.0, float(data.get("ai_max_total_risk", current["ai_max_total_risk"]))),
-        "ai_risk_per_trade": max(0.01, float(data.get("ai_risk_per_trade", current["ai_risk_per_trade"]))),
-        "ai_compounding": int(bool(data.get("ai_compounding", current["ai_compounding"]))),
-        "ai_starting_balance": max(0.01, float(data.get("ai_starting_balance", current["ai_starting_balance"]))),
-        "ai_goal_balance": max(0.01, float(data.get("ai_goal_balance", current["ai_goal_balance"]))),
-        "ai_stop_at_goal": int(bool(data.get("ai_stop_at_goal", current["ai_stop_at_goal"]))),
-        "ai_max_daily_loss": max(0.0, float(data.get("ai_max_daily_loss", current["ai_max_daily_loss"]))),
-        "ai_target_profit": max(0.01, float(data.get("ai_target_profit", current["ai_target_profit"]))),
-        "ai_stop_loss": max(0.01, float(data.get("ai_stop_loss", current["ai_stop_loss"]))),
-        "ai_protect_25": max(0.0, float(data.get("ai_protect_25", current["ai_protect_25"]))),
-        "ai_protect_50": max(0.0, float(data.get("ai_protect_50", current["ai_protect_50"]))),
-        "ai_protect_75": max(0.0, float(data.get("ai_protect_75", current["ai_protect_75"]))),
-    }
-    conn.execute("""
-        UPDATE settings SET
-        ai_enabled=?, ai_auto_trade=?, ai_min_confidence=?, ai_max_open_trades=?, ai_max_total_risk=?,
-        ai_risk_per_trade=?, ai_compounding=?, ai_starting_balance=?, ai_goal_balance=?, ai_stop_at_goal=?,
-        ai_max_daily_loss=?, ai_target_profit=?, ai_stop_loss=?, ai_protect_25=?, ai_protect_50=?, ai_protect_75=?,
-        ai_markets=?, ai_lot_sizes=? WHERE user_id=?
-    """, (*values.values(), json.dumps(markets), json.dumps(lots), user_id))
-    conn.commit(); conn.close()
-    return load_ai_settings(user_id)
-
-
 def dashboard_context(request: Request, user, error=None, message=None):
     conn = db()
 
@@ -858,15 +752,35 @@ async def register_page(request: Request):
 
 
 @app.post("/register")
-async def register(
-    request: Request,
-    first_name: str = Form(...),
-    last_name: str = Form(...),
-    date_of_birth: str = Form(...),
-    email: str = Form(...),
-    password: str = Form(...),
-    confirm: str = Form(...),
-):
+async def register(request: Request):
+    # Accept both normal HTML form submissions and JSON submissions.
+    # The frontend that was producing the validation error was sending a
+    # JSON/body shape that did not match FastAPI's Form(...) parameters.
+    # Keeping the same field names makes the endpoint backward-compatible.
+    try:
+        content_type = (request.headers.get("content-type") or "").lower()
+        if "application/json" in content_type:
+            payload = await request.json()
+            first_name = str(payload.get("first_name") or "")
+            last_name = str(payload.get("last_name") or "")
+            date_of_birth = str(payload.get("date_of_birth") or "")
+            email = str(payload.get("email") or "")
+            password = str(payload.get("password") or "")
+            confirm = str(payload.get("confirm") or payload.get("confirm_password") or "")
+        else:
+            form = await request.form()
+            first_name = str(form.get("first_name") or "")
+            last_name = str(form.get("last_name") or "")
+            date_of_birth = str(form.get("date_of_birth") or "")
+            email = str(form.get("email") or "")
+            password = str(form.get("password") or "")
+            confirm = str(form.get("confirm") or form.get("confirm_password") or "")
+    except Exception:
+        return JSONResponse({
+            "ok": False,
+            "error": "Invalid registration request."
+        }, status_code=400)
+
     first_name = first_name.strip()
     last_name = last_name.strip()
     date_of_birth = date_of_birth.strip()
@@ -2039,315 +1953,6 @@ async def fetch_m5_candles(
         "candles",
         [],
     )
-
-
-# ============================================================
-# INDEPENDENT AI SCAN / AI TRADING ENGINE
-# ============================================================
-
-async def ai_bridge_request(method, path, *, params=None, payload=None, timeout=15.0):
-    if not MT5_BRIDGE_URL or not MT5_BRIDGE_TOKEN:
-        raise RuntimeError("MT5 bridge is not configured for AI risk/trading checks.")
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        r = await client.request(method, f"{MT5_BRIDGE_URL}{path}", headers={"x-bridge-token": MT5_BRIDGE_TOKEN}, params=params, json=payload)
-        if r.status_code >= 400:
-            try: detail = r.json().get("detail", r.text)
-            except Exception: detail = r.text
-            raise RuntimeError(f"AI MT5 bridge {path} failed ({r.status_code}): {detail}")
-        return r.json()
-
-
-async def ai_manage_positions(user_id, settings):
-    """Apply optional, monotonic profit protection to AI MT5 positions only."""
-    if not MT5_BRIDGE_TOKEN:
-        return
-    try:
-        rows=(await ai_bridge_request("GET","/positions")).get("positions",[])
-        for pos in rows:
-            if int(pos.get("magic",0)) != MT5_AI_MAGIC:
-                continue
-            entry=float(pos.get("price_open",0) or 0); sl=float(pos.get("sl",0) or 0); tp=float(pos.get("tp",0) or 0); cur=float(pos.get("price_current",entry) or entry)
-            if not entry or not tp or tp==entry: continue
-            direction="BUY" if int(pos.get("type",0))==0 else "SELL"
-            progress=max(0.0,min(1.0,((cur-entry)/(tp-entry)) if direction=="BUY" else ((entry-cur)/(entry-tp))))
-            lock=0.0
-            if progress>=0.75: lock=settings["ai_protect_75"]
-            elif progress>=0.50: lock=settings["ai_protect_50"]
-            elif progress>=0.25: lock=settings["ai_protect_25"]
-            if lock<=0: continue
-            frac=min(0.95,max(0.0,lock/max(settings["ai_target_profit"],0.01)))
-            new_sl=entry+(tp-entry)*frac
-            tighten=(direction=="BUY" and (sl<=0 or new_sl>sl)) or (direction=="SELL" and (sl<=0 or new_sl<sl))
-            if tighten:
-                await ai_bridge_request("POST","/position/modify",payload={"ticket":int(pos["ticket"]),"sl":float(new_sl),"tp":float(tp)})
-    except Exception as exc:
-        BOT_STATE.setdefault(user_id,{})["ai_last_management_error"]=f"{type(exc).__name__}: {exc}"
-
-
-def ai_candles(candles):
-    out=[]
-    for c in candles or []:
-        out.append({k: float(c[k]) for k in ("open","high","low","close")})
-    return out
-
-
-def ai_ema(vals, period):
-    if not vals: return 0.0
-    k=2.0/(period+1.0); x=vals[0]
-    for v in vals[1:]: x=v*k+x*(1-k)
-    return x
-
-
-def ai_atr(candles, period=14):
-    c=ai_candles(candles)
-    if len(c)<period+1: return 0.0
-    trs=[]
-    for i in range(1,len(c)):
-        trs.append(max(c[i]["high"]-c[i]["low"], abs(c[i]["high"]-c[i-1]["close"]), abs(c[i]["low"]-c[i-1]["close"])))
-    return sum(trs[-period:])/min(period,len(trs))
-
-
-def ai_efficiency(candles, n=14):
-    c=ai_candles(candles)[-(n+1):]
-    if len(c)<3: return 0.0
-    net=abs(c[-1]["close"]-c[0]["close"])
-    path=sum(abs(c[i]["close"]-c[i-1]["close"]) for i in range(1,len(c)))
-    return net/path if path else 0.0
-
-
-def ai_direction(candles):
-    c=ai_candles(candles)
-    if len(c)<55: return "CONFLICT"
-    closes=[x["close"] for x in c]
-    e20=ai_ema(closes[-55:],20); e50=ai_ema(closes[-55:],50)
-    slope=closes[-1]-closes[-6]
-    if e20>e50 and closes[-1]>e20 and slope>0: return "BUY"
-    if e20<e50 and closes[-1]<e20 and slope<0: return "SELL"
-    return "CONFLICT"
-
-
-def ai_structure(candles, direction):
-    c=ai_candles(candles)
-    if len(c)<30: return 0.0
-    highs=[x["high"] for x in c[-30:]]; lows=[x["low"] for x in c[-30:]]
-    mid=len(highs)//2
-    if direction=="BUY":
-        return 1.0 if max(highs[mid:])>max(highs[:mid]) and min(lows[mid:])>=min(lows[:mid]) else 0.0
-    if direction=="SELL":
-        return 1.0 if min(lows[mid:])<min(lows[:mid]) and max(highs[mid:])<=max(highs[:mid]) else 0.0
-    return 0.0
-
-
-def ai_candle_quality(candles, direction):
-    c=ai_candles(candles)
-    if not c: return 0.0
-    x=c[-1]; rng=max(x["high"]-x["low"],1e-12); body=abs(x["close"]-x["open"]); ratio=body/rng
-    good=(x["close"]>x["open"]) if direction=="BUY" else (x["close"]<x["open"] if direction=="SELL" else False)
-    return min(1.0, ratio)* (1.0 if good else 0.25)
-
-
-def ai_pullback(candles, direction):
-    c=ai_candles(candles)
-    if len(c)<25: return 0.0
-    closes=[x["close"] for x in c]
-    e20=ai_ema(closes[-40:],20); atr=ai_atr(c,14)
-    if atr<=0: return 0.0
-    distance=abs(closes[-1]-e20)/atr
-    return max(0.0,min(1.0,1.0-distance/2.5))
-
-
-def ai_levels_and_plan(candles, direction, target_profit=10.0, stop_loss=2.0):
-    c=ai_candles(candles)
-    if len(c)<30: return None
-    entry=c[-1]["close"]; atr=ai_atr(c,14)
-    if atr<=0: return None
-    recent_low=min(x["low"] for x in c[-20:]); recent_high=max(x["high"] for x in c[-20:])
-    if direction=="BUY":
-        sl=min(recent_low, entry-atr*1.2)
-        risk_distance=entry-sl
-        tp=entry+risk_distance*5.0
-        levels=[x["high"] for x in c[-60:-1] if x["high"]>entry]
-        blocking=min(levels) if levels else None
-        room=blocking is None or blocking>=tp
-    else:
-        sl=max(recent_high, entry+atr*1.2)
-        risk_distance=sl-entry
-        tp=entry-risk_distance*5.0
-        levels=[x["low"] for x in c[-60:-1] if x["low"]<entry]
-        blocking=max(levels) if levels else None
-        room=blocking is None or blocking<=tp
-    return {"entry":entry,"sl":sl,"tp":tp,"risk_distance":abs(risk_distance),"room_good":bool(room),"atr":atr}
-
-
-def ai_score(features):
-    score=0.0
-    score += 25.0 if features["alignment"] else 0.0
-    score += 15.0*features["structure"]
-    score += 15.0*features["momentum"]
-    score += 10.0*features["candle_quality"]
-    score += 10.0*features["pullback"]
-    score += 10.0 if features["market_quality"]=="CLEAN" else 0.0
-    score += 15.0 if features["room_good"] else 0.0
-    return round(min(100.0,score),1)
-
-
-def ai_historical_oos(candles, direction, max_samples=120):
-    """Simple, deterministic out-of-sample 1:5 validation; not a claimed win rate.
-    The model is evaluated on the later 30% of historical candles only."""
-    c=ai_candles(candles)
-    if len(c)<220: return {"samples":0,"wins":0,"losses":0,"win_rate":0.0,"validated":False}
-    split=int(len(c)*0.70); start=max(split,70); end=len(c)-50
-    wins=losses=0
-    for i in range(start,min(end,start+max_samples)):
-        window=c[:i+1]
-        d=ai_direction(window)
-        if d!=direction or ai_efficiency(window)<0.35: continue
-        atr=ai_atr(window,14)
-        if atr<=0: continue
-        entry=window[-1]["close"]
-        if direction=="BUY": sl=entry-atr*1.2; tp=entry+(entry-sl)*5
-        else: sl=entry+atr*1.2; tp=entry-(sl-entry)*5
-        outcome=None
-        for f in c[i+1:i+49]:
-            if direction=="BUY":
-                if f["low"]<=sl: outcome="LOSS"; break
-                if f["high"]>=tp: outcome="WIN"; break
-            else:
-                if f["high"]>=sl: outcome="LOSS"; break
-                if f["low"]<=tp: outcome="WIN"; break
-        if outcome=="WIN": wins+=1
-        elif outcome=="LOSS": losses+=1
-    total=wins+losses
-    return {"samples":total,"wins":wins,"losses":losses,"win_rate":round((wins/total*100) if total else 0.0,1),"validated":total>=10}
-
-
-async def ai_scan_market(user_id, market, settings, *, allow_trade=False):
-    state=BOT_STATE.setdefault(user_id,{})
-    result={"market":market,"status":"NO TRADE","direction":None,"htf_1d":"â","htf_4h":"â","htf_1h":"â","tf_15m":"â"}
-    try:
-        ws_url=await deriv_ws_url(state.get("account_id"),state.get("token"))
-        async with websockets.connect(ws_url,open_timeout=15,close_timeout=5,ping_interval=20) as ws:
-            active=await get_active_symbols(ws)
-            symbol=resolve_online_symbol(active,market)
-            if not symbol: raise RuntimeError("Market symbol unavailable")
-            data=await fetch_abc_timeframes(ws,symbol)
-            extra=await ws_request(ws,{"ticks_history":symbol,"end":"latest","count":600,"style":"candles","granularity":900},9801+abs(hash(market))%1000)
-            hist=extra.get("candles",[])
-        dirs={tf:ai_direction(data.get(tf,[])) for tf in ("1D","4H","1H","15M")}
-        result.update({"symbol":symbol,"htf_1d":dirs["1D"],"htf_4h":dirs["4H"],"htf_1h":dirs["1H"],"tf_15m":dirs["15M"]})
-        direction=dirs["15M"]
-        aligned=direction in ("BUY","SELL") and all(dirs[x]==direction for x in ("1D","4H","1H"))
-        result["direction"]=direction if direction in ("BUY","SELL") else None
-        if not aligned:
-            result.update(status="NO TRADE",market_quality="CONFLICTING",reason="Timeframes are not fully aligned.")
-            return result
-        f15=ai_candles(data["15M"]); efficiency=ai_efficiency(f15)
-        momentum=min(1.0,max(0.0,(abs(f15[-1]["close"]-f15[-6]["close"])/(ai_atr(f15,14) or 1e-9))/2.0)) if len(f15)>=6 else 0
-        structure=ai_structure(f15,direction); candleq=ai_candle_quality(f15,direction); pullback=ai_pullback(f15,direction)
-        atr_now=ai_atr(f15,14)
-        atr_samples=[]
-        for j in range(max(20,len(f15)-80),len(f15)-14,14):
-            a=ai_atr(f15[:j],14)
-            if a>0: atr_samples.append(a)
-        atr_base=(sum(atr_samples)/len(atr_samples)) if atr_samples else atr_now
-        vol_ratio=(atr_now/atr_base) if atr_base else 1.0
-        volatility_condition="EXTREME" if vol_ratio>2.0 else ("LOW" if vol_ratio<0.5 else "NORMAL")
-        quality="CHOPPY" if efficiency<0.35 else ("NOISY" if candleq<0.25 or volatility_condition=="EXTREME" else "CLEAN")
-        plan=ai_levels_and_plan(f15,direction,settings["ai_target_profit"],settings["ai_stop_loss"])
-        if not plan: raise RuntimeError("Insufficient 15M data")
-        result.update({"market_quality":quality,"volatility":volatility_condition,"momentum":"STRONG" if momentum>=0.65 else ("MEDIUM" if momentum>=0.4 else "WEAK"),"structure":"GOOD" if structure>=1 else "WEAK","candle_quality":round(candleq*100,1),"pullback":"GOOD" if pullback>=0.5 else "POOR","room_to_tp":"GOOD" if plan["room_good"] else "POOR","entry":plan["entry"],"sl":plan["sl"],"tp":plan["tp"],"risk_target":settings["ai_stop_loss"],"target_profit":settings["ai_target_profit"]})
-        result["oos_validation"]=ai_historical_oos(hist,direction)
-        features={"alignment":True,"structure":structure,"momentum":momentum,"candle_quality":candleq,"pullback":pullback,"market_quality":quality,"room_good":plan["room_good"]}
-        confidence=ai_score(features)
-        result["confidence"]=confidence
-        result["confidence_note"]="Model score; not an 85% win-rate claim. OOS validation is reported separately."
-        reasons=[]
-        if quality!="CLEAN": reasons.append("market quality failed")
-        if not plan["room_good"]: reasons.append("insufficient room to target")
-        if momentum<0.4: reasons.append("weak momentum")
-        if candleq<0.25: reasons.append("poor candle quality")
-        if structure<1: reasons.append("weak market structure")
-        if pullback<0.35: reasons.append("poor pullback/retest")
-        if confidence<settings["ai_min_confidence"]: reasons.append("confidence below threshold")
-        if not result["oos_validation"]["validated"]: reasons.append("insufficient out-of-sample validation samples")
-        if result["oos_validation"]["validated"] and result["oos_validation"]["win_rate"]<20.0: reasons.append("historical OOS performance below safety floor")
-        if reasons:
-            result.update(status="NO TRADE",reason="; ".join(reasons)); return result
-
-        lots=float(settings["ai_lot_sizes"].get(market,0.1))
-        result["configured_lot"]=lots
-        if not MT5_BRIDGE_TOKEN:
-            result.update(status="NO TRADE",reason="MT5 risk validation is not configured."); return result
-        bridge_symbol=(await ai_bridge_request("GET","/symbols",params={"query":market.replace(" Index","")})).get("symbols",[])
-        if not bridge_symbol: result.update(status="NO TRADE",reason="MT5 symbol unavailable for risk validation."); return result
-        mt5symbol=next((x["name"] for x in bridge_symbol if x.get("visible")),bridge_symbol[0]["name"])
-        price_open=plan["entry"]; price_close=plan["sl"]
-        risk=await ai_bridge_request("GET","/calc-profit",params={"symbol":mt5symbol,"direction":direction,"volume":lots,"price_open":price_open,"price_close":price_close})
-        target=await ai_bridge_request("GET","/calc-profit",params={"symbol":mt5symbol,"direction":direction,"volume":lots,"price_open":price_open,"price_close":plan["tp"]})
-        actual_risk=abs(float(risk.get("profit",0))); actual_target=abs(float(target.get("profit",0)))
-        result.update(mt5_symbol=mt5symbol,actual_risk=round(actual_risk,2),actual_target=round(actual_target,2),lot_size=lots)
-        allowed_risk=settings["ai_risk_per_trade"]
-        if settings["ai_compounding"]:
-            bal=float((await ai_bridge_request("GET","/account")).get("balance",0)); allowed_risk=bal*settings["ai_risk_per_trade"]/100.0
-        allowed_risk=min(allowed_risk,settings["ai_max_total_risk"])
-        result["risk_limit"]=round(allowed_risk,2)
-        if actual_risk>allowed_risk+0.01:
-            result.update(status="NO TRADE",reason=f"Configured lot risks ${actual_risk:.2f}, above ${allowed_risk:.2f} limit."); return result
-        if actual_risk < allowed_risk*0.90 or actual_target < settings["ai_target_profit"]*0.95:
-            result.update(status="NO TRADE",reason=f"Configured lot does not produce the required ${allowed_risk:.2f} risk / ${settings['ai_target_profit']:.2f} target at the planned stop/TP."); return result
-        result.update(status="QUALIFIED",reason="All configured AI gates passed.")
-        if allow_trade and settings["ai_auto_trade"]:
-            positions=(await ai_bridge_request("GET","/positions")).get("positions",[])
-            ai_positions=[p for p in positions if int(p.get("magic",0))==MT5_AI_MAGIC]
-            if len(ai_positions)>=settings["ai_max_open_trades"]: result["trade_action"]="BLOCKED_MAX_OPEN_TRADES"; return result
-            total_risk=0.0
-            for p in ai_positions:
-                if p.get("sl") and p.get("price_open"):
-                    try:
-                        rrisk=await ai_bridge_request("GET","/calc-profit",params={"symbol":p["symbol"],"direction":"BUY" if int(p.get("type",0))==0 else "SELL","volume":p["volume"],"price_open":p["price_open"],"price_close":p["sl"]})
-                        total_risk+=abs(float(rrisk.get("profit",0)))
-                    except Exception: pass
-            if total_risk+actual_risk>settings["ai_max_total_risk"]+0.01:
-                result["trade_action"]="BLOCKED_MAX_TOTAL_RISK"; return result
-            order=await ai_bridge_request("POST","/order",payload={"symbol":mt5symbol,"direction":direction,"volume":lots,"sl":plan["sl"],"tp":plan["tp"],"magic":MT5_AI_MAGIC,"comment":"NR AI SCAN"})
-            result["trade_action"]="TRADE_OPENED"; result["ticket"]=order.get("ticket")
-        return result
-    except Exception as exc:
-        result.update(status="NO TRADE",reason=f"AI scan error: {type(exc).__name__}: {exc}")
-        return result
-
-
-async def ai_trading_worker(user_id):
-    state=BOT_STATE.setdefault(user_id,{})
-    settings=load_ai_settings(user_id)
-    state["ai_running"]=True; state["ai_message"]="AI scanner running â quality over quantity."; state["ai_scan"]={}
-    try:
-        while not BOT_STATE.setdefault(user_id, {}).get("ai_stop_requested"):
-            state=BOT_STATE.setdefault(user_id,{})
-            settings=load_ai_settings(user_id)
-            if not settings["ai_enabled"]:
-                state["ai_message"]="AI section is OFF."; await asyncio.sleep(3); continue
-            if MT5_BRIDGE_TOKEN:
-                try:
-                    acct=await ai_bridge_request("GET","/account")
-                    balance=float(acct.get("balance",0) or 0)
-                    state.setdefault("ai_day_start_balance",balance)
-                    if settings["ai_stop_at_goal"] and balance>=settings["ai_goal_balance"]:
-                        state["ai_message"]=f"AI goal reached: ${balance:.2f}. Trading stopped."; state["ai_stop_requested"]=True; break
-                    if settings["ai_max_daily_loss"]>0 and balance<=float(state.get("ai_day_start_balance",balance))-settings["ai_max_daily_loss"]:
-                        state["ai_message"]=f"AI daily loss limit reached: ${settings['ai_max_daily_loss']:.2f}. Trading stopped."; state["ai_stop_requested"]=True; break
-                    await ai_manage_positions(user_id,settings)
-                except Exception as exc:
-                    state["ai_message"]=f"AI account/risk check unavailable: {type(exc).__name__}."
-            for market in settings["ai_markets"]:
-                if state.get("ai_stop_requested"): break
-                state["ai_scan"][market]=await ai_scan_market(user_id,market,settings,allow_trade=True)
-                await asyncio.sleep(0.25)
-            await asyncio.sleep(15)
-    except asyncio.CancelledError:
-        raise
-    finally:
-        BOT_STATE.setdefault(user_id,{})["ai_running"]=False
 
 
 # ============================================================
@@ -3862,20 +3467,12 @@ async def start_trading(request: Request):
         "market_data": {},
         "signals": [],
         "engine": "ABC",
-        "ai_running": False,
-        "ai_stop_requested": False,
-        "ai_scan": {},
-        "ai_message": "AI scanner is stopped.",
     }
-
-    state = BOT_STATE[uid]
-    state["account_id"] = connection["account_id"]
 
     try:
         token = unprotect_token(
             connection["access_token_encrypted"]
         )
-        state["token"] = token
     except Exception:
         return JSONResponse(
             {
@@ -4038,85 +3635,246 @@ async def resume_trading(request: Request):
 
 
 
+# ============================================================
+# INDEPENDENT AI SCAN ENGINE
+# ============================================================
+
+AI_MARKETS = [
+    "Volatility 5 Index",
+    "Volatility 10 Index",
+    "Volatility 25 Index",
+    "Volatility 30 Index",
+    "Volatility 50 Index",
+    "Volatility 75 Index",
+    "Volatility 100 Index",
+    "Step Index",
+]
+
+
+def _ai_default_markets():
+    return {
+        market: {"enabled": False, "lot_size": 0.01}
+        for market in AI_MARKETS
+    }
+
+
+def _ai_settings_dict(row):
+    markets = _ai_default_markets()
+    protection = {}
+    if row:
+        try:
+            markets.update(json.loads(row["markets_json"] or "{}"))
+        except Exception:
+            pass
+        try:
+            protection = json.loads(row["protection_json"] or "{}")
+        except Exception:
+            protection = {}
+    return {
+        "enabled": bool(row["enabled"]) if row else False,
+        "min_confidence": float(row["min_confidence"] if row else 85),
+        "max_open_trades": int(row["max_open_trades"] if row else 1),
+        "max_total_risk": float(row["max_total_risk"] if row else 2),
+        "risk_per_trade": float(row["risk_per_trade"] if row else 2),
+        "reward_target": float(row["reward_target"] if row else 10),
+        "starting_balance": float(row["starting_balance"] if row else 100),
+        "goal_balance": float(row["goal_balance"] if row else 200),
+        "compound_enabled": bool(row["compound_enabled"]) if row else False,
+        "max_daily_loss": float(row["max_daily_loss"] if row else 2),
+        "stop_at_goal": bool(row["stop_at_goal"]) if row else True,
+        "protection": protection,
+        "markets": markets,
+    }
+
+
+def _ai_candle_values(c):
+    if isinstance(c, dict):
+        return float(c["open"]), float(c["high"]), float(c["low"]), float(c["close"])
+    return float(c[1]), float(c[2]), float(c[3]), float(c[4])
+
+
+def _ai_quality(candles):
+    if len(candles) < 20:
+        return {"quality": "INSUFFICIENT", "momentum": "WEAK", "score": 0}
+    vals = [_ai_candle_values(c) for c in candles[-30:]]
+    ranges = [max(h-l, 0) for _,h,l,_ in vals]
+    avg_range = sum(ranges) / len(ranges) if ranges else 0
+    closes = [c[3] for c in vals]
+    net = abs(closes[-1] - closes[0])
+    path = sum(abs(closes[i]-closes[i-1]) for i in range(1,len(closes)))
+    efficiency = net/path if path else 0
+    bodies = [abs(c[3]-c[0]) / max(c[1]-c[2], 1e-12) for c in vals[-8:]]
+    body_quality = sum(bodies)/len(bodies) if bodies else 0
+    if efficiency < 0.28:
+        return {"quality":"CHOPPY", "momentum":"WEAK", "score":25}
+    if body_quality < 0.38:
+        return {"quality":"NOISY", "momentum":"WEAK", "score":35}
+    momentum = "STRONG" if efficiency >= 0.58 and body_quality >= 0.55 else "MODERATE"
+    score = 82 if momentum == "STRONG" else 68
+    return {"quality":"CLEAN", "momentum":momentum, "score":score, "avg_range":avg_range}
+
+
+def _ai_structure(candles, direction):
+    if len(candles) < 12 or direction not in {"BUY","SELL"}:
+        return False
+    vals = [_ai_candle_values(c) for c in candles[-12:]]
+    highs=[x[1] for x in vals]; lows=[x[2] for x in vals]
+    if direction == "BUY":
+        return highs[-1] >= max(highs[-5:]) and lows[-1] >= min(lows[-6:-1])
+    return lows[-1] <= min(lows[-5:]) and highs[-1] <= max(highs[-6:-1])
+
+
+def _ai_room(candles, direction, risk_dollars=2.0, reward_dollars=10.0):
+    if len(candles) < 20:
+        return "POOR", 0.0
+    vals = [_ai_candle_values(c) for c in candles[-30:]]
+    price = vals[-1][3]
+    recent_high = max(x[1] for x in vals[:-1])
+    recent_low = min(x[2] for x in vals[:-1])
+    span = max(recent_high-recent_low, 1e-12)
+    # Price-space room is normalized here. Actual dollar-risk/SL sizing must
+    # be calculated by the execution adapter for the selected contract type.
+    if direction == "BUY":
+        room = max(recent_high-price, 0.0) / span
+    else:
+        room = max(price-recent_low, 0.0) / span
+    return ("GOOD" if room >= 0.45 else "POOR"), room
+
+
+def _ai_analyze(market, data, min_confidence):
+    biases = {tf: timeframe_bias(data.get(tf, [])) for tf in ("1D","4H","1H")}
+    m15 = data.get("15M", [])
+    votes = [v for v in biases.values() if v in {"BUY","SELL"}]
+    direction = votes[0] if len(votes) == 3 and len(set(votes)) == 1 else None
+    quality = _ai_quality(m15)
+    structure = _ai_structure(m15, direction) if direction else False
+    room, room_score = _ai_room(m15, direction) if direction else ("POOR",0.0)
+    alignment = 1.0 if direction else 0.0
+    confidence = 35 + alignment*30 + (quality["score"]-25)*0.35 + (20 if structure else 0) + room_score*15
+    confidence = max(0.0, min(99.0, confidence))
+    qualified = bool(direction and quality["quality"] == "CLEAN" and quality["momentum"] in {"STRONG","MODERATE"} and structure and room == "GOOD" and confidence >= min_confidence)
+    return {
+        "market": market,
+        "htf_1d": "â" if biases["1D"] in {"BUY","SELL"} else "â",
+        "htf_4h": "â" if biases["4H"] in {"BUY","SELL"} else "â",
+        "htf_1h": "â" if biases["1H"] in {"BUY","SELL"} else "â",
+        "direction": direction or "â",
+        "market_quality": quality["quality"],
+        "momentum": quality["momentum"],
+        "setup": "QUALIFIED" if qualified else "NO TRADE",
+        "room_to_tp": room,
+        "risk": 2.0,
+        "target": 10.0,
+        "risk_reward": "1:5",
+        "confidence": round(confidence,1),
+        "status": "QUALIFIED" if qualified else "NO TRADE",
+        "historical_validation": "NOT VALIDATED",
+        "execution_ready": False,
+        "reason": "Rule-based scan only; out-of-sample validation and a compatible SL/TP execution adapter are required before live AI execution." if qualified else "One or more AI quality gates failed.",
+    }
+
+
 @app.get("/api/ai/settings")
-async def ai_settings_endpoint(request: Request):
-    user=current_user(request)
-    if not user: return JSONResponse({"ok":False,"error":"Not logged in."},status_code=401)
-    return {"ok":True,"settings":load_ai_settings(user["id"]),"markets":AI_MARKETS}
+async def ai_settings_get(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    conn = db()
+    row = conn.execute("SELECT * FROM ai_settings WHERE user_id=?", (user["id"],)).fetchone()
+    if not row:
+        conn.execute("INSERT OR IGNORE INTO ai_settings(user_id) VALUES (?)", (user["id"],))
+        conn.commit()
+        row = conn.execute("SELECT * FROM ai_settings WHERE user_id=?", (user["id"],)).fetchone()
+    conn.close()
+    return {"ok": True, "settings": _ai_settings_dict(row)}
 
-@app.post("/api/ai/settings/market")
-async def ai_save_market(request: Request):
-    user=current_user(request)
-    if not user: return JSONResponse({"ok":False,"error":"Not logged in."},status_code=401)
-    data=await request.json(); market=str(data.get("market","")).strip()
-    if market not in AI_MARKETS: return JSONResponse({"ok":False,"error":"Unsupported AI market."},status_code=400)
-    return {"ok":True,"settings":save_ai_settings(user["id"],data,market_only=market),"message":f"{market} AI settings saved."}
 
-@app.post("/api/ai/settings/all")
-async def ai_save_all(request: Request):
-    user=current_user(request)
-    if not user: return JSONResponse({"ok":False,"error":"Not logged in."},status_code=401)
-    data=await request.json()
-    return {"ok":True,"settings":save_ai_settings(user["id"],data),"message":"All AI Scan settings saved."}
+@app.post("/api/ai/settings")
+async def ai_settings_save(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    payload = await request.json()
+    markets = _ai_default_markets()
+    markets.update(payload.get("markets") or {})
+    conn = db()
+    conn.execute("""
+        INSERT INTO ai_settings(user_id,enabled,min_confidence,max_open_trades,max_total_risk,risk_per_trade,reward_target,starting_balance,goal_balance,compound_enabled,max_daily_loss,stop_at_goal,protection_json,markets_json,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id) DO UPDATE SET
+          enabled=excluded.enabled,min_confidence=excluded.min_confidence,max_open_trades=excluded.max_open_trades,
+          max_total_risk=excluded.max_total_risk,risk_per_trade=excluded.risk_per_trade,reward_target=excluded.reward_target,
+          starting_balance=excluded.starting_balance,goal_balance=excluded.goal_balance,compound_enabled=excluded.compound_enabled,
+          max_daily_loss=excluded.max_daily_loss,stop_at_goal=excluded.stop_at_goal,protection_json=excluded.protection_json,
+          markets_json=excluded.markets_json,updated_at=CURRENT_TIMESTAMP
+    """, (
+        user["id"], int(bool(payload.get("enabled"))),
+        max(50,min(99,float(payload.get("min_confidence",85)))),
+        max(1,min(50,int(payload.get("max_open_trades",1)))),
+        max(0.0,float(payload.get("max_total_risk",2))),
+        max(0.0,float(payload.get("risk_per_trade",2))),
+        10.0,
+        max(0.0,float(payload.get("starting_balance",100))),
+        max(0.0,float(payload.get("goal_balance",200))),
+        int(bool(payload.get("compound_enabled"))),
+        max(0.0,float(payload.get("max_daily_loss",2))),
+        int(bool(payload.get("stop_at_goal",True))),
+        json.dumps(payload.get("protection") or {}),
+        json.dumps(markets),
+    ))
+    conn.commit(); conn.close()
+    return {"ok": True, "settings": payload}
+
 
 @app.post("/api/ai/scan")
-async def ai_scan_one(request: Request):
-    user=current_user(request)
-    if not user: return JSONResponse({"ok":False,"error":"Not logged in."},status_code=401)
-    data=await request.json(); market=str(data.get("market","")).strip()
-    if market not in AI_MARKETS: return JSONResponse({"ok":False,"error":"Unsupported AI market."},status_code=400)
-    state=BOT_STATE.setdefault(user["id"],{})
-    conn=db(); row=conn.execute("SELECT account_id, access_token_encrypted FROM deriv_connections WHERE user_id=?",(user["id"],)).fetchone(); conn.close()
-    if not row: return JSONResponse({"ok":False,"error":"Connect your Deriv Demo account first."},status_code=400)
+async def ai_scan(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Not logged in."}, status_code=401)
+    payload = {}
     try:
-        state["account_id"]=row["account_id"]; state["token"]=unprotect_token(row["access_token_encrypted"])
-        result=await ai_scan_market(user["id"],market,load_ai_settings(user["id"]),allow_trade=False)
-        state.setdefault("ai_scan",{})[market]=result
-        state["ai_message"]=f"AI scan complete â {market}: {result.get('status','NO TRADE')}."
-        return {"ok":True,"result":result,"message":state["ai_message"]}
+        payload = await request.json()
+    except Exception:
+        pass
+    requested = payload.get("market")
+    conn = db()
+    row = conn.execute("SELECT * FROM ai_settings WHERE user_id=?", (user["id"],)).fetchone()
+    conn.close()
+    settings = _ai_settings_dict(row)
+    markets = settings["markets"]
+    names = [requested] if requested else [m for m in AI_MARKETS if markets.get(m,{}).get("enabled")]
+    if not names:
+        names = [m for m in AI_MARKETS if markets.get(m,{}).get("enabled")]
+    conn = db()
+    connection = conn.execute("SELECT account_id, access_token_encrypted FROM deriv_connections WHERE user_id=?", (user["id"],)).fetchone()
+    conn.close()
+    if not connection:
+        return JSONResponse({"ok": False, "error": "Connect a Deriv account before running the AI Scan."}, status_code=400)
+    try:
+        token = unprotect_token(connection["access_token_encrypted"])
+        ws_url = await deriv_ws_url(connection["account_id"], token)
+        async with websockets.connect(ws_url, open_timeout=15, close_timeout=5, ping_interval=20) as ws:
+            active = await get_active_symbols(ws)
+            results=[]
+            for market in names:
+                if market not in AI_MARKETS:
+                    continue
+                symbol = resolve_online_symbol(active, market)
+                if not symbol:
+                    results.append({"market":market,"status":"NO TRADE","reason":"Market symbol is unavailable from Deriv.","execution_ready":False})
+                    continue
+                data = await fetch_abc_timeframes(ws, symbol)
+                result = _ai_analyze(market, data, settings["min_confidence"])
+                result["symbol"] = symbol
+                result["lot_size"] = float(markets.get(market,{}).get("lot_size",0.01))
+                conn = db()
+                conn.execute("INSERT INTO ai_scan_history(user_id,market,direction,confidence,status,payload_json) VALUES(?,?,?,?,?,?)", (user["id"],market,result.get("direction"),result.get("confidence"),result.get("status"),json.dumps(result)))
+                conn.commit(); conn.close()
+                results.append(result)
+        return {"ok":True,"results":results,"message":f"AI Scan complete â {len(results)} market(s) analyzed."}
     except Exception as exc:
-        return JSONResponse({"ok":False,"error":f"AI scan failed: {type(exc).__name__}: {exc}"},status_code=500)
+        return JSONResponse({"ok":False,"error":f"AI scan failed: {type(exc).__name__}: {exc}"}, status_code=500)
 
-@app.post("/api/ai/scan-all")
-async def ai_scan_all(request: Request):
-    user=current_user(request)
-    if not user: return JSONResponse({"ok":False,"error":"Not logged in."},status_code=401)
-    state=BOT_STATE.setdefault(user["id"],{})
-    conn=db(); row=conn.execute("SELECT account_id, access_token_encrypted FROM deriv_connections WHERE user_id=?",(user["id"],)).fetchone(); conn.close()
-    if not row: return JSONResponse({"ok":False,"error":"Connect your Deriv Demo account first."},status_code=400)
-    state["account_id"]=row["account_id"]; state["token"]=unprotect_token(row["access_token_encrypted"])
-    settings=load_ai_settings(user["id"]); results={}
-    for market in settings["ai_markets"]:
-        results[market]=await ai_scan_market(user["id"],market,settings,allow_trade=False)
-        state.setdefault("ai_scan",{})[market]=results[market]
-    state["ai_message"]=f"AI Scan All complete â {sum(v.get('status')=='QUALIFIED' for v in results.values())} qualified setup(s)."
-    return {"ok":True,"results":results,"message":state["ai_message"]}
-
-@app.post("/api/ai/start")
-async def ai_start(request: Request):
-    user=current_user(request)
-    if not user: return JSONResponse({"ok":False,"error":"Not logged in."},status_code=401)
-    uid=user["id"]; settings=load_ai_settings(uid)
-    if not settings["ai_enabled"]: return JSONResponse({"ok":False,"error":"Turn AI TRADING ON in the AI section first."},status_code=400)
-    conn=db(); row=conn.execute("SELECT account_id, access_token_encrypted FROM deriv_connections WHERE user_id=?",(uid,)).fetchone(); conn.close()
-    if not row: return JSONResponse({"ok":False,"error":"Connect your Deriv Demo account first."},status_code=400)
-    state=BOT_STATE.setdefault(uid,{})
-    state.update({"account_id":row["account_id"],"token":unprotect_token(row["access_token_encrypted"]),"ai_stop_requested":False})
-    old=BOT_TASKS.get(f"ai:{uid}")
-    if old and not old.done(): return {"ok":True,"message":"AI trader is already running."}
-    task=asyncio.create_task(ai_trading_worker(uid)); BOT_TASKS[f"ai:{uid}"]=task
-    return {"ok":True,"message":"AI trader started independently. Existing strategies are unchanged."}
-
-@app.post("/api/ai/stop")
-async def ai_stop(request: Request):
-    user=current_user(request)
-    if not user: return JSONResponse({"ok":False,"error":"Not logged in."},status_code=401)
-    uid=user["id"]; state=BOT_STATE.setdefault(uid,{})
-    state["ai_stop_requested"]=True
-    task=BOT_TASKS.get(f"ai:{uid}")
-    if task and not task.done(): task.cancel()
-    state["ai_running"]=False; state["ai_message"]="AI trader stopped. Existing bot strategies were not changed."
-    return {"ok":True,"message":state["ai_message"]}
 
 @app.get("/api/trading/state")
 async def trading_state(request: Request):
@@ -4215,11 +3973,6 @@ async def trading_state(request: Request):
         "market_data": state.get("market_data", {}),
         "market_scan": state.get("market_scan", {}),
         "signals": state.get("signals", []),
-        "ai": {
-            "running": bool(state.get("ai_running", False)),
-            "message": state.get("ai_message", "AI scanner is stopped."),
-            "scan": state.get("ai_scan", {}),
-        },
         "recovery": {
             "amount_due": round(float(state.get("recovery_due", 0) or 0), 2),
             "active": bool(state.get("recovery_mode", False)),
