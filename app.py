@@ -321,6 +321,18 @@ def init_db():
         )
     """)
 
+    # Forward-compatible AI-only columns. These migrations touch only the
+    # independent ai_settings table and do not alter existing strategy settings.
+    ai_columns = {row[1] for row in conn.execute("PRAGMA table_info(ai_settings)").fetchall()}
+    ai_feature_columns = {
+        "risk_percent": "REAL NOT NULL DEFAULT 2",
+        "max_total_exposure": "REAL NOT NULL DEFAULT 2",
+        "auto_trade_enabled": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for column, definition in ai_feature_columns.items():
+        if column not in ai_columns:
+            conn.execute(f"ALTER TABLE ai_settings ADD COLUMN {column} {definition}")
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ai_scan_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -753,153 +765,70 @@ async def register_page(request: Request):
 
 @app.post("/register")
 async def register(request: Request):
-    # Accept both normal HTML form submissions and JSON submissions.
-    # The frontend that was producing the validation error was sending a
-    # JSON/body shape that did not match FastAPI's Form(...) parameters.
-    # Keeping the same field names makes the endpoint backward-compatible.
+    """Create an account using Username, Email, Password and Confirm Password only.
+
+    First name, last name and date of birth are NOT required during registration.
+    They remain separate profile fields and are not requested by the Create Account page.
+    """
     try:
         content_type = (request.headers.get("content-type") or "").lower()
         if "application/json" in content_type:
             payload = await request.json()
-            first_name = str(payload.get("first_name") or "")
-            last_name = str(payload.get("last_name") or "")
-            date_of_birth = str(payload.get("date_of_birth") or "")
+            username = str(payload.get("username") or "")
             email = str(payload.get("email") or "")
             password = str(payload.get("password") or "")
             confirm = str(payload.get("confirm") or payload.get("confirm_password") or "")
         else:
             form = await request.form()
-            first_name = str(form.get("first_name") or "")
-            last_name = str(form.get("last_name") or "")
-            date_of_birth = str(form.get("date_of_birth") or "")
+            username = str(form.get("username") or "")
             email = str(form.get("email") or "")
             password = str(form.get("password") or "")
             confirm = str(form.get("confirm") or form.get("confirm_password") or "")
     except Exception:
-        return JSONResponse({
-            "ok": False,
-            "error": "Invalid registration request."
-        }, status_code=400)
+        return JSONResponse({"ok": False, "error": "Invalid registration request."}, status_code=400)
 
-    first_name = first_name.strip()
-    last_name = last_name.strip()
-    date_of_birth = date_of_birth.strip()
+    username = username.strip()
     email = email.strip().lower()
 
-    if not first_name or not last_name:
+    def registration_error(message):
         return templates.TemplateResponse(
             "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "First name and last name are required.",
-            },
+            {"request": request, "title": APP_NAME, "error": message},
             status_code=400,
         )
 
-    if not date_of_birth:
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Date of birth is required.",
-            },
-            status_code=400,
-        )
-
+    if not username:
+        return registration_error("Username is required.")
+    if len(username) < 3:
+        return registration_error("Username must be at least 3 characters.")
     if "@" not in email or "." not in email.split("@")[-1]:
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Enter a valid email address.",
-            },
-            status_code=400,
-        )
-
+        return registration_error("Enter a valid email address.")
     if len(password) < 8:
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Password must be at least 8 characters.",
-            },
-            status_code=400,
-        )
-
+        return registration_error("Password must be at least 8 characters.")
     if password != confirm:
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "Passwords do not match.",
-            },
-            status_code=400,
-        )
-
-    # New accounts use email as the internal username.
-    username = email
+        return registration_error("Passwords do not match.")
 
     conn = db()
-
     try:
         cur = conn.execute(
             """
             INSERT INTO users
-            (
-                username,
-                first_name,
-                last_name,
-                date_of_birth,
-                email,
-                password_hash
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
+            (username, first_name, last_name, date_of_birth, email, password_hash)
+            VALUES (?, '', '', '', ?, ?)
             """,
-            (
-                username,
-                first_name,
-                last_name,
-                date_of_birth,
-                email,
-                pw_hash(password),
-            ),
+            (username, email, pw_hash(password)),
         )
-
         uid = cur.lastrowid
-
-        conn.execute(
-            "INSERT INTO settings(user_id) VALUES (?)",
-            (uid,),
-        )
-
+        conn.execute("INSERT INTO settings(user_id) VALUES (?)", (uid,))
         conn.commit()
-
     except sqlite3.IntegrityError:
+        conn.rollback()
         conn.close()
-
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "title": APP_NAME,
-                "error": "An account with that email already exists.",
-            },
-            status_code=400,
-        )
+        return registration_error("That username or email is already in use.")
 
     conn.close()
-
     request.session["user_id"] = uid
-
-    return RedirectResponse(
-        "/dashboard",
-        status_code=303,
-    )
+    return RedirectResponse("/dashboard", status_code=303)
 
 
 # ============================================================
@@ -3676,6 +3605,9 @@ def _ai_settings_dict(row):
         "max_open_trades": int(row["max_open_trades"] if row else 1),
         "max_total_risk": float(row["max_total_risk"] if row else 2),
         "risk_per_trade": float(row["risk_per_trade"] if row else 2),
+        "risk_percent": float(row["risk_percent"] if row and "risk_percent" in row.keys() else 2),
+        "max_total_exposure": float(row["max_total_exposure"] if row and "max_total_exposure" in row.keys() else 2),
+        "auto_trade_enabled": bool(row["auto_trade_enabled"]) if row and "auto_trade_enabled" in row.keys() else False,
         "reward_target": float(row["reward_target"] if row else 10),
         "starting_balance": float(row["starting_balance"] if row else 100),
         "goal_balance": float(row["goal_balance"] if row else 200),
@@ -3741,7 +3673,7 @@ def _ai_room(candles, direction, risk_dollars=2.0, reward_dollars=10.0):
     return ("GOOD" if room >= 0.45 else "POOR"), room
 
 
-def _ai_analyze(market, data, min_confidence):
+def _ai_analyze(market, data, min_confidence, risk_dollars=2.0):
     biases = {tf: timeframe_bias(data.get(tf, [])) for tf in ("1D","4H","1H")}
     m15 = data.get("15M", [])
     votes = [v for v in biases.values() if v in {"BUY","SELL"}]
@@ -3763,9 +3695,10 @@ def _ai_analyze(market, data, min_confidence):
         "momentum": quality["momentum"],
         "setup": "QUALIFIED" if qualified else "NO TRADE",
         "room_to_tp": room,
-        "risk": 2.0,
-        "target": 10.0,
+        "risk": round(float(risk_dollars), 2),
+        "target": round(float(risk_dollars) * 5.0, 2),
         "risk_reward": "1:5",
+        "lot_risk_check": "BLOCKED UNTIL CONTRACT SL DISTANCE IS AVAILABLE",
         "confidence": round(confidence,1),
         "status": "QUALIFIED" if qualified else "NO TRADE",
         "historical_validation": "NOT VALIDATED",
@@ -3799,11 +3732,12 @@ async def ai_settings_save(request: Request):
     markets.update(payload.get("markets") or {})
     conn = db()
     conn.execute("""
-        INSERT INTO ai_settings(user_id,enabled,min_confidence,max_open_trades,max_total_risk,risk_per_trade,reward_target,starting_balance,goal_balance,compound_enabled,max_daily_loss,stop_at_goal,protection_json,markets_json,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+        INSERT INTO ai_settings(user_id,enabled,min_confidence,max_open_trades,max_total_risk,risk_per_trade,risk_percent,max_total_exposure,auto_trade_enabled,reward_target,starting_balance,goal_balance,compound_enabled,max_daily_loss,stop_at_goal,protection_json,markets_json,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
         ON CONFLICT(user_id) DO UPDATE SET
           enabled=excluded.enabled,min_confidence=excluded.min_confidence,max_open_trades=excluded.max_open_trades,
-          max_total_risk=excluded.max_total_risk,risk_per_trade=excluded.risk_per_trade,reward_target=excluded.reward_target,
+          max_total_risk=excluded.max_total_risk,risk_per_trade=excluded.risk_per_trade,risk_percent=excluded.risk_percent,
+          max_total_exposure=excluded.max_total_exposure,auto_trade_enabled=excluded.auto_trade_enabled,reward_target=excluded.reward_target,
           starting_balance=excluded.starting_balance,goal_balance=excluded.goal_balance,compound_enabled=excluded.compound_enabled,
           max_daily_loss=excluded.max_daily_loss,stop_at_goal=excluded.stop_at_goal,protection_json=excluded.protection_json,
           markets_json=excluded.markets_json,updated_at=CURRENT_TIMESTAMP
@@ -3813,6 +3747,9 @@ async def ai_settings_save(request: Request):
         max(1,min(50,int(payload.get("max_open_trades",1)))),
         max(0.0,float(payload.get("max_total_risk",2))),
         max(0.0,float(payload.get("risk_per_trade",2))),
+        max(0.1,min(100.0,float(payload.get("risk_percent",2)))),
+        max(0.0,float(payload.get("max_total_exposure",payload.get("max_total_risk",2)))),
+        int(bool(payload.get("auto_trade_enabled"))),
         10.0,
         max(0.0,float(payload.get("starting_balance",100))),
         max(0.0,float(payload.get("goal_balance",200))),
@@ -3850,6 +3787,18 @@ async def ai_scan(request: Request):
     conn.close()
     if not connection:
         return JSONResponse({"ok": False, "error": "Connect a Deriv account before running the AI Scan."}, status_code=400)
+    # Compute AI-only effective risk. Compounding scales from the live balance,
+    # but never bypasses the configured per-trade/total-exposure caps.
+    state_balance = float(BOT_STATE.get(user["id"], {}).get("balance", 0.0) or 0.0)
+    base_risk = max(0.0, float(settings.get("risk_per_trade", 2.0)))
+    if settings.get("compound_enabled") and state_balance > 0:
+        effective_risk = state_balance * (max(0.1, float(settings.get("risk_percent", 2.0))) / 100.0)
+    else:
+        effective_risk = base_risk
+    exposure_cap = max(0.0, float(settings.get("max_total_exposure", settings.get("max_total_risk", 2.0))))
+    if exposure_cap > 0:
+        effective_risk = min(effective_risk, exposure_cap)
+
     try:
         token = unprotect_token(connection["access_token_encrypted"])
         ws_url = await deriv_ws_url(connection["account_id"], token)
@@ -3864,7 +3813,7 @@ async def ai_scan(request: Request):
                     results.append({"market":market,"status":"NO TRADE","reason":"Market symbol is unavailable from Deriv.","execution_ready":False})
                     continue
                 data = await fetch_abc_timeframes(ws, symbol)
-                result = _ai_analyze(market, data, settings["min_confidence"])
+                result = _ai_analyze(market, data, settings["min_confidence"], effective_risk)
                 result["symbol"] = symbol
                 result["lot_size"] = float(markets.get(market,{}).get("lot_size",0.01))
                 conn = db()
