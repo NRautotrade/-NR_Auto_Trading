@@ -184,7 +184,7 @@ a{text-decoration:none;color:inherit}
           <label class="check"><input type="checkbox" name="strategies" value="Digit Over/Under" {% if 'Digit Over/Under' in saved_strategies %}checked{% endif %}>Digit Over/Under â Live Scanner</label>
           <label class="check"><input type="checkbox" name="strategies" value="Breakout" {% if 'Breakout' in saved_strategies %}checked{% endif %}>Breakout</label>
           <label class="check"><input type="checkbox" name="strategies" value="Trend" {% if 'Trend' in saved_strategies %}checked{% endif %}>Trend</label>
-          <label class="check"><input type="checkbox" checked disabled>Minimum Lot Only</label>
+          <label class="check"><input type="checkbox" name="minimum_lot_only" value="1" {% if not settings or settings.minimum_lot_only %}checked{% endif %}>Minimum Lot Only</label>
         </div>
       </section>
 
@@ -217,13 +217,14 @@ a{text-decoration:none;color:inherit}
         <div class="feature-switches">
           <div class="feature-switch"><div><strong>ABC TRADER</strong><small>Allow ABC setups to generate trades.</small></div><label class="switch"><input type="checkbox" name="abc_enabled" value="1" {% if not settings or settings.abc_enabled %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>DIGIT TRADER</strong><small>Allow the Digit engine to generate trades.</small></div><label class="switch"><input type="checkbox" name="digit_enabled" value="1" {% if not settings or settings.digit_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+          <div class="feature-switch"><div><strong>DIGIT AI QUALITY FILTER</strong><small>Require the conservative $2-risk / $10-target quality behavior before a Digit trade. OFF preserves the normal reference-bot entry behavior.</small></div><label class="switch"><input type="checkbox" name="digit_ai_filter_enabled" value="1" {% if settings and settings.digit_ai_filter_enabled %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>STRICT OVER 1 FILTER</strong><small>Use the current OVER 1 / 94%+ entry rule.</small></div><label class="switch"><input type="checkbox" name="over_under_filter" value="1" {% if not settings or settings.over_under_filter %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>CHOPPY MARKET FILTER</strong><small>Block entries when price action is choppy.</small></div><label class="switch"><input type="checkbox" name="choppy_filter" value="1" {% if not settings or settings.choppy_filter %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>LOSS RECOVERY</strong><small>Track losses and require stricter recovery setups. Never increases the stake.</small></div><label class="switch"><input type="checkbox" name="recovery_enabled" value="1" {% if settings and settings.recovery_enabled %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>MAGNET PROFIT PROTECTION</strong><small>Use progressive early-sell protection on open Digit contracts.</small></div><label class="switch"><input type="checkbox" name="magnet_enabled" value="1" {% if not settings or settings.magnet_enabled %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>MINIMUM PAYOUT FILTER</strong><small>Only allow Digit trades when the quoted profit meets the minimum expected-profit setting.</small></div><label class="switch"><input type="checkbox" name="min_profit_filter_enabled" value="1" {% if not settings or settings.min_profit_filter_enabled %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>ABC MINIMUM PROFIT FILTER</strong><small>Only allow ABC trades when the quoted profit is at least the selected amount. It never increases the stake to reach it.</small></div><label class="switch"><input type="checkbox" name="abc_profit_filter_enabled" value="1" {% if not settings or settings.abc_profit_filter_enabled %}checked{% endif %}><span class="slider"></span></label></div>
-          <div class="feature-switch"><div><strong>MINIMUM LOT ONLY</strong><small>Permanent rule â the bot always uses Deriv's minimum accepted stake for each contract.</small></div><span class="status-pill on">ALWAYS ON</span></div>
+          <div class="feature-switch"><div><strong>MINIMUM LOT ONLY</strong><small>The switch above controls this. ON uses Deriv's minimum accepted stake; OFF uses the configured stake/risk.</small></div><span class="status-pill">CONFIGURABLE</span></div>
           <div class="feature-switch"><div><strong>LIVE SCANNER</strong><small>Continuously receive and analyze live market ticks.</small></div><label class="switch"><input type="checkbox" name="live_scanner" value="1" {% if not settings or settings.live_scanner %}checked{% endif %}><span class="slider"></span></label></div>
           <div class="feature-switch"><div><strong>AUTO TRADING</strong><small>When OFF, the bot can scan but will not open new trades.</small></div><label class="switch"><input type="checkbox" name="auto_trading" value="1" {% if not settings or settings.auto_trading %}checked{% endif %}><span class="slider"></span></label></div>
         </div>
@@ -238,7 +239,18 @@ a{text-decoration:none;color:inherit}
           <div class="form-group"><label class="form-label">Minimum Confidence (%)</label><input class="input" type="number" min="50" max="95" name="digit_min_confidence" value="{{ settings.digit_min_confidence if settings else 65 }}"></div>
           <div class="form-group"><label class="form-label">Minimum Expected Profit ($)</label><input class="input" type="number" min="0" step="0.01" name="min_expected_profit" value="{{ settings.min_expected_profit if settings else 1.00 }}"></div>
         </div>
-        <div class="note">When the filter is ON, the Digit bot skips any contract whose quoted maximum profit is below this amount. It never increases the stake to reach the threshold.</div>
+        <div class="card-title" style="margin-top:20px">DIGIT AI $2 â $10 QUALITY BEHAVIOR</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">AI Confidence Threshold (%)</label><input class="input" type="number" min="85" max="99" step="1" name="digit_ai_confidence" value="{{ settings.digit_ai_confidence if settings else 85 }}"></div>
+          <div class="form-group"><label class="form-label">MAX AI RISK ($)</label><input class="input" type="number" min="0.01" max="2" step="0.01" name="digit_ai_risk" value="{{ settings.digit_ai_risk if settings else 2 }}"></div>
+          <div class="form-group"><label class="form-label">AI TARGET ($)</label><input class="input" type="number" min="0.01" step="0.01" name="digit_ai_target" value="{{ settings.digit_ai_target if settings else 10 }}"></div>
+          <div class="form-group"><label class="form-label">PROTECTION 1 ($)</label><input class="input" type="number" min="0" step="0.01" name="digit_ai_protect1" value="{{ settings.digit_ai_protect1 if settings else 5 }}"></div>
+          <div class="form-group"><label class="form-label">PROTECTION 2 ($)</label><input class="input" type="number" min="0" step="0.01" name="digit_ai_protect2" value="{{ settings.digit_ai_protect2 if settings else 7 }}"></div>
+          <div class="form-group"><label class="form-label">TARGET / PROTECTION 3 ($)</label><input class="input" type="number" min="0" step="0.01" name="digit_ai_protect3" value="{{ settings.digit_ai_protect3 if settings else 10 }}"></div>
+        </div>
+        <div class="note">When Digit AI Quality Filter is ON, the bot waits for a clean pre-entry setup, enforces the maximum $2 risk, and rejects a contract whose quoted maximum profit cannot reach the configured $10 target. Protection checkpoints default to $5, $7 and $10. Confidence is a filter score, not a guaranteed win rate.</div>
+        <div class="note">AI outcome records are created only after a trade settles. Future ticks are never used to make the entry decision.</div>
+        <div class="note">The normal Digit minimum-payout filter remains independent and still works as before.</div>
         <div class="note">ABC entries now require 1D + 4H + 1H direction agreement, a confirmed 15M ABC structure, clean price action, the 2% maximum risk cap, and the ABC minimum-profit filter when enabled. If any check fails, the bot waits.</div>
         <div class="note">The scanner continuously reads incoming ticks for every selected market and builds a rolling last-digit distribution.</div>
       </section>
@@ -513,6 +525,7 @@ async function refresh(){
           <div class="scanner-head"><div><div class="scanner-name">${name}</div><div class="muted">${a.symbol||''} â¢ Ticks ${a.ticks||0}</div></div><div class="scanner-quote">${a.quote??'â'}</div></div>
           <div class="digit-row">${Array.from({length:10},(_,i)=>`<div class="digit-box"><strong>${i}</strong><span>${Number(p[i]||0).toFixed(1)}%</span></div>`).join('')}</div>
           <div class="signal-box">Last digit: <b>${a.last_digit??'â'}</b> ${sig?`â¢ <span class="signal-live">${sig.direction} ${sig.barrier} â ${Number(sig.confidence||0).toFixed(1)}%</span>`:'â¢ waiting for confidence threshold'}</div>
+          <div class="signal-box">Digit AI: <b>${a.ai_filter?.status||'AI FILTER OFF'}</b>${a.ai_filter?.score!=null?` â¢ Score ${Number(a.ai_filter.score).toFixed(1)}%`:''}${a.ai_filter?.reason?` â¢ ${a.ai_filter.reason}`:''}</div>
         </div>`;
       }).join('');
     }
