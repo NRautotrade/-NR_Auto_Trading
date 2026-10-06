@@ -297,6 +297,40 @@ def init_db():
         if column not in settings_columns:
             conn.execute(f"ALTER TABLE settings ADD COLUMN {column} {definition}")
 
+    # Digit AI quality-filter settings. OFF by default so the existing Digit
+    # reference-bot behavior is preserved until the user enables the filter.
+    digit_ai_columns = {
+        "digit_ai_filter_enabled": "INTEGER NOT NULL DEFAULT 0",
+        "digit_ai_confidence": "REAL NOT NULL DEFAULT 85",
+        "digit_ai_risk": "REAL NOT NULL DEFAULT 2",
+        "digit_ai_target": "REAL NOT NULL DEFAULT 10",
+        "digit_ai_protect1": "REAL NOT NULL DEFAULT 5",
+        "digit_ai_protect2": "REAL NOT NULL DEFAULT 7",
+        "digit_ai_protect3": "REAL NOT NULL DEFAULT 10",
+    }
+    for column, definition in digit_ai_columns.items():
+        if column not in settings_columns:
+            conn.execute(f"ALTER TABLE settings ADD COLUMN {column} {definition}")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS digit_ai_outcomes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            market TEXT NOT NULL,
+            direction TEXT,
+            confidence REAL,
+            stake REAL,
+            target_profit REAL NOT NULL DEFAULT 10,
+            max_risk REAL NOT NULL DEFAULT 2,
+            outcome TEXT NOT NULL,
+            peak_profit REAL NOT NULL DEFAULT 0,
+            final_profit REAL NOT NULL DEFAULT 0,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+
     # Independent AI Scan settings. This table is deliberately separate from
     # the existing strategy settings so the AI feature cannot overwrite ABC,
     # Digit, Magnet, or other existing bot configuration.
@@ -551,34 +585,29 @@ def current_user(request: Request):
 
 def save_settings(user_id, form):
     conn = db()
-
     strategies = form.getlist("strategies")
-    # Minimum-lot-only rule: recovery never changes stake size.
     stake_mode = "Flat Stake"
-
-    conn.execute(
-        """
-        INSERT INTO settings
-        (
-            user_id, markets, strategies, risk_trade, reward_risk,
-            daily_target, max_daily_profit, max_daily_loss, protect_tp,
-            lock_profit_r, max_trades, stake_mode, martingale_multiplier,
-            tp_adjust_percent, digit_trade_type, digit_barrier,
-            digit_duration, digit_duration_unit, digit_min_confidence,
-            magnet_stage1, magnet_lock1, magnet_stage2, magnet_lock2,
-            magnet_stage3, magnet_lock3, magnet_stage4, magnet_lock4,
-            abc_enabled, digit_enabled, over_under_filter, choppy_filter,
-            recovery_enabled, magnet_enabled, minimum_lot_only, live_scanner, auto_trading,
-            abc_profit_filter_enabled, abc_min_expected_profit, abc_min_risk_percent
+    truthy = {"1", "true", "on", "yes"}
+    conn.execute("""
+        INSERT INTO settings (
+            user_id, markets, strategies, risk_trade, reward_risk, daily_target,
+            max_daily_profit, max_daily_loss, protect_tp, lock_profit_r, max_trades,
+            stake_mode, martingale_multiplier, tp_adjust_percent, digit_trade_type,
+            digit_barrier, digit_duration, digit_duration_unit, digit_min_confidence,
+            magnet_stage1, magnet_lock1, magnet_stage2, magnet_lock2, magnet_stage3,
+            magnet_lock3, magnet_stage4, magnet_lock4, abc_enabled, digit_enabled,
+            over_under_filter, choppy_filter, recovery_enabled, magnet_enabled,
+            minimum_lot_only, live_scanner, auto_trading, abc_profit_filter_enabled,
+            abc_min_expected_profit, abc_min_risk_percent, digit_ai_filter_enabled,
+            digit_ai_confidence, digit_ai_risk, digit_ai_target, digit_ai_protect1,
+            digit_ai_protect2, digit_ai_protect3
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(user_id) DO UPDATE SET
-            markets=excluded.markets, strategies=excluded.strategies,
-            risk_trade=excluded.risk_trade, reward_risk=excluded.reward_risk,
-            daily_target=excluded.daily_target, max_daily_profit=excluded.max_daily_profit,
-            max_daily_loss=excluded.max_daily_loss, protect_tp=excluded.protect_tp,
-            lock_profit_r=excluded.lock_profit_r, max_trades=excluded.max_trades,
+            markets=excluded.markets, strategies=excluded.strategies, risk_trade=excluded.risk_trade,
+            reward_risk=excluded.reward_risk, daily_target=excluded.daily_target,
+            max_daily_profit=excluded.max_daily_profit, max_daily_loss=excluded.max_daily_loss,
+            protect_tp=excluded.protect_tp, lock_profit_r=excluded.lock_profit_r, max_trades=excluded.max_trades,
             stake_mode=excluded.stake_mode, martingale_multiplier=excluded.martingale_multiplier,
             tp_adjust_percent=excluded.tp_adjust_percent, digit_trade_type=excluded.digit_trade_type,
             digit_barrier=excluded.digit_barrier, digit_duration=excluded.digit_duration,
@@ -591,57 +620,36 @@ def save_settings(user_id, form):
             over_under_filter=excluded.over_under_filter, choppy_filter=excluded.choppy_filter,
             recovery_enabled=excluded.recovery_enabled, magnet_enabled=excluded.magnet_enabled,
             minimum_lot_only=excluded.minimum_lot_only, live_scanner=excluded.live_scanner,
-            auto_trading=excluded.auto_trading,
-            abc_profit_filter_enabled=excluded.abc_profit_filter_enabled,
-            abc_min_expected_profit=excluded.abc_min_expected_profit,
-            abc_min_risk_percent=excluded.abc_min_risk_percent
-        """,
-        (
-            user_id,
-            json.dumps(form.getlist("markets")),
-            json.dumps(strategies),
-            min(2.0, max(0.1, float(form.get("risk_trade", 2)))),
-            float(form.get("reward_risk", 2)),
-            float(form.get("daily_target", 500)),
-            max(0.0, float(form.get("max_daily_profit", 1200))),
-            float(form.get("max_daily_loss", 50)),
-            float(form.get("protect_tp", 50)),
-            float(form.get("lock_profit_r", 1)),
-            min(200.0, max(1.0, float(form.get("max_trades", 200)))),
-            stake_mode,
-            min(5.0, max(1.0, float(form.get("martingale_multiplier", 2)))),
-            min(99.0, max(50.0, float(form.get("tp_adjust_percent", 90)))),
-            str(form.get("digit_trade_type", "Over/Under")),
-            min(8, max(1, int(float(form.get("digit_barrier", 5))))),
-            min(10, max(1, int(float(form.get("digit_duration", 5))))),
-            str(form.get("digit_duration_unit", "t")),
-            min(95.0, max(50.0, float(form.get("digit_min_confidence", 65)))),
-            float(form.get("magnet_stage1", 10)),
-            float(form.get("magnet_lock1", 0)),
-            float(form.get("magnet_stage2", 20)),
-            float(form.get("magnet_lock2", 0.5)),
-            float(form.get("magnet_stage3", 50)),
-            float(form.get("magnet_lock3", 1)),
-            float(form.get("magnet_stage4", 70)),
-            float(form.get("magnet_lock4", 1.5)),
-            1 if form.get("abc_enabled") in {"1", "true", "on", "yes"} else 0,
-            1 if form.get("digit_enabled") in {"1", "true", "on", "yes"} else 0,
-            1 if form.get("over_under_filter") in {"1", "true", "on", "yes"} else 0,
-            1 if form.get("choppy_filter") in {"1", "true", "on", "yes"} else 0,
-            1 if form.get("recovery_enabled") in {"1", "true", "on", "yes"} else 0,
-            1 if form.get("magnet_enabled") in {"1", "true", "on", "yes"} else 0,
-            # Minimum-lot-only is a permanent safety rule for this bot.
-            1,
-            1 if form.get("live_scanner") in {"1", "true", "on", "yes"} else 0,
-            1 if form.get("auto_trading") in {"1", "true", "on", "yes"} else 0,
-            1 if form.get("abc_profit_filter_enabled") in {"1", "true", "on", "yes"} else 0,
-            max(0.0, float(form.get("abc_min_expected_profit", 5))),
-            min(2.0, max(0.1, float(form.get("abc_min_risk_percent", 2)))),
-        ),
-    )
-
-    conn.commit()
-    conn.close()
+            auto_trading=excluded.auto_trading, abc_profit_filter_enabled=excluded.abc_profit_filter_enabled,
+            abc_min_expected_profit=excluded.abc_min_expected_profit, abc_min_risk_percent=excluded.abc_min_risk_percent,
+            digit_ai_filter_enabled=excluded.digit_ai_filter_enabled, digit_ai_confidence=excluded.digit_ai_confidence,
+            digit_ai_risk=excluded.digit_ai_risk, digit_ai_target=excluded.digit_ai_target,
+            digit_ai_protect1=excluded.digit_ai_protect1, digit_ai_protect2=excluded.digit_ai_protect2,
+            digit_ai_protect3=excluded.digit_ai_protect3
+    """, (
+        user_id, json.dumps(form.getlist("markets")), json.dumps(strategies),
+        min(2.0,max(0.1,float(form.get("risk_trade",2)))), float(form.get("reward_risk",2)),
+        float(form.get("daily_target",500)), max(0.0,float(form.get("max_daily_profit",1200))),
+        float(form.get("max_daily_loss",50)), float(form.get("protect_tp",50)), float(form.get("lock_profit_r",1)),
+        min(200.0,max(1.0,float(form.get("max_trades",200)))), stake_mode,
+        min(5.0,max(1.0,float(form.get("martingale_multiplier",2)))), min(99.0,max(50.0,float(form.get("tp_adjust_percent",90)))),
+        str(form.get("digit_trade_type","Over/Under")), min(8,max(1,int(float(form.get("digit_barrier",5))))),
+        min(10,max(1,int(float(form.get("digit_duration",5))))), str(form.get("digit_duration_unit","t")),
+        min(95.0,max(50.0,float(form.get("digit_min_confidence",65)))), float(form.get("magnet_stage1",10)),
+        float(form.get("magnet_lock1",0)), float(form.get("magnet_stage2",20)), float(form.get("magnet_lock2",0.5)),
+        float(form.get("magnet_stage3",50)), float(form.get("magnet_lock3",1)), float(form.get("magnet_stage4",70)),
+        float(form.get("magnet_lock4",1.5)), 1 if form.get("abc_enabled") in truthy else 0,
+        1 if form.get("digit_enabled") in truthy else 0, 1 if form.get("over_under_filter") in truthy else 0,
+        1 if form.get("choppy_filter") in truthy else 0, 1 if form.get("recovery_enabled") in truthy else 0,
+        1 if form.get("magnet_enabled") in truthy else 0, 1 if form.get("minimum_lot_only") in truthy else 0,
+        1 if form.get("live_scanner") in truthy else 0, 1 if form.get("auto_trading") in truthy else 0,
+        1 if form.get("abc_profit_filter_enabled") in truthy else 0, max(0.0,float(form.get("abc_min_expected_profit",5))),
+        min(2.0,max(0.1,float(form.get("abc_min_risk_percent",2)))), 1 if form.get("digit_ai_filter_enabled") in truthy else 0,
+        min(99.0,max(85.0,float(form.get("digit_ai_confidence",85)))), min(2.0,max(0.01,float(form.get("digit_ai_risk",2)))),
+        max(0.01,float(form.get("digit_ai_target",10))), max(0.0,float(form.get("digit_ai_protect1",5))),
+        max(0.0,float(form.get("digit_ai_protect2",7))), max(0.0,float(form.get("digit_ai_protect3",10))),
+    ))
+    conn.commit(); conn.close()
 
 
 def dashboard_context(request: Request, user, error=None, message=None):
@@ -2806,6 +2814,34 @@ async def minimum_stake_proposal(ws, payload, req_counter_start, preferred=0.35)
     return None, None, req_counter, last_error
 
 
+def digit_ai_quality_filter(digits, quotes, signal, min_confidence=85.0, risk_dollars=2.0, target_dollars=10.0):
+    """Conservative pre-entry Digit quality gate using only prior/live data."""
+    if not signal:
+        return {"qualified":False,"score":0.0,"status":"NO TRADE","reason":"No valid Over/Under signal."}
+    if len(digits) < 50:
+        return {"qualified":False,"score":0.0,"status":"NO TRADE","reason":"Not enough pre-entry digit history."}
+    confidence=float(signal.get("confidence",0) or 0)
+    if confidence < float(min_confidence):
+        return {"qualified":False,"score":round(confidence,1),"status":"NO TRADE","reason":f"Confidence {confidence:.1f}% is below {float(min_confidence):.0f}%."}
+    recent=list(digits[-50:]); barrier=int(signal.get("barrier",1))
+    over=sum(d>barrier for d in recent)/len(recent)*100.0
+    under=sum(d<barrier for d in recent)/len(recent)*100.0
+    edge=abs(over-under)
+    prior=recent[:25]; latest=recent[25:]
+    _,pp=digit_percentages(prior); _,lp=digit_percentages(latest)
+    drift=sum(abs(pp[i]-lp[i]) for i in range(10))/2.0
+    stability=max(0.0,min(100.0,100.0-drift*2.0))
+    if len(quotes)>=20 and is_choppy_quotes(quotes):
+        return {"qualified":False,"score":round(max(0,confidence-10),1),"status":"NO TRADE","reason":"Choppy/noisy price action detected."}
+    edge_score=min(100.0,edge*2.0)
+    score=max(0.0,min(99.0,(confidence*0.60)+(stability*0.25)+(edge_score*0.15)))
+    qualified=score>=float(min_confidence)
+    return {"qualified":qualified,"score":round(score,1),"status":"QUALIFIED" if qualified else "NO TRADE",
+            "reason":"Clean pre-entry Digit setup passed the confidence, stability, and noise gates." if qualified else f"Setup quality score {score:.1f}% is below {float(min_confidence):.0f}%.",
+            "confidence":round(confidence,1),"stability":round(stability,1),"edge":round(edge,1),
+            "max_risk":round(min(2.0,float(risk_dollars)),2),"target":round(float(target_dollars),2)}
+
+
 async def digit_bot_worker(
     user_id,
     account_id,
@@ -2832,6 +2868,11 @@ async def digit_bot_worker(
     live_scanner=True,
     auto_trading=True,
     magnet_enabled=True,
+    digit_ai_filter_enabled=False,
+    digit_ai_confidence=85.0,
+    digit_ai_risk=2.0,
+    digit_ai_target=10.0,
+    digit_ai_protect=(5.0, 7.0, 10.0),
 ):
     state = BOT_STATE[user_id]
     state.update({
@@ -2856,7 +2897,7 @@ async def digit_bot_worker(
         "trade_history": [],
         "activity": [],
         "paused": False,
-        "feature_switches": {"digit_enabled": bool(digit_enabled), "over_under_filter": bool(over_under_filter), "choppy_filter": bool(choppy_filter), "recovery_enabled": bool(recovery_enabled), "minimum_lot_only": bool(minimum_lot_only), "live_scanner": bool(live_scanner), "auto_trading": bool(auto_trading), "magnet_enabled": bool(magnet_enabled)},
+        "feature_switches": {"digit_enabled": bool(digit_enabled), "over_under_filter": bool(over_under_filter), "choppy_filter": bool(choppy_filter), "recovery_enabled": bool(recovery_enabled), "minimum_lot_only": bool(minimum_lot_only), "live_scanner": bool(live_scanner), "auto_trading": bool(auto_trading), "magnet_enabled": bool(magnet_enabled), "digit_ai_filter_enabled": bool(digit_ai_filter_enabled)},
     })
 
     req = 12000
@@ -2907,6 +2948,8 @@ async def digit_bot_worker(
                     "counts": counts,
                     "percentages": pcts,
                     "signal": None,
+                    "ai_filter": {"status": "AI FILTER OFF" if not digit_ai_filter_enabled else "WAITING"},
+                    "quotes": [float(q) for q in prices[-50:]],
                     "ticks": len(seeded),
                 }
                 if live_scanner:
@@ -2954,11 +2997,15 @@ async def digit_bot_worker(
                 if now - float(last_trade_tick.get(market, 0) or 0) < 8:
                     return
 
+                if digit_ai_filter_enabled:
+                    ai_check=digit_ai_quality_filter(state.get("market_data",{}).get(market,{}).get("digits",[]),state.get("market_data",{}).get(market,{}).get("quotes",[]),signal,min_confidence=digit_ai_confidence,risk_dollars=digit_ai_risk,target_dollars=digit_ai_target)
+                    state["market_data"].setdefault(market,{})["ai_filter"]=ai_check
+                    if not ai_check.get("qualified"):
+                        state["message"]=f"{market}: AI filter â NO TRADE. {ai_check.get('reason','')}"
+                        return
+
                 balance = float(state.get("balance", 0) or 0)
-                # Minimum-stake-only rule: never increase stake after a loss.
-                # Start at Deriv's common minimum and let the proposal response
-                # validate the amount for the selected market/account.
-                stake = 0.35 if minimum_lot_only else max(0.35, float(risk or 0))
+                stake = 0.35 if minimum_lot_only else min(2.0, max(0.35, float(risk or 0)))
                 if balance <= 0 or stake > balance:
                     return
 
@@ -2972,7 +3019,7 @@ async def digit_bot_worker(
                 ]
                 proposal = None
                 used_duration = requested_duration
-                stake = 0.35
+                stake = 0.35 if minimum_lot_only else min(2.0, max(0.35, float(risk or 0)))
                 last_duration_error = None
 
                 for candidate_duration in duration_candidates:
@@ -3022,6 +3069,17 @@ async def digit_bot_worker(
 
                 ask = float(proposal.get("ask_price", stake) or stake)
                 payout = float(proposal.get("payout", 0) or 0)
+                max_profit = max(0.0, payout - ask)
+                if digit_ai_filter_enabled:
+                    if stake > min(2.0,float(digit_ai_risk)) + 1e-9:
+                        state["market_data"].setdefault(market,{})["ai_filter"]={"status":"NO TRADE","qualified":False,"score":0.0,"reason":f"Stake ${stake:.2f} exceeds the ${min(2.0,float(digit_ai_risk)):.2f} maximum risk."}
+                        state["message"]=f"{market}: AI risk cap exceeded â NO TRADE."
+                        return
+                    if max_profit + 1e-9 < float(digit_ai_target):
+                        state["market_data"].setdefault(market,{})["ai_filter"].update({"status":"NO TRADE","qualified":False,"max_profit":round(max_profit,2),"reason":f"Quoted maximum profit ${max_profit:.2f} cannot reach the ${float(digit_ai_target):.2f} target."})
+                        state["message"]=f"{market}: AI target ${float(digit_ai_target):.2f} unavailable â NO TRADE."
+                        return
+                    state["market_data"].setdefault(market,{})["ai_filter"].update({"status":"QUALIFIED","max_profit":round(max_profit,2),"target":round(float(digit_ai_target),2),"risk":round(float(stake),2)})
                 req += 1
                 buy_req = req
                 await trade_ws.send(json.dumps({"buy": proposal["id"], "price": ask, "req_id": buy_req}))
@@ -3053,6 +3111,12 @@ async def digit_bot_worker(
                     "current": ask,
                     "profit": 0.0,
                     "max_profit": max_profit,
+                    "ai_filter_enabled": bool(digit_ai_filter_enabled),
+                    "ai_target": float(digit_ai_target),
+                    "ai_max_risk": min(2.0,float(digit_ai_risk)),
+                    "ai_protect_levels": [float(x) for x in digit_ai_protect],
+                    "ai_protect_stage": 0,
+                    "ai_outcome": "UNRESOLVED",
                     "peak_profit": 0.0,
                     "magnet_stage": 0,
                     "magnet_progress": 0.0,
@@ -3106,6 +3170,7 @@ async def digit_bot_worker(
                             signal = digit_signal(data["digits"], trade_type, barrier, min_confidence, strict_over1=over_under_filter)
                             choppy = is_choppy_quotes(data.get("quotes", [])) if choppy_filter else False
                             data["choppy"] = bool(choppy)
+                            data["ai_filter"] = (digit_ai_quality_filter(data.get("digits",[]),data.get("quotes",[]),signal,min_confidence=digit_ai_confidence,risk_dollars=digit_ai_risk,target_dollars=digit_ai_target) if digit_ai_filter_enabled else {"status":"AI FILTER OFF","qualified":True})
                             if choppy and signal:
                                 data["signal"] = None
                                 state["signals"] = []
@@ -3142,6 +3207,22 @@ async def digit_bot_worker(
                     })
                     position["peak_profit"] = max(float(position.get("peak_profit", 0) or 0), profit)
                     max_profit = float(position.get("max_profit", 0) or 0)
+
+                    if position.get("ai_filter_enabled") and not c.get("is_sold"):
+                        levels=sorted({float(x) for x in position.get("ai_protect_levels",[5,7,10]) if float(x)>0})
+                        target=float(position.get("ai_target",10) or 10)
+                        ai_stage=sum(position["peak_profit"]>=level for level in levels)
+                        position["ai_protect_stage"]=max(int(position.get("ai_protect_stage",0) or 0),ai_stage)
+                        if position["peak_profit"]>=target and not position.get("sell_requested"):
+                            position["sell_requested"]=True; position["ai_outcome"]="WIN"; req+=1
+                            await trade_ws.send(json.dumps({"sell":contract_id,"price":0,"req_id":req}))
+                            state["message"]=f"{market}: AI target +${target:.2f} reached â closing for target."
+                        elif position["ai_protect_stage"]>0 and not position.get("sell_requested"):
+                            level=levels[min(position["ai_protect_stage"]-1,len(levels)-1)]
+                            if profit>0 and profit<=level:
+                                position["sell_requested"]=True; position["ai_outcome"]="PROTECTED"; req+=1
+                                await trade_ws.send(json.dumps({"sell":contract_id,"price":0,"req_id":req}))
+                                state["message"]=f"{market}: AI profit protection held ${level:.2f}; closing trade."
                     if max_profit <= 0:
                         max_profit = max(0.0, float(c.get("payout", 0) or 0) - float(position.get("entry", 0) or 0))
                         position["max_profit"] = max_profit
@@ -3194,6 +3275,11 @@ async def digit_bot_worker(
                         history = state.setdefault("trade_history", [])
                         history.insert(0, closed)
                         state["trade_history"] = history
+                        if position.get("ai_filter_enabled"):
+                             target=float(position.get("ai_target",10) or 10); peak=float(position.get("peak_profit",0) or 0)
+                             ai_outcome="WIN" if peak>=target else ("LOSS" if status in {"lost","expired"} or profit<0 else "NO TRADE / UNRESOLVED")
+                             position["ai_outcome"]=ai_outcome
+                             conn_ai=db(); conn_ai.execute("INSERT INTO digit_ai_outcomes(user_id,market,direction,confidence,stake,target_profit,max_risk,outcome,peak_profit,final_profit,payload_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(user_id,market,position.get("direction"),float(position.get("confidence",0) or 0),float(position.get("stake",0) or 0),target,min(2.0,float(position.get("ai_max_risk",2) or 2)),ai_outcome,peak,profit,json.dumps({"contract_id":contract_id,"barrier":position.get("barrier"),"duration":position.get("duration")}))); conn_ai.commit(); conn_ai.close()
                         activity = state.setdefault("activity", [])
                         activity.insert(0, f"CLOSE {market} {status.upper()} â¢ Contract {contract_id} â¢ P/L ${profit:+.2f}")
                         state["activity"] = activity[:30]
@@ -3363,7 +3449,12 @@ async def start_trading(request: Request):
     choppy_filter = bool(settings["choppy_filter"] if "choppy_filter" in settings.keys() else 1)
     recovery_enabled = bool(settings["recovery_enabled"] if "recovery_enabled" in settings.keys() else 0)
     magnet_enabled = bool(settings["magnet_enabled"] if "magnet_enabled" in settings.keys() else 1)
-    minimum_lot_only = True  # permanent rule: always use the minimum accepted stake
+    minimum_lot_only = bool(settings["minimum_lot_only"] if "minimum_lot_only" in settings.keys() else 1)
+    digit_ai_filter_enabled = bool(settings["digit_ai_filter_enabled"] if "digit_ai_filter_enabled" in settings.keys() else 0)
+    digit_ai_confidence = float(settings["digit_ai_confidence"] if "digit_ai_confidence" in settings.keys() else 85)
+    digit_ai_risk = float(settings["digit_ai_risk"] if "digit_ai_risk" in settings.keys() else 2)
+    digit_ai_target = float(settings["digit_ai_target"] if "digit_ai_target" in settings.keys() else 10)
+    digit_ai_protect = (float(settings["digit_ai_protect1"] if "digit_ai_protect1" in settings.keys() else 5), float(settings["digit_ai_protect2"] if "digit_ai_protect2" in settings.keys() else 7), float(settings["digit_ai_protect3"] if "digit_ai_protect3" in settings.keys() else 10))
     live_scanner = bool(settings["live_scanner"] if "live_scanner" in settings.keys() else 1)
     auto_trading = bool(settings["auto_trading"] if "auto_trading" in settings.keys() else 1)
 
@@ -3453,6 +3544,11 @@ async def start_trading(request: Request):
                 live_scanner,
                 auto_trading,
                 magnet_enabled,
+                digit_ai_filter_enabled,
+                digit_ai_confidence,
+                digit_ai_risk,
+                digit_ai_target,
+                digit_ai_protect,
             )
         )
     else:
